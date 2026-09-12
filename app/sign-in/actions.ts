@@ -1,41 +1,53 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isUserNotFound } from "@/lib/auth/accounts";
 import { getAuth } from "@/lib/auth/server";
-import { portalOrigin } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
 
 export type SignInState =
-  | { status: "idle" }
-  | { status: "sent"; email: string }
-  | { status: "error"; message: string };
+  | { step: "email"; error?: string }
+  | { step: "code"; email: string; error?: string; resent?: boolean };
 
-export async function sendMagicLink(
-  _previous: SignInState,
+/**
+ * Two steps on one action: email a 6-digit code, then trade the code for a
+ * session. Codes (not magic links) because Neon Auth's magic-link plugin is
+ * off in this project, and a code also works when the email is opened on a
+ * different device from the one signing in.
+ */
+export async function signInWithCode(
+  previous: SignInState,
   formData: FormData,
 ): Promise<SignInState> {
+  const intent = String(formData.get("intent") ?? "send");
   const email = normalizeEmail(String(formData.get("email") ?? ""));
   if (!z.email().safeParse(email).success) {
-    return { status: "error", message: "Enter the email address we invited." };
+    return { step: "email", error: "Enter the email address we invited." };
   }
 
-  const origin = await portalOrigin();
-  const { error } = await getAuth().signIn.magicLink({
-    email,
-    callbackURL: `${origin}/`,
-  });
+  if (intent === "send" || intent === "resend") {
+    const { error } = await getAuth().emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+    if (error) {
+      console.error("[sign-in] code could not be sent", error);
+      return { step: "email", error: "We couldn't send a code just now. Try again in a minute." };
+    }
+    return { step: "code", email, resent: intent === "resend" };
+  }
 
-  // An address without an account gets the same answer as one with an
-  // account, so the form never reveals who has access.
-  if (isUserNotFound(error)) return { status: "sent", email };
-
+  const otp = String(formData.get("otp") ?? "").replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(otp)) {
+    return { step: "code", email, error: "Enter the 6-digit code from the email." };
+  }
+  const { error } = await getAuth().signIn.emailOtp({ email, otp });
   if (error) {
-    console.error("[sign-in] magic link could not be sent", error);
+    const expired = /expired/i.test(`${error.code ?? ""} ${error.message ?? ""}`);
     return {
-      status: "error",
-      message: "We couldn't send a sign-in link just now. Try again in a minute.",
+      step: "code",
+      email,
+      error: expired
+        ? "That code has expired. Send a new one."
+        : "That code doesn't match. Check the latest email and try again.",
     };
   }
-  return { status: "sent", email };
+  redirect("/");
 }

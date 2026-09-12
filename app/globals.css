@@ -577,6 +577,11 @@ td.num {
 .signin-card form {
   margin-top: 14px;
 }
+.code-input {
+  font: 500 24px/1 var(--mono);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
 .signin-sent {
   display: grid;
   gap: 10px;

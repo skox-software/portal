@@ -5,8 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
-import { ensureAuthAccount, isUserNotFound } from "@/lib/auth/accounts";
-import { getAuth } from "@/lib/auth/server";
+import { ensureAuthAccount } from "@/lib/auth/accounts";
 import { getDb } from "@/lib/db";
 import {
   clients,
@@ -20,7 +19,7 @@ import {
 } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { midpoint, PROJECT_KINDS } from "@/lib/format";
-import { backWith, portalOrigin } from "@/lib/http";
+import { backWith } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
 
 /*
@@ -129,44 +128,7 @@ export async function inviteMember(formData: FormData) {
     }),
   ]);
   revalidatePath(back);
-  backWith(back, "notice", `Added ${parsed.data.email}. Send them a sign-in link when you're ready.`);
-}
-
-/** Emails a pending (or existing) client their magic link. */
-export async function sendSignInLink(formData: FormData) {
-  const { viewer, staff } = await requireStaff();
-  const membershipId = String(formData.get("membershipId") ?? "");
-  if (!z.uuid().safeParse(membershipId).success) backWith("/admin", "error", "Unknown person.");
-
-  const [row] = await getDb()
-    .select()
-    .from(memberships)
-    .where(and(eq(memberships.id, membershipId), eq(memberships.workspaceId, staff.workspaceId)))
-    .limit(1);
-  if (!row?.clientId) backWith("/admin", "error", "Unknown person.");
-  const back = `/admin/clients/${row.clientId}`;
-
-  const origin = await portalOrigin();
-  const send = () => getAuth().signIn.magicLink({ email: row.email, callbackURL: `${origin}/` });
-  let { error } = await send();
-  // Invited before accounts were created on invite: create it, then retry once.
-  if (isUserNotFound(error) && (await ensureAuthAccount(row.email)).ok) {
-    ({ error } = await send());
-  }
-  if (error) {
-    console.error("[admin] sign-in link failed", error);
-    backWith(back, "error", `Couldn't email ${row.email}. Check that magic links are enabled in Neon Auth.`);
-  }
-
-  await eventInsert({
-    workspaceId: staff.workspaceId,
-    actorId: viewer.userId,
-    verb: "membership.link_sent",
-    subjectType: "membership",
-    subjectId: row.id,
-    payload: { email: row.email },
-  });
-  backWith(back, "notice", `Sign-in link sent to ${row.email}.`);
+  backWith(back, "notice", `Added ${parsed.data.email}. Tell them to sign in at portal.skoxsoftware.com with that email.`);
 }
 
 export async function removeMember(formData: FormData) {

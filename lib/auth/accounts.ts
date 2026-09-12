@@ -12,17 +12,13 @@ function isAlreadyExists(error: AuthError) {
   );
 }
 
-export function isUserNotFound(error: AuthError) {
-  return Boolean(error) && (error?.code === "user_not_found" || error?.status === 404);
-}
-
 /**
- * Makes sure a sign-in account exists for an invited email, so their first
- * magic link works. Magic links in this Neon Auth project only go to existing
- * accounts, which also stops strangers creating accounts from the sign-in page.
+ * Makes sure a sign-in account exists for an invited email before they first
+ * sign in. Signing in with an emailed code would also create it; doing it at
+ * invite time surfaces auth problems to SKOX instead of to the client.
  *
- * The account has no password: people always sign in by magic link. Creating
- * it requires the caller to hold Neon Auth's admin role (the SKOX team does).
+ * The account has no password: people always sign in with an emailed code.
+ * Creating it requires the caller to hold Neon Auth's admin role (SKOX does).
  */
 export async function ensureAuthAccount(email: string) {
   const { error } = await getAuth().admin.createUser({ email, name: email });

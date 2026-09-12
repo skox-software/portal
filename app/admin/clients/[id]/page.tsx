@@ -8,7 +8,7 @@ import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, memberships, projects } from "@/lib/db/schema";
 import { formatDate, kindLabel, PROJECT_KINDS, ROLE_LABEL, STATUS_LABEL, todayIso } from "@/lib/format";
-import { createProject, inviteMember, removeMember, sendSignInLink } from "../../actions";
+import { createProject, inviteMember, removeMember } from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Client" };
@@ -150,12 +150,6 @@ export default async function ClientAdmin({
                         <span className={m.userId ? "chip chip-ok" : "chip chip-amber"}>
                           {m.userId ? "Signed in" : "Invited"}
                         </span>
-                        <form action={sendSignInLink}>
-                          <input type="hidden" name="membershipId" value={m.id} />
-                          <button className="btn btn-link small" type="submit">
-                            Email sign-in link
-                          </button>
-                        </form>
                         <form action={removeMember}>
                           <input type="hidden" name="membershipId" value={m.id} />
                           <button className="btn btn-link small" type="submit">

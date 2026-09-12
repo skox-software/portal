@@ -13,7 +13,7 @@ Blueprint" (phase 1).
 | --- | --- |
 | App | Next.js 16 (App Router), deployed on Vercel (SKOX account) |
 | Database | Neon Postgres (`skox-client-portal`, AWS us-east-2, database `portal`) + Drizzle |
-| Sign-in | Neon Auth (Managed Better Auth): magic links |
+| Sign-in | Neon Auth (Managed Better Auth): 6-digit email codes |
 | Styling | Plain CSS with the skoxsoftware.com tokens (`app/globals.css`) |
 
 ## How access works
@@ -25,7 +25,7 @@ Blueprint" (phase 1).
   **Clients** have `client_approver` or `client_member` on one client.
 - **Invitations are memberships keyed by email.** They attach to an account the
   first time someone signs in with that address, and only if the address is
-  verified (magic links verify it), so nobody can claim an invite by signing up
+  verified (entering an emailed code verifies it), so nobody can claim an invite by signing up
   with someone else's email and a password.
 - `proxy.ts` only redirects signed-out visitors; it is not the security layer.
 
@@ -61,7 +61,9 @@ Don't run `vercel link` here: it rewrites `.env.local`.
 
 ## Neon Auth settings that live in the Neon Console
 
-- Auth → Plugins → **Magic Link**: enabled, link expiration 60 minutes.
+- Sign-in uses the **Email OTP** endpoints (on by default). The Magic Link
+  plugin is off in this project; don't switch the portal back to links unless
+  it's enabled there.
 - Trusted domains: `https://portal.skoxsoftware.com` and `http://localhost:3300`.
 - Production email: your own SMTP provider rather than Neon's shared sender.
 

@@ -1,0 +1,31 @@
+name: CI
+
+# Deploys go out through the Vercel CLI, not Git integration. This job only
+# catches a broken build, failing tests or lint before anything ships.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      # npm install, not npm ci: a lockfile written on macOS can disagree with
+      # Linux about optional platform packages (see the website repo).
+      - run: npm install --no-audit --no-fund
+      - run: npx eslint .
+      - run: npm test
+      # The build needs no secrets: the database and auth clients are created
+      # lazily at request time.
+      - run: npm run build

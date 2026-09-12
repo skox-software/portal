@@ -1,0 +1,75 @@
+# SKOX Client Portal
+
+One link for a client's whole relationship with SKOX: the delivery date, weekly
+updates, what we need from them, previews, and (in later phases) feedback,
+approvals, signatures and payments.
+
+Live at **https://portal.skoxsoftware.com**. Plan: the "SKOX Client Portal
+Blueprint" (phase 1).
+
+## Stack
+
+| Layer | Choice |
+| --- | --- |
+| App | Next.js 16 (App Router), deployed on Vercel (SKOX account) |
+| Database | Neon Postgres (`skox-client-portal`, AWS us-east-2, database `portal`) + Drizzle |
+| Sign-in | Neon Auth (Managed Better Auth): magic links |
+| Styling | Plain CSS with the skoxsoftware.com tokens (`app/globals.css`) |
+
+## How access works
+
+- **Sign-in proves who someone is; `memberships` decides what they can do.**
+  Rules live in `lib/permissions.ts` (tested in `lib/permissions.test.ts`) and
+  are enforced on the server for every page and action through `lib/access.ts`.
+- **Staff** have a membership with no client (`staff_owner` / `staff`).
+  **Clients** have `client_approver` or `client_member` on one client.
+- **Invitations are memberships keyed by email.** They attach to an account the
+  first time someone signs in with that address, and only if the address is
+  verified (magic links verify it), so nobody can claim an invite by signing up
+  with someone else's email and a password.
+- `proxy.ts` only redirects signed-out visitors; it is not the security layer.
+
+Every table carries `workspace_id` (SKOX is one workspace), and every change
+writes an `events` row in the same batch: that is the audit trail.
+
+## Develop
+
+```sh
+npm install
+cp .env.example .env.local   # fill in DATABASE_URL, NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET
+npm run dev                  # http://localhost:3300
+npm test                     # permission and date rules
+npm run lint
+npm run build
+```
+
+Schema changes: edit `lib/db/schema.ts`, then
+
+```sh
+npm run db:generate          # writes SQL to drizzle/
+npm run db:migrate           # applies it to the database in .env.local
+```
+
+Review generated SQL before migrating production.
+
+## Deploy
+
+Deploys use the Vercel CLI from the SKOX account (`npx vercel deploy --prod`).
+Production env vars: `DATABASE_URL`, `NEON_AUTH_BASE_URL`,
+`NEON_AUTH_COOKIE_SECRET`, `PORTAL_URL=https://portal.skoxsoftware.com`.
+Don't run `vercel link` here: it rewrites `.env.local`.
+
+## Neon Auth settings that live in the Neon Console
+
+- Auth → Plugins → **Magic Link**: enabled, link expiration 60 minutes.
+- Trusted domains: `https://portal.skoxsoftware.com` and `http://localhost:3300`.
+- Production email: your own SMTP provider rather than Neon's shared sender.
+
+## Phase 1 status
+
+Built: sign-in, clients, people and invitations, projects with default
+milestones, delivery date with change history, status, milestones, tasks
+("waiting on you"), weekly updates with preview and video links, the client
+project home, SKOX mission control, and audit events.
+
+Schema ready, screens next: pinned feedback, approvals, files, share links.

@@ -13,12 +13,12 @@ export function SignInForm() {
       <div className="signin-sent" role="status">
         <h2>Check your email</h2>
         <p>
-          We sent a sign-in link to <strong>{state.email}</strong>. Open it on this
-          device; it expires soon.
+          If <strong>{state.email}</strong> has access to the portal, a sign-in link is on
+          its way. Open it on this device; it expires soon.
         </p>
         <p className="muted">
-          Nothing after a couple of minutes? Check your spam folder, or{" "}
-          <a href="/sign-in">send another link</a>.
+          Nothing after a couple of minutes? Check your spam folder, make sure this is the
+          address SKOX invited, or <a href="/sign-in">send another link</a>.
         </p>
       </div>
     );

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { isUserNotFound } from "@/lib/auth/accounts";
 import { getAuth } from "@/lib/auth/server";
 import { portalOrigin } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
@@ -24,6 +25,10 @@ export async function sendMagicLink(
     email,
     callbackURL: `${origin}/`,
   });
+
+  // An address without an account gets the same answer as one with an
+  // account, so the form never reveals who has access.
+  if (isUserNotFound(error)) return { status: "sent", email };
 
   if (error) {
     console.error("[sign-in] magic link could not be sent", error);

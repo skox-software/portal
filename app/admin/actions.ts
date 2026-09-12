@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
+import { ensureAuthAccount, isUserNotFound } from "@/lib/auth/accounts";
 import { getAuth } from "@/lib/auth/server";
 import { getDb } from "@/lib/db";
 import {
@@ -103,6 +104,11 @@ export async function inviteMember(formData: FormData) {
     .limit(1);
   if (existing) backWith(back, "error", `${parsed.data.email} already has access to ${client.name}.`);
 
+  const account = await ensureAuthAccount(parsed.data.email);
+  if (!account.ok) {
+    backWith(back, "error", `Couldn't set up a sign-in account for ${parsed.data.email}. Try again in a minute.`);
+  }
+
   const id = crypto.randomUUID();
   await getDb().batch([
     getDb().insert(memberships).values({
@@ -141,7 +147,12 @@ export async function sendSignInLink(formData: FormData) {
   const back = `/admin/clients/${row.clientId}`;
 
   const origin = await portalOrigin();
-  const { error } = await getAuth().signIn.magicLink({ email: row.email, callbackURL: `${origin}/` });
+  const send = () => getAuth().signIn.magicLink({ email: row.email, callbackURL: `${origin}/` });
+  let { error } = await send();
+  // Invited before accounts were created on invite: create it, then retry once.
+  if (isUserNotFound(error) && (await ensureAuthAccount(row.email)).ok) {
+    ({ error } = await send());
+  }
   if (error) {
     console.error("[admin] sign-in link failed", error);
     backWith(back, "error", `Couldn't email ${row.email}. Check that magic links are enabled in Neon Auth.`);

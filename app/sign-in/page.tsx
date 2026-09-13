@@ -23,14 +23,14 @@ export default async function SignInPage({
         <p className="eyebrow">Client Portal</p>
         <h1>Your project, in one place.</h1>
         <ul className="signin-points">
-          <li>The delivery date, always on screen</li>
+          <li>Your launch date and progress, always on screen</li>
           <li>Weekly updates on what shipped and what&apos;s next</li>
           <li>What we need from you, and by when</li>
         </ul>
       </section>
       <section className="signin-card" aria-labelledby="signin-title">
         <h2 id="signin-title">Sign in</h2>
-        <p className="muted">Use the email address SKOX invited.</p>
+        <p className="muted">Use the email your invitation went to.</p>
         <SignInForm defaultEmail={prefill} />
       </section>
     </main>

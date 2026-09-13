@@ -58,6 +58,14 @@ milestones, delivery date with reasons, tasks, weekly updates, audit log.
 - **Client team invites**: approvers invite teammates (view/comment or
   approve/sign/pay) and remove members from the Overview.
 
+### Phase 3, slice 3: client onboarding (2026-09-13)
+See [ONBOARDING.md](ONBOARDING.md). One email starts it; the agreement and
+deposit come first; a calm, animated setup (vision card, call recap to
+confirm, tailored project brief, brand studio with live preview, access
+checklist, kickoff agenda); skipped steps become to-dos; reminders and staff
+alerts; the printable project brief; launch dates "set at kickoff" until
+confirmed.
+
 ## Next
 
 ### Phase 3, remaining

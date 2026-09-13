@@ -16,8 +16,15 @@ import { remindSigners, voidDocument } from "../actions";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Document" };
 
-export default async function DocumentPage({ params }: { params: Promise<{ id: string; docId: string }> }) {
-  const { id, docId } = await params;
+export default async function DocumentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string; docId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ id, docId }, sp] = await Promise.all([params, searchParams]);
+  const fromWelcome = sp.from === "welcome";
   const shell = await loadProjectShell(id);
   const { project, viewer, access } = shell;
   if (!/^[0-9a-f-]{36}$/i.test(docId)) notFound();
@@ -55,7 +62,11 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       <ProjectHeader shell={shell} tab="documents" title={doc.title} intro={`${DOCUMENT_KIND_LABEL[doc.kind]} for ${project.name}`} />
       <main className="shell page page-after-band">
         <p className="small" style={{ marginBottom: 14 }}>
-          <Link href={`/projects/${project.id}/documents`}>← All documents</Link>
+          {fromWelcome ? (
+            <Link href={`/projects/${project.id}/welcome?step=agreement`}>← Back to your setup</Link>
+          ) : (
+            <Link href={`/projects/${project.id}/documents`}>← All documents</Link>
+          )}
         </p>
         <div className="doc-layout">
           <div className="pdf-frame">
@@ -94,7 +105,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
                 </p>
                 <div className="row">
                   {deposit && !access.isStaff && (
-                    <Link className="btn btn-primary" href={`/projects/${project.id}/billing`}>
+                    <Link className="btn btn-primary" href={`/projects/${project.id}/billing${fromWelcome ? "?from=welcome" : ""}`}>
                       Next: pay the deposit ({formatMoney(deposit.amountCents, deposit.currency)}) →
                     </Link>
                   )}

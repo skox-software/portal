@@ -94,7 +94,10 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
     }),
   ]);
 
-  notifyLater(() => signers.filter((s) => s !== viewer.email), {
+  // During onboarding the welcome email introduces the agreement, so the
+  // client gets one clear email instead of two competing ones.
+  const silent = formData.get("silent") === "1";
+  if (!silent) notifyLater(() => signers.filter((s) => s !== viewer.email), {
     subject: `Please sign: ${input.title}`,
     preheader: `${client.name} · ${DOCUMENT_KIND_LABEL[input.kind]} ready for your signature`,
     heading: `${input.title} is ready for your signature`,

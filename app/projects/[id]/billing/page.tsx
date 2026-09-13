@@ -52,6 +52,11 @@ export default async function BillingPage({
         notice={thanks ? "Thank you! Your payment is processing. It shows as paid here within a minute." : readMessage(sp.notice)}
       />
       <main className="shell page page-after-band">
+        {sp.from === "welcome" && (
+          <p className="small" style={{ marginBottom: 14 }}>
+            <a href={`/projects/${project.id}/welcome?step=agreement`}>← Back to your setup</a>
+          </p>
+        )}
         <section className="stat-row" aria-label="Billing summary">
           <div className="stat">
             <p className="label">Outstanding</p>

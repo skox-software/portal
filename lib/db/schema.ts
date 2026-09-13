@@ -84,6 +84,7 @@ export const ideaStatus = pgEnum("idea_status", ["proposed", "interested", "not_
 export const referralStatus = pgEnum("referral_status", ["new", "contacted", "won", "lost"]);
 export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "login_note"]);
 export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
+export const onboardingStatus = pgEnum("onboarding_status", ["invited", "in_progress", "completed"]);
 
 export const workspaces = pgTable("workspaces", {
   id: id(),
@@ -93,6 +94,12 @@ export const workspaces = pgTable("workspaces", {
   reviewUrl: text("review_url"),
   /** What a referrer gets, shown on the referral card. */
   referralReward: text("referral_reward"),
+  /** Cal.com / Calendly link clients use to book kickoff. */
+  schedulingUrl: text("scheduling_url"),
+  /** Loom/YouTube welcome from the founders, shown at the start of onboarding. */
+  welcomeVideoUrl: text("welcome_video_url"),
+  /** One line introducing the team, e.g. "Josh & Sam, co-founders". */
+  teamIntro: text("team_intro"),
   createdAt: createdAt(),
 });
 
@@ -154,6 +161,8 @@ export const projects = pgTable(
     deliveryDate: date("delivery_date", { mode: "string" }).notNull(),
     liveUrl: text("live_url"),
     launchedOn: date("launched_on", { mode: "string" }),
+    /** A target set at onboarding, confirmed at kickoff. */
+    dateTentative: boolean("date_tentative").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
@@ -320,6 +329,8 @@ export const files = pgTable(
     uploadedBy: text("uploaded_by").notNull(),
     uploadedByEmail: text("uploaded_by_email"),
     fromClient: boolean("from_client").notNull().default(false),
+    /** logo | brand | content | other, so the brand kit can find its files. */
+    category: text("category"),
     createdAt: createdAt(),
   },
   (t) => [index("files_project_idx").on(t.projectId)],
@@ -546,6 +557,50 @@ export const events = pgTable(
   ],
 );
 
+/**
+ * The welcome flow a new client walks after saying yes. One per project.
+ * Answers are JSON validated by zod at the edges (lib/onboarding-content.ts),
+ * so question sets can evolve without migrations.
+ */
+export const onboardings = pgTable(
+  "onboardings",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .unique()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    invitedEmail: text("invited_email").notNull(),
+    invitedBy: text("invited_by").notNull(),
+    status: onboardingStatus("status").notNull().default("invited"),
+    /** "What we heard on our call", written by SKOX, confirmed by the client. */
+    callRecap: text("call_recap"),
+    recapConfirmed: boolean("recap_confirmed"),
+    recapFeedback: text("recap_feedback"),
+    internalNotes: text("internal_notes"),
+    /** step key -> "done" | "skipped" */
+    steps: jsonb("steps").$type<Record<string, "done" | "skipped">>().notNull().default({}),
+    contact: jsonb("contact").$type<Record<string, string>>().notNull().default({}),
+    answers: jsonb("answers").$type<Record<string, string | string[]>>().notNull().default({}),
+    brand: jsonb("brand").$type<Record<string, string | string[] | boolean>>().notNull().default({}),
+    access: jsonb("access").$type<Record<string, { status: string; note?: string }>>().notNull().default({}),
+    team: jsonb("team").$type<Record<string, string>>().notNull().default({}),
+    kickoff: jsonb("kickoff").$type<Record<string, string>>().notNull().default({}),
+    /** Null while SKOX is still attaching the agreement and deposit. */
+    welcomeSentAt: timestamp("welcome_sent_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    remindersSent: integer("reminders_sent").notNull().default(0),
+    staffAlertedAt: timestamp("staff_alerted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("onboardings_workspace_idx").on(t.workspaceId, t.status)],
+);
+
+export type Onboarding = typeof onboardings.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Client = typeof clients.$inferSelect;

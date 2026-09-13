@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { requireViewer } from "@/lib/access";
 import { getDb } from "@/lib/db";
-import { clients, projects } from "@/lib/db/schema";
+import { clients, onboardings, projects } from "@/lib/db/schema";
 import { describeDaysUntil, daysUntil, formatDate, kindLabel, STATUS_LABEL } from "@/lib/format";
 import { staffMembershipIn } from "@/lib/permissions";
 
@@ -24,7 +24,16 @@ export default async function Home() {
     : [];
   const visible = rows;
 
-  if (visible.length === 1) redirect(`/projects/${visible[0].project.id}`);
+  if (visible.length === 1) {
+    const only = visible[0].project;
+    // A brand-new client lands straight in their welcome flow until it's finished.
+    const [welcome] = await getDb()
+      .select({ status: onboardings.status })
+      .from(onboardings)
+      .where(eq(onboardings.projectId, only.id))
+      .limit(1);
+    redirect(welcome && welcome.status !== "completed" ? `/projects/${only.id}/welcome` : `/projects/${only.id}`);
+  }
 
   return (
     <>

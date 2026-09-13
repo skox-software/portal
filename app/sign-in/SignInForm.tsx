@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { signInWithCode, type SignInState } from "./actions";
 
-export function SignInForm() {
+export function SignInForm({ defaultEmail = "" }: { defaultEmail?: string }) {
   const [state, action, pending] = useActionState<SignInState, FormData>(signInWithCode, {
     step: "email",
   });
@@ -67,6 +67,7 @@ export function SignInForm() {
           type="email"
           autoComplete="email"
           required
+          defaultValue={defaultEmail}
           placeholder="you@company.com"
           aria-invalid={Boolean(state.error)}
           aria-describedby={state.error ? "email-error" : undefined}

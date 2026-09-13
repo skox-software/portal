@@ -1,10 +1,12 @@
-import { and, eq, gte, inArray, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { documents, documentSigners, invoices, projects } from "@/lib/db/schema";
+import { clients, documents, documentSigners, invoices, onboardings, projects } from "@/lib/db/schema";
+import { nextStep, progress, shouldRemind, stepsFor } from "@/lib/onboarding-flow";
+import { agreementState, welcomeLink } from "@/lib/onboarding-server";
 import { sendWeeklyDigests } from "@/lib/digest";
 import { sendEmail } from "@/lib/email";
 import { formatDate, formatMoney, todayIso } from "@/lib/format";
-import { clientRecipients, portalLink } from "@/lib/notify";
+import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
 
 /**
  * Daily nudges, so nothing sits waiting: unsigned documents (every 3 days)
@@ -77,6 +79,59 @@ export async function GET(request: Request) {
     });
     await db.update(invoices).set({ lastRemindedAt: now }).where(eq(invoices.id, invoice.id));
     sent++;
+  }
+
+  // Onboarding: a gentle nudge toward the next step (never "are you still interested?"),
+  // and a heads-up to SKOX when someone has been paused for five days.
+  const openOnboardings = await db
+    .select({ onboarding: onboardings, project: projects, client: clients })
+    .from(onboardings)
+    .innerJoin(projects, eq(projects.id, onboardings.projectId))
+    .innerJoin(clients, eq(clients.id, projects.clientId))
+    .where(and(ne(onboardings.status, "completed"), isNotNull(onboardings.welcomeSentAt)))
+    .limit(200);
+  for (const { onboarding: o, project, client } of openOnboardings) {
+    const since = o.lastActivityAt ?? o.welcomeSentAt ?? o.createdAt;
+    if (shouldRemind({ ...o, lastActivityAt: since }, now)) {
+      const agreement = await agreementState(project.id, project.status);
+      const flow = stepsFor({ hasAgreement: agreement.hasAgreement });
+      const next = nextStep(o.steps, flow);
+      const nextTitle = flow.find((s) => s.key === next)?.title ?? "your setup";
+      const left = progress(o.steps, flow).minutesLeft;
+      await sendEmail(o.invitedEmail, {
+        subject: o.status === "invited" ? `Your SKOX portal is ready for ${project.name}` : `Next up for ${project.name}: ${nextTitle.toLowerCase()}`,
+        preheader: `About ${left} minutes to go. It picks up right where you left off.`,
+        heading: o.status === "invited" ? "Your portal is ready when you are" : `Next up: ${nextTitle}`,
+        paragraphs: [
+          o.status === "invited"
+            ? `Everything for ${project.name} is set up and waiting in your portal.`
+            : `You're making great progress on your setup for ${project.name}.`,
+          `The next step takes about ${flow.find((s) => s.key === next)?.minutes ?? 2} minutes, and it saves as you go.`,
+        ],
+        cta: { label: o.status === "invited" ? "Open your portal" : "Pick up where you left off", href: welcomeLink(o.invitedEmail) },
+      });
+      await db
+        .update(onboardings)
+        .set({ lastRemindedAt: now, remindersSent: o.remindersSent + 1 })
+        .where(eq(onboardings.id, o.id));
+      sent++;
+    }
+    const idle = Math.floor((now.getTime() - since.getTime()) / DAY);
+    if (idle >= 5 && !o.staffAlertedAt) {
+      const staff = await staffRecipients(o.workspaceId);
+      await sendEmail(staff, {
+        subject: `${client.name} paused onboarding ${idle} days ago`,
+        preheader: "A personal note or quick call usually gets things moving.",
+        heading: `${client.name} could use a personal nudge`,
+        paragraphs: [
+          `${o.invitedEmail} hasn't touched their setup for ${project.name} in ${idle} days (${o.remindersSent} automatic reminder(s) sent).`,
+          "A short personal message or a quick call works better than another automated email.",
+        ],
+        cta: { label: "Open onboarding", href: portalLink("/admin/onboard") },
+      });
+      await db.update(onboardings).set({ staffAlertedAt: now }).where(eq(onboardings.id, o.id));
+      sent++;
+    }
   }
 
   // Fridays (UTC): the weekly recap. Hobby cron runs once a day, so it rides along here.

@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne } from "drizzle-orm";
 import { startSteps } from "@/lib/onboarding";
+import { progress, stepsFor } from "@/lib/onboarding-flow";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
@@ -19,6 +20,7 @@ import {
   invoices,
   memberships,
   milestones,
+  onboardings,
   previews,
   supportRequests,
   tasks,
@@ -119,6 +121,10 @@ export default async function ProjectHome({
         invoice: { id: depositRow.invoice.id, number: depositRow.invoice.number, status: depositRow.invoice.status },
       })
     : null;
+  const [welcome] = await db.select().from(onboardings).where(eq(onboardings.projectId, project.id)).limit(1);
+  const welcomeProgress = welcome
+    ? progress(welcome.steps, stepsFor({ hasAgreement: Boolean(depositRow) }))
+    : { percent: 0, minutesLeft: 0, finished: 0, total: 0 };
   const team = can.inviteTeammates(access)
     ? await db.select().from(memberships).where(eq(memberships.clientId, project.clientId)).orderBy(asc(memberships.createdAt))
     : [];
@@ -212,6 +218,21 @@ export default async function ProjectHome({
           <p className="hello-line">{headline}</p>
         </section>
 
+        {welcome && welcome.status !== "completed" && welcome.welcomeSentAt && (
+          <section className="card setup-banner" aria-labelledby="setup-title">
+            <div>
+              <p className="label">Your setup</p>
+              <h2 id="setup-title">
+                {welcomeProgress.percent > 0 ? `You're ${welcomeProgress.percent}% set up` : "Let's get you set up"}
+              </h2>
+              <p className="small muted">About {welcomeProgress.minutesLeft} minutes left. It saves as you go.</p>
+            </div>
+            <Link className="btn btn-primary" href={`/projects/${project.id}/welcome`}>
+              {welcomeProgress.percent > 0 ? "Pick up where you left off" : "Start setup"} →
+            </Link>
+          </section>
+        )}
+
         {startPath && (
           <section className="card start-card" aria-labelledby="start-title">
             <div className="card-head">
@@ -267,9 +288,18 @@ export default async function ProjectHome({
         ) : (
           <section className="date-panel" aria-label="Delivery date">
             <div className="date-main">
-              <p className="label">Delivery date</p>
-              <p className="date-big">{formatDate(project.deliveryDate)}</p>
-              <p className="date-countdown">{describeDaysUntil(days)}</p>
+              <p className="label">Launch date</p>
+              {project.dateTentative ? (
+                <>
+                  <p className="date-big date-soft">Set at kickoff</p>
+                  <p className="date-countdown">We&apos;ll confirm it together once we&apos;ve walked through your plan</p>
+                </>
+              ) : (
+                <>
+                  <p className="date-big">{formatDate(project.deliveryDate)}</p>
+                  <p className="date-countdown">{describeDaysUntil(days)}</p>
+                </>
+              )}
               {changes[0] && (
                 <p className="date-history">
                   Moved from {formatDate(changes[0].fromDate)}: {changes[0].reason}

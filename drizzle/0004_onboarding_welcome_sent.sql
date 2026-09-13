@@ -1,0 +1,1 @@
+ALTER TABLE "onboardings" ADD COLUMN "welcome_sent_at" timestamp with time zone;

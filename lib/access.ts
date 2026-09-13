@@ -27,7 +27,15 @@ export type Viewer = {
  * address and a password.
  */
 export async function getViewer(): Promise<Viewer | null> {
-  const { data: session } = await getAuth().getSession();
+  let session: Awaited<ReturnType<ReturnType<typeof getAuth>["getSession"]>>["data"] = null;
+  try {
+    ({ data: session } = await getAuth().getSession());
+  } catch (error) {
+    // An expired session outside the proxy (e.g. the sign-in page) tries to
+    // refresh cookies during render, which Next forbids. Treat it as signed out.
+    console.warn("[access] could not read session; treating as signed out", (error as Error).message);
+    return null;
+  }
   const user = session?.user;
   if (!user?.id || !user.email) return null;
 

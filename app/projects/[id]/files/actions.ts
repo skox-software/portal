@@ -61,6 +61,7 @@ export async function registerFile(formData: FormData): Promise<{ ok: boolean; m
       uploadedBy: viewer.userId,
       uploadedByEmail: viewer.email,
       fromClient,
+      category: ["logo", "brand", "content"].includes(String(formData.get("category"))) ? String(formData.get("category")) : null,
     }),
     eventInsert({
       workspaceId: project.workspaceId,

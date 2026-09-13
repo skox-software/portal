@@ -14,6 +14,7 @@ import {
   ideas,
   invoices,
   memberships,
+  onboardings,
   projects,
   referrals,
   supportRequests,
@@ -79,6 +80,12 @@ export default async function MissionControl({
       db.select().from(workspaces).where(eq(workspaces.id, ws)).limit(1),
     ]);
 
+  const onboardingRows = await db
+    .select({ onboarding: onboardings, client: clients })
+    .from(onboardings)
+    .innerJoin(projects, eq(projects.id, onboardings.projectId))
+    .innerJoin(clients, eq(clients.id, projects.clientId))
+    .where(eq(onboardings.workspaceId, ws));
   const waitingBy = new Map(waiting.map((w) => [w.projectId, Number(w.n)]));
   const lastBy = new Map(lastUpdates.map((u) => [u.projectId, u.last]));
   const visitBy = new Map(clientVisits.map((v) => [v.clientId, v]));
@@ -135,6 +142,21 @@ export default async function MissionControl({
       text: `${n} must-fix comment${n === 1 ? "" : "s"} open on ${projectById.get(projectId)?.name ?? "a project"}`,
       href: `/projects/${projectId}/review`,
     })),
+    ...onboardingRows.flatMap(({ onboarding: o, client }) => {
+      const items: Attention[] = [];
+      const idle = Math.floor((now - (o.lastActivityAt ?? o.welcomeSentAt ?? o.createdAt).getTime()) / DAY);
+      if (!o.welcomeSentAt) {
+        items.push({ key: `ob-draft-${o.id}`, level: "high", text: `Welcome not sent yet: ${client.name}`, href: `/admin/onboard/${o.projectId}`, when: o.createdAt });
+      } else if (o.status === "completed" && o.completedAt && now - o.completedAt.getTime() < 7 * DAY) {
+        items.push({ key: `ob-done-${o.id}`, level: "normal", text: `Brief ready: ${client.name} finished onboarding`, href: `/admin/projects/${o.projectId}/brief`, when: o.completedAt });
+      } else if (o.status !== "completed" && idle >= 3) {
+        items.push({ key: `ob-idle-${o.id}`, level: idle >= 5 ? "high" : "normal", text: `${client.name} paused onboarding ${idle} days ago`, href: `/admin/onboard`, when: o.lastActivityAt ?? o.createdAt });
+      }
+      if (o.recapConfirmed === false && o.status !== "completed") {
+        items.push({ key: `ob-recap-${o.id}`, level: "high", text: `${client.name} added to the call recap`, href: `/admin/projects/${o.projectId}/brief` });
+      }
+      return items;
+    }),
     ...referralList
       .filter((r) => r.status === "new")
       .map((r) => ({ key: `ref-${r.id}`, level: "high" as const, text: `New referral: ${r.name} (${r.email})`, href: "#referrals", when: r.createdAt })),
@@ -188,6 +210,9 @@ export default async function MissionControl({
             <p className="eyebrow">SKOX team</p>
             <h1>Mission control</h1>
           </div>
+          <Link className="btn btn-primary" href="/admin/onboard">
+            Onboard a new client →
+          </Link>
         </div>
         <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
 
@@ -372,9 +397,24 @@ export default async function MissionControl({
 
             <section className="card" aria-labelledby="settings-title">
               <div className="card-head">
-                <h2 id="settings-title">Growth settings</h2>
+                <h2 id="settings-title">Workspace settings</h2>
               </div>
               <form action={saveWorkspaceSettings} className="stack">
+                <div className="field">
+                  <label htmlFor="ws-scheduling">Kickoff booking link</label>
+                  <input id="ws-scheduling" name="schedulingUrl" type="url" defaultValue={workspace?.schedulingUrl ?? ""} placeholder="https://cal.com/skox/kickoff" />
+                  <span className="hint">New clients book kickoff from their welcome flow.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="ws-intro">Team intro</label>
+                  <input id="ws-intro" name="teamIntro" defaultValue={workspace?.teamIntro ?? ""} maxLength={120} placeholder="Josh & Sam, co-founders" />
+                  <span className="hint">Signs the welcome note and emails.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="ws-video">Welcome video (optional)</label>
+                  <input id="ws-video" name="welcomeVideoUrl" type="url" defaultValue={workspace?.welcomeVideoUrl ?? ""} placeholder="https://www.loom.com/share/…" />
+                  <span className="hint">Leave empty until you record one. Nothing shows without it.</span>
+                </div>
                 <div className="field">
                   <label htmlFor="ws-review">Review link</label>
                   <input id="ws-review" name="reviewUrl" type="url" defaultValue={workspace?.reviewUrl ?? ""} placeholder="https://g.page/r/…/review" />

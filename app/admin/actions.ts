@@ -88,19 +88,35 @@ export async function createClient(formData: FormData) {
 
 export async function saveWorkspaceSettings(formData: FormData) {
   const { staff } = await requireStaff();
+  const link = z.union([z.literal(""), z.url({ protocol: /^https$/ })]);
   const parsed = z
     .object({
-      reviewUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ })]),
+      reviewUrl: link,
       referralReward: text(160),
+      schedulingUrl: link,
+      welcomeVideoUrl: link,
+      teamIntro: text(120),
     })
-    .safeParse({ reviewUrl: formData.get("reviewUrl") ?? "", referralReward: formData.get("referralReward") ?? "" });
-  if (!parsed.success) backWith("/admin", "error", "The review link must start with https://");
+    .safeParse({
+      reviewUrl: formData.get("reviewUrl") ?? "",
+      referralReward: formData.get("referralReward") ?? "",
+      schedulingUrl: formData.get("schedulingUrl") ?? "",
+      welcomeVideoUrl: formData.get("welcomeVideoUrl") ?? "",
+      teamIntro: formData.get("teamIntro") ?? "",
+    });
+  if (!parsed.success) backWith("/admin", "error", "Links must start with https://");
   await getDb()
     .update(workspaces)
-    .set({ reviewUrl: parsed.data.reviewUrl || null, referralReward: parsed.data.referralReward || null })
+    .set({
+      reviewUrl: parsed.data.reviewUrl || null,
+      referralReward: parsed.data.referralReward || null,
+      schedulingUrl: parsed.data.schedulingUrl || null,
+      welcomeVideoUrl: parsed.data.welcomeVideoUrl || null,
+      teamIntro: parsed.data.teamIntro || null,
+    })
     .where(eq(workspaces.id, staff.workspaceId));
   revalidatePath("/admin");
-  backWith("/admin", "notice", "Growth settings saved.");
+  backWith("/admin", "notice", "Settings saved.");
 }
 
 export async function setReferralStatus(formData: FormData) {
@@ -299,7 +315,7 @@ export async function changeDeliveryDate(formData: FormData) {
 
   const db = getDb();
   await db.batch([
-    db.update(projects).set({ deliveryDate: parsed.data.deliveryDate }).where(eq(projects.id, project.id)),
+    db.update(projects).set({ deliveryDate: parsed.data.deliveryDate, dateTentative: false }).where(eq(projects.id, project.id)),
     db
       .update(milestones)
       .set({ dueOn: parsed.data.deliveryDate })

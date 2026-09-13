@@ -7,8 +7,14 @@ import { SignInForm } from "./SignInForm";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Sign in" };
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (await getViewer()) redirect("/");
+  const { email } = await searchParams;
+  const prefill = typeof email === "string" && /^[^\s@]+@[^\s@]+$/.test(email) ? email.slice(0, 200) : "";
 
   return (
     <main className="signin">
@@ -25,7 +31,7 @@ export default async function SignInPage() {
       <section className="signin-card" aria-labelledby="signin-title">
         <h2 id="signin-title">Sign in</h2>
         <p className="muted">Use the email address SKOX invited.</p>
-        <SignInForm />
+        <SignInForm defaultEmail={prefill} />
       </section>
     </main>
   );

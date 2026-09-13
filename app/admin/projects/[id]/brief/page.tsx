@@ -60,6 +60,9 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
           </div>
           <div className="row no-print">
             <PrintButton />
+            <a className="btn btn-ghost btn-small" href={`/api/projects/${project.id}/welcome-guide`} target="_blank" rel="noopener noreferrer">
+              Welcome guide (PDF)
+            </a>
             <Link className="btn btn-ghost btn-small" href={`/projects/${project.id}/welcome`}>
               Open their setup
             </Link>

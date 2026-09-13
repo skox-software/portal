@@ -172,6 +172,9 @@ export default async function PrepareWelcome({
               <Link className="btn btn-link small" href={`/projects/${project.id}/welcome`}>
                 Preview what they&apos;ll see
               </Link>
+              <a className="btn btn-link small" href={`/api/projects/${project.id}/welcome-guide`} target="_blank" rel="noopener noreferrer">
+                Preview their welcome guide (PDF)
+              </a>
             </div>
             {!doc && !sent && (
               <p className="small muted" style={{ marginTop: 8 }}>

@@ -1932,6 +1932,34 @@ a.doc-title:hover {
   font: 400 19px/1.5 var(--serif);
   color: var(--ink);
 }
+.guide-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.2s, transform 0.25s var(--ease-out), box-shadow 0.25s;
+}
+.guide-link:hover {
+  border-color: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(28, 32, 29, 0.08);
+}
+.guide-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 52px;
+  flex: none;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--amber);
+  font: 600 10px/1 var(--mono);
+}
 .recap-card {
   display: grid;
   gap: 14px;

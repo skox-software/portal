@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   // Pin the workspace root: a stray package-lock.json in the home folder would
   // otherwise be taken as the root.
   turbopack: { root: __dirname },
+  // The welcome guide PDF reads brand fonts from disk at runtime.
+  outputFileTracingIncludes: {
+    "/api/projects/\\[id\\]/welcome-guide": ["./assets/fonts/**/*"],
+    "/api/projects/*/welcome-guide": ["./assets/fonts/**/*"],
+  },
   // Files go straight from the browser to private Blob storage, so actions
   // only carry form fields and the default 1MB action body limit stays.
   async headers() {

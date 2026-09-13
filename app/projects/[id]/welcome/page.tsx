@@ -227,9 +227,14 @@ export default async function WelcomePage({
               {Object.values(o.steps).includes("skipped") && (
                 <p className="small muted">Anything you saved for later is on your to-do list, whenever you&apos;re ready.</p>
               )}
-              <Link className="btn btn-primary btn-lg" href={`/projects/${project.id}`}>
-                Go to your project →
-              </Link>
+              <div className="row">
+                <Link className="btn btn-primary btn-lg" href={`/projects/${project.id}`}>
+                  Go to your project →
+                </Link>
+                <a className="btn btn-ghost btn-lg" href={`/api/projects/${project.id}/welcome-guide?download=1`}>
+                  Download your welcome guide
+                </a>
+              </div>
             </div>
           ) : (
             <div className="step-enter" key={current}>
@@ -277,6 +282,17 @@ export default async function WelcomePage({
                         everything. If anything is ever unclear, reply to any of our emails and a founder answers.
                       </p>
                     </div>
+                  </Reveal>
+                  <Reveal>
+                    <a className="guide-link" href={`/api/projects/${project.id}/welcome-guide`} target="_blank" rel="noopener noreferrer">
+                      <span className="guide-icon" aria-hidden="true">
+                        PDF
+                      </span>
+                      <span>
+                        <strong>Your welcome guide</strong>
+                        <span className="small muted"> · everything about working with us, made for {greetingName}. Save or print it.</span>
+                      </span>
+                    </a>
                   </Reveal>
                   {o.callRecap && (
                     <Reveal>

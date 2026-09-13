@@ -1,0 +1,74 @@
+# SKOX Client Portal roadmap
+
+Goal: a client can do **everything** with SKOX in one place (follow the build,
+give feedback, approve, sign, pay, send files, ask for changes, see results)
+and enjoy it enough to stay on a care plan and refer friends.
+
+Every page answers three questions:
+
+| Before launch | After launch |
+| --- | --- |
+| When will it be done? | Is it healthy? |
+| What's new? | What did it do for me this month? |
+| What do you need from me? | What should we do next? |
+
+## Shipped
+
+### Phase 1: foundation (2026-09-12)
+Sign-in with 6-digit email codes, clients and invitations, projects with
+milestones, delivery date with reasons, tasks, weekly updates, audit log.
+
+### Phase 2: one-stop shop (2026-09-13)
+- **Overview**: greeting, one-line status, progress ring, unified *Your to-do*
+  (sign, approve, pay, reply, tick off tasks, react to ideas), *Since your last
+  visit*, read-only status link for bosses and boards.
+- **Review**: SKOX posts design rounds; clients drop numbered pins on the
+  design (Change / Must fix / Love it); approvers approve or request changes.
+- **Documents & e-signature**: PDF sent to named signers, typed-name signature
+  with consent, IP/device/time recorded, SHA-256 fingerprint checked at signing,
+  signed copy with a signature certificate. Reminders every 3 days.
+- **Files**: private uploads both ways (Vercel Blob, private store).
+- **Billing**: invoices with due/overdue states, Pay now (Stripe Checkout when
+  `STRIPE_SECRET_KEY` is set, else any pay link), auto-mark paid via webhook,
+  reminders when due soon or overdue.
+- **Requests**: "Request a change" with priority, threaded replies, status.
+- **Results**: monthly report (visitors, leads, uptime, speed, trend lines),
+  care plan with hours meter, "What we could build next" ideas with one-click
+  interest, launch kit, referral link, review ask.
+- **Mission control**: needs-attention queue, client health score, KPIs,
+  referrals inbox, growth settings.
+- **Email**: branded emails for every step via Resend (portal@skoxsoftware.com).
+
+## Next
+
+### Phase 3: less typing for SKOX, zero chasing for clients
+1. **Onboarding checklist** at kickoff: brand assets, logins, content, a short
+   questionnaire; each item uploads straight into Files and ticks itself off.
+2. **Proposal → contract → deposit in one flow**: accept proposal, sign,
+   pay deposit on one page; project auto-moves to Kickoff.
+3. **Weekly digest email** (Friday): progress, what's next, open to-dos.
+4. **Notification preferences** per person (instant / weekly digest / off).
+5. **Stripe**: saved payment method for care plans, auto-billed monthly;
+   receipts in Billing; ACH for large invoices.
+6. **Loom/video embeds** inline in updates and the launch kit.
+
+### Phase 4: results that sell renewals
+1. **Live metrics**: connect Google Analytics / Plausible and uptime monitoring
+   so monthly reports fill themselves.
+2. **Quarterly business review** page generated from reports and requests.
+3. **Care plan usage alerts** at 80% of hours.
+4. **Case-study consent** at launch (one click), feeding skoxsoftware.com.
+
+### Phase 5: product-grade
+1. Team roles on the client side (billing contact vs approver).
+2. Custom domain + white-label per workspace (portal as a product).
+3. MFA for staff when Neon Auth supports it; audit log viewer.
+4. Mobile push / PWA install.
+
+## Operating notes
+- Emails send only in production (or with `EMAIL_SEND_IN_DEV=1`).
+- Required env: `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`,
+  `PORTAL_URL`, `RESEND_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`.
+- Optional: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (endpoint
+  `/api/stripe/webhook`, events `checkout.session.completed` and
+  `checkout.session.async_payment_succeeded`), `EMAIL_FROM`, `EMAIL_REPLY_TO`.

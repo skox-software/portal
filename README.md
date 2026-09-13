@@ -67,11 +67,12 @@ Don't run `vercel link` here: it rewrites `.env.local`.
 - Trusted domains: `https://portal.skoxsoftware.com` and `http://localhost:3300`.
 - Production email: your own SMTP provider rather than Neon's shared sender.
 
-## Phase 1 status
+## What's built
 
-Built: sign-in, clients, people and invitations, projects with default
-milestones, delivery date with change history, status, milestones, tasks
-("waiting on you"), weekly updates with preview and video links, the client
-project home, SKOX mission control, and audit events.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for everything shipped and what's next.
+Client project tabs: Overview, Review, Documents, Files, Billing, Requests,
+Results. Staff controls live on the same pages, marked "SKOX only".
 
-Schema ready, screens next: pinned feedback, approvals, files, share links.
+Services: Resend (email from portal@skoxsoftware.com), Vercel Blob (private
+store `skox-portal-files`), Vercel Cron (`/api/cron/reminders`, daily), and
+optional Stripe Checkout (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`).

@@ -14,8 +14,10 @@ import {
   milestones,
   previews,
   projects,
+  referrals,
   tasks,
   updates,
+  workspaces,
 } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { midpoint, PROJECT_KINDS } from "@/lib/format";
@@ -78,6 +80,46 @@ export async function createClient(formData: FormData) {
     }),
   ]);
   redirect(`/admin/clients/${id}`);
+}
+
+export async function saveWorkspaceSettings(formData: FormData) {
+  const { staff } = await requireStaff();
+  const parsed = z
+    .object({
+      reviewUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ })]),
+      referralReward: text(160),
+    })
+    .safeParse({ reviewUrl: formData.get("reviewUrl") ?? "", referralReward: formData.get("referralReward") ?? "" });
+  if (!parsed.success) backWith("/admin", "error", "The review link must start with https://");
+  await getDb()
+    .update(workspaces)
+    .set({ reviewUrl: parsed.data.reviewUrl || null, referralReward: parsed.data.referralReward || null })
+    .where(eq(workspaces.id, staff.workspaceId));
+  revalidatePath("/admin");
+  backWith("/admin", "notice", "Growth settings saved.");
+}
+
+export async function setReferralStatus(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const parsed = z
+    .object({ referralId: z.uuid(), status: z.enum(["new", "contacted", "won", "lost"]) })
+    .safeParse({ referralId: formData.get("referralId"), status: formData.get("status") });
+  if (!parsed.success) return;
+  await getDb().batch([
+    getDb()
+      .update(referrals)
+      .set({ status: parsed.data.status })
+      .where(and(eq(referrals.id, parsed.data.referralId), eq(referrals.workspaceId, staff.workspaceId))),
+    eventInsert({
+      workspaceId: staff.workspaceId,
+      actorId: viewer.userId,
+      verb: "referral.status_changed",
+      subjectType: "referral",
+      subjectId: parsed.data.referralId,
+      payload: { status: parsed.data.status },
+    }),
+  ]);
+  revalidatePath("/admin");
 }
 
 export async function inviteMember(formData: FormData) {

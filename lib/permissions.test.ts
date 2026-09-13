@@ -4,6 +4,7 @@ import {
   accessToProject,
   can,
   canInviteRole,
+  canSign,
   normalizeEmail,
   staffMembershipIn,
   type MembershipLike,
@@ -67,6 +68,27 @@ test("invitations can never grant staff roles", () => {
   assert.equal(canInviteRole(a, "client_member"), true);
   assert.equal(canInviteRole(a, "staff"), false);
   assert.equal(canInviteRole(accessToProject([member], project)!, "client_member"), false);
+});
+
+test("only the named signer can sign, once, while the document is out", () => {
+  const doc = { status: "out_for_signature" as const };
+  const signer = { email: "ceo@acme.com", status: "pending" as const };
+  assert.equal(canSign("CEO@acme.com", doc, signer), true);
+  assert.equal(canSign("cfo@acme.com", doc, signer), false, "someone else can't sign for them");
+  assert.equal(canSign("ceo@acme.com", doc, { ...signer, status: "signed" }), false, "no double signing");
+  assert.equal(canSign("ceo@acme.com", { status: "void" }, signer), false);
+  assert.equal(canSign("ceo@acme.com", doc, undefined), false, "not a signer at all");
+});
+
+test("clients raise requests and react to ideas; staff run billing and share links", () => {
+  const s = accessToProject([staff], project)!;
+  const ap = accessToProject([approver], project)!;
+  const m = accessToProject([member], project)!;
+  assert.equal(can.requestSupport(m), true);
+  assert.equal(can.requestSupport(s), false, "SKOX doesn't file requests to itself");
+  assert.equal(can.createShareLink(ap), true);
+  assert.equal(can.createShareLink(m), false);
+  assert.equal(can.uploadFiles(m), true);
 });
 
 test("emails are compared case- and space-insensitively", () => {

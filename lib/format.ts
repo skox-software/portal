@@ -77,9 +77,85 @@ export const MILESTONE_STATE_LABEL = {
   done: "Done",
 } as const;
 
+export function formatMoney(cents: number, currency = "usd") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  }).format(cents / 100);
+}
+
+/** "2026-09-01" → "September 2026" */
+export function formatMonth(isoDate: string) {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/** Percentage change, rounded; null when there's nothing to compare with. */
+export function percentChange(current: number | null | undefined, previous: number | null | undefined) {
+  if (current == null || previous == null || previous === 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+export function firstName(nameOrEmail: string | null | undefined) {
+  if (!nameOrEmail) return "there";
+  const base = nameOrEmail.includes("@") ? nameOrEmail.split("@")[0] : nameOrEmail;
+  const word = base.split(/[\s._-]+/)[0] ?? base;
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+export function greeting(now: Date = new Date()) {
+  const hour = Number(
+    now.toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" }),
+  );
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+export const DOCUMENT_KIND_LABEL = {
+  proposal: "Proposal",
+  sow: "Statement of work",
+  contract: "Contract",
+  nda: "NDA",
+  change_order: "Change order",
+  other: "Document",
+} as const;
+
+export const REQUEST_STATUS_LABEL = {
+  new: "New",
+  in_progress: "In progress",
+  waiting_on_client: "Waiting on you",
+  done: "Done",
+} as const;
+
+export const PRIORITY_LABEL = { low: "Low", normal: "Normal", urgent: "Urgent" } as const;
+
+export const IDEA_STATUS_LABEL = {
+  proposed: "New idea",
+  interested: "You're interested",
+  not_now: "Not now",
+  planned: "Planned",
+} as const;
+
+export const RESOURCE_KIND_LABEL = {
+  video: "Video",
+  guide: "Guide",
+  link: "Link",
+  login_note: "Access note",
+} as const;
+
 export const ROLE_LABEL = {
   staff_owner: "SKOX owner",
   staff: "SKOX team",
   client_approver: "Approver",
   client_member: "Team member",
 } as const;
+
+/** Current time in ms. Lives here so server components read the clock through one place. */
+export function nowMs() {
+  return Date.now();
+}

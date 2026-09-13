@@ -25,6 +25,7 @@ import {
   setProjectStatus,
   toggleTask,
 } from "../../actions";
+import { markLaunched } from "@/app/projects/[id]/results/actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Manage project" };
@@ -79,6 +80,15 @@ export default async function ProjectAdmin({
           </Link>
         </div>
         <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
+
+        <nav className="round-tabs" aria-label="Manage in the client view" style={{ marginBottom: 20 }}>
+          <Link href={`/projects/${project.id}/review`}>Post designs for review</Link>
+          <Link href={`/projects/${project.id}/documents`}>Send a document to sign</Link>
+          <Link href={`/projects/${project.id}/billing`}>Invoices</Link>
+          <Link href={`/projects/${project.id}/files`}>Files</Link>
+          <Link href={`/projects/${project.id}/support`}>Requests</Link>
+          <Link href={`/projects/${project.id}/results`}>Reports, care plan, ideas &amp; launch kit</Link>
+        </nav>
 
         <div className="split">
           <div>
@@ -214,6 +224,39 @@ export default async function ProjectAdmin({
                     </li>
                   ))}
                 </ul>
+              )}
+            </section>
+
+            <section className="card" aria-labelledby="launch-title">
+              <div className="card-head">
+                <h2 id="launch-title">{project.status === "launched" ? "Live" : "Launch it"}</h2>
+              </div>
+              {project.status === "launched" && project.liveUrl ? (
+                <p className="small">
+                  Live at{" "}
+                  <a href={project.liveUrl} target="_blank" rel="noopener noreferrer">
+                    {project.liveUrl}
+                  </a>{" "}
+                  since {formatDate(project.launchedOn)}.
+                </p>
+              ) : (
+                <form action={markLaunched} className="stack">
+                  {hidden}
+                  <div className="field">
+                    <label htmlFor="l-url">Live URL</label>
+                    <input id="l-url" name="liveUrl" type="url" required placeholder="https://" />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="l-date">Launch date</label>
+                    <input id="l-date" name="launchedOn" type="date" required />
+                  </div>
+                  <p className="small muted">Sends the client a “you&apos;re live” email and switches their portal to results and support.</p>
+                  <div>
+                    <button className="btn btn-primary btn-small" type="submit">
+                      Mark as live
+                    </button>
+                  </div>
+                </form>
               )}
             </section>
 

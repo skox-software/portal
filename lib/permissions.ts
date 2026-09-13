@@ -71,7 +71,31 @@ export const can = {
   approve: (a: ProjectAccess) => a.clientRole === "client_approver",
   inviteTeammates: (a: ProjectAccess) => a.isStaff || a.clientRole === "client_approver",
   manageProject: (a: ProjectAccess) => a.isStaff,
+  uploadFiles: (a: ProjectAccess) => a.isStaff || a.clientRole !== null,
+  requestSupport: (a: ProjectAccess) => a.clientRole !== null,
+  respondToIdeas: (a: ProjectAccess) => a.clientRole !== null,
+  /** Approvers can share read-only status with their boss or board. */
+  createShareLink: (a: ProjectAccess) => a.isStaff || a.clientRole === "client_approver",
+  seeBilling: (a: ProjectAccess) => a.isStaff || a.clientRole !== null,
 };
+
+/**
+ * Only the named signer may sign, only while the document is out for
+ * signature, and only once. Staff can see every document but cannot sign on a
+ * client's behalf.
+ */
+export function canSign(
+  viewerEmail: string,
+  document: { status: "out_for_signature" | "completed" | "void" },
+  signer: { email: string; status: "pending" | "viewed" | "signed" } | undefined,
+) {
+  return (
+    document.status === "out_for_signature" &&
+    signer !== undefined &&
+    signer.status !== "signed" &&
+    normalizeEmail(signer.email) === normalizeEmail(viewerEmail)
+  );
+}
 
 /** Client-side invitations can only ever grant client roles. */
 export function canInviteRole(inviter: ProjectAccess, role: PortalRole) {

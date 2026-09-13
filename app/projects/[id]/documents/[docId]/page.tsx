@@ -6,8 +6,8 @@ import { after } from "next/server";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { SignPanel } from "@/components/SignPanel";
 import { getDb } from "@/lib/db";
-import { documents, documentSigners } from "@/lib/db/schema";
-import { DOCUMENT_KIND_LABEL, formatDateTime } from "@/lib/format";
+import { documents, documentSigners, invoices } from "@/lib/db/schema";
+import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney } from "@/lib/format";
 import { canSign } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
 import { CONSENT_TEXT } from "@/lib/signing";
@@ -28,7 +28,14 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
     .where(and(eq(documents.id, docId), eq(documents.projectId, project.id)))
     .limit(1);
   if (!doc) notFound();
-  const signers = await db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id));
+  const [signers, [deposit]] = await Promise.all([
+    db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id)),
+    db
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.documentId, doc.id), eq(invoices.status, "open")))
+      .limit(1),
+  ]);
   const mine = signers.find((s) => s.email === viewer.email);
   const maySign = canSign(viewer.email, doc, mine);
 
@@ -85,9 +92,16 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
                 <p className="small muted" style={{ margin: "6px 0 12px" }}>
                   Completed {doc.completedAt ? formatDateTime(doc.completedAt) : ""}. The signed copy ends with a signature certificate.
                 </p>
-                <a className="btn btn-primary" href={`/api/documents/${doc.id}?signed=1&download=1`}>
-                  Download signed PDF
-                </a>
+                <div className="row">
+                  {deposit && !access.isStaff && (
+                    <Link className="btn btn-primary" href={`/projects/${project.id}/billing`}>
+                      Next: pay the deposit ({formatMoney(deposit.amountCents, deposit.currency)}) →
+                    </Link>
+                  )}
+                  <a className={deposit && !access.isStaff ? "btn btn-ghost" : "btn btn-primary"} href={`/api/documents/${doc.id}?signed=1&download=1`}>
+                    Download signed PDF
+                  </a>
+                </div>
               </section>
             )}
 

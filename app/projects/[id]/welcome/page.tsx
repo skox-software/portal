@@ -4,6 +4,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { SubmitButton } from "@/components/SubmitButton";
+import { BookingEmbed } from "@/components/BookingEmbed";
+import { safeBookingUrl } from "@/lib/meetings";
 import { BrandStudio } from "@/components/BrandStudio";
 import { Notice, readMessage } from "@/components/Notice";
 import { Reveal } from "@/components/Reveal";
@@ -95,6 +97,7 @@ export default async function WelcomePage({
     .limit(1);
   if (!row) redirect(`/projects/${project.id}`);
   const { onboarding: o, workspace } = row;
+  const kickoffUrl = safeBookingUrl(workspace.schedulingUrl);
 
   const agreement = await agreementState(project.id, project.status);
   const flow = stepsFor({ hasAgreement: agreement.hasAgreement });
@@ -627,24 +630,19 @@ export default async function WelcomePage({
                       <li>Launch date and first milestone</li>
                     </ol>
                   </div>
-                  {workspace.schedulingUrl && (
-                    <p>
-                      <a className="btn btn-primary btn-lg" href={workspace.schedulingUrl} target="_blank" rel="noopener noreferrer">
-                        Pick a time that suits you ↗
-                      </a>
-                    </p>
-                  )}
+                  {kickoffUrl && <p className="small muted">For the company/project field, use <strong>{client.name} · {project.name}</strong>.</p>}
+                  <BookingEmbed url={kickoffUrl} title="Kickoff" projectId={project.id} />
                   <div className="field">
                     <p className="q-label">Kickoff</p>
                     <div className="tag-choice">
-                      {workspace.schedulingUrl && (
+                      {kickoffUrl && (
                         <label className="tag-option">
                           <input type="radio" name="kickoff_status" value="booked" defaultChecked={o.kickoff.status === "booked"} />
                           <span>I&apos;ve booked a time</span>
                         </label>
                       )}
                       <label className="tag-option">
-                        <input type="radio" name="kickoff_status" value="reach_out" defaultChecked={!workspace.schedulingUrl || o.kickoff.status === "reach_out"} />
+                        <input type="radio" name="kickoff_status" value="reach_out" defaultChecked={!kickoffUrl || o.kickoff.status === "reach_out"} />
                         <span>Please reach out to schedule</span>
                       </label>
                     </div>

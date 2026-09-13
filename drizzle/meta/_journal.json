@@ -50,6 +50,13 @@
       "when": 1789281036297,
       "tag": "0006_reliability_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789312997124,
+      "tag": "0007_meeting_booking_links",
+      "breakpoints": true
     }
   ]
 }

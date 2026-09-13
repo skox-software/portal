@@ -22,6 +22,7 @@ import {
 import { eventInsert } from "@/lib/events";
 import { midpoint, PROJECT_KINDS } from "@/lib/format";
 import { backWith } from "@/lib/http";
+import { googleBookingEmbedUrl, safeBookingUrl } from "@/lib/meetings";
 import { normalizeEmail } from "@/lib/permissions";
 
 /*
@@ -89,11 +90,15 @@ export async function createClient(formData: FormData) {
 export async function saveWorkspaceSettings(formData: FormData) {
   const { staff } = await requireStaff();
   const link = z.union([z.literal(""), z.url({ protocol: /^https$/ })]);
+  const bookingLink = z.string().trim().max(2048).refine((value) => !value || !!googleBookingEmbedUrl(value), "Use the Google appointment URL from Inline booking page, not a short link or embed code.");
+  const kickoffLink = z.string().trim().max(2048).refine((value) => !value || !!safeBookingUrl(value), "Kickoff booking links must be valid HTTPS URLs without credentials.");
   const parsed = z
     .object({
       reviewUrl: link,
       referralReward: text(160),
-      schedulingUrl: link,
+      schedulingUrl: kickoffLink,
+      projectReviewSchedulingUrl: bookingLink,
+      checkInSchedulingUrl: bookingLink,
       welcomeVideoUrl: link,
       teamIntro: text(120),
     })
@@ -101,21 +106,27 @@ export async function saveWorkspaceSettings(formData: FormData) {
       reviewUrl: formData.get("reviewUrl") ?? "",
       referralReward: formData.get("referralReward") ?? "",
       schedulingUrl: formData.get("schedulingUrl") ?? "",
+      projectReviewSchedulingUrl: formData.get("projectReviewSchedulingUrl") ?? "",
+      checkInSchedulingUrl: formData.get("checkInSchedulingUrl") ?? "",
       welcomeVideoUrl: formData.get("welcomeVideoUrl") ?? "",
       teamIntro: formData.get("teamIntro") ?? "",
     });
-  if (!parsed.success) backWith("/admin", "error", "Links must start with https://");
+  if (!parsed.success) backWith("/admin", "error", parsed.error.issues[0]?.message ?? "Check the workspace settings.");
   await getDb()
     .update(workspaces)
     .set({
       reviewUrl: parsed.data.reviewUrl || null,
       referralReward: parsed.data.referralReward || null,
       schedulingUrl: parsed.data.schedulingUrl || null,
+      projectReviewSchedulingUrl: googleBookingEmbedUrl(parsed.data.projectReviewSchedulingUrl),
+      checkInSchedulingUrl: googleBookingEmbedUrl(parsed.data.checkInSchedulingUrl),
       welcomeVideoUrl: parsed.data.welcomeVideoUrl || null,
       teamIntro: parsed.data.teamIntro || null,
     })
     .where(eq(workspaces.id, staff.workspaceId));
   revalidatePath("/admin");
+  revalidatePath("/projects/[id]/meetings", "page");
+  revalidatePath("/projects/[id]/welcome", "page");
   backWith("/admin", "notice", "Settings saved.");
 }
 

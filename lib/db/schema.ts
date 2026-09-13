@@ -94,8 +94,10 @@ export const workspaces = pgTable("workspaces", {
   reviewUrl: text("review_url"),
   /** What a referrer gets, shown on the referral card. */
   referralReward: text("referral_reward"),
-  /** Cal.com / Calendly link clients use to book kickoff. */
+  /** Google appointment schedule, or an existing external kickoff booking link. */
   schedulingUrl: text("scheduling_url"),
+  projectReviewSchedulingUrl: text("project_review_scheduling_url"),
+  checkInSchedulingUrl: text("check_in_scheduling_url"),
   /** Loom/YouTube welcome from the founders, shown at the start of onboarding. */
   welcomeVideoUrl: text("welcome_video_url"),
   /** One line introducing the team, e.g. "Josh & Sam, co-founders". */

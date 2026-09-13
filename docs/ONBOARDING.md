@@ -22,7 +22,7 @@ Protecting the decision:
 
 ## What SKOX does manually
 **Once:** Workspace settings in mission control: kickoff booking link
-(Cal.com/Calendly), team intro line, welcome video (optional, later). Keep a
+(Google appointment schedule, or an existing external link), team intro line, welcome video (optional, later). Keep a
 lawyer-reviewed agreement template ready to fill in.
 
 **Per client (about 5 minutes):**
@@ -56,7 +56,7 @@ resumable, skippable. Progress bar with minutes left.
 | Brand | Upload logos/guides, pick colours, fonts, 3 tone words, **live preview** of their product in their brand; "no brand yet" option | Delight + real design inputs |
 | Access | Checklist tailored to the project; each with "add founders@ as a user, never share passwords"; mark done / need help / not needed | Security and zero back-and-forth |
 | Agreement & deposit | Existing sign → pay flow (shown only if attached) | Money and paperwork, painless |
-| Kickoff | Book via scheduling link; agenda built from their answers | A kickoff that's already productive |
+| Kickoff | Book in the Google embed (legacy links open externally); manually confirm booking; agenda built from their answers | A kickoff that's already productive |
 | All set | Celebration, summary, next dates | The feeling they tell friends about |
 
 Skipped steps become to-dos on their Overview (uploads tick themselves off).
@@ -85,3 +85,5 @@ intro line.
 - `files.category` (logo, brand, content, other) for the brand kit.
 - `projects.date_tentative` so the client sees "Target date" until kickoff.
 - `workspaces.scheduling_url`, `welcome_video_url`, `team_intro`.
+
+Meeting setup and release checks: [Google appointment booking](MEETINGS.md).

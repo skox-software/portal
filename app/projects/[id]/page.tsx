@@ -217,6 +217,7 @@ export default async function ProjectHome({
             {greeting()}, {firstName(viewer.name ?? viewer.email)}.
           </p>
           <p className="hello-line">{headline}</p>
+          <Link className="btn btn-ghost btn-small" href={`${base}/meetings`}>Schedule a meeting</Link>
         </section>
 
         {welcome && welcome.status !== "completed" && welcome.welcomeSentAt && (

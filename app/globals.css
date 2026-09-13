@@ -2502,3 +2502,22 @@ fieldset.q-field {
     padding: 22px;
   }
 }
+
+/* Appointment booking: one Google schedule mounted at a time. */
+.meeting-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }
+.meeting-choice { display: flex; flex-direction: column; gap: 8px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: inherit; }
+.meeting-choice[aria-current="page"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.meeting-choice:hover { background: var(--paper); }
+.meeting-card, .booking { min-width: 0; }
+.meeting-context { margin-bottom: 20px; overflow-wrap: anywhere; }
+.booking-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.booking-toolbar p { flex: 1 1 260px; }
+.booking-toolbar a { flex-shrink: 0; }
+.booking-frame { display: block; width: 100%; height: 760px; border: 0; border-radius: 8px; background: white; }
+.hello .btn { margin-top: 16px; }
+@media (max-width: 640px) {
+  .meeting-choices { grid-template-columns: 1fr; }
+  .meeting-choice { padding: 16px; }
+  .meeting-card { padding: 16px; }
+  .booking-frame { height: 820px; }
+}

@@ -59,6 +59,19 @@ Production env vars: `DATABASE_URL`, `NEON_AUTH_BASE_URL`,
 `NEON_AUTH_COOKIE_SECRET`, `PORTAL_URL=https://portal.skoxsoftware.com`.
 Don't run `vercel link` here: it rewrites `.env.local`.
 
+Release accounts: GitHub CLI must use `skox-software`; Vercel CLI must use
+`founders@skoxsoftware.com` (`founders-8267`) in the `skox` Hobby team.
+Check `gh api user --jq .login` and `npx vercel whoami` before releasing.
+This repository uses the company Git identity (set locally, not globally):
+
+```sh
+git config --local user.name skox-software
+git config --local user.email 328514113+skox-software@users.noreply.github.com
+```
+
+Apply reviewed database migrations before deploying code that reads new columns.
+Meeting booking setup and validation are documented in [docs/MEETINGS.md](docs/MEETINGS.md).
+
 ## Neon Auth settings that live in the Neon Console
 
 - Sign-in uses the **Email OTP** endpoints (on by default). The Magic Link
@@ -70,7 +83,7 @@ Don't run `vercel link` here: it rewrites `.env.local`.
 ## What's built
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for everything shipped and what's next.
-Client project tabs: Overview, Review, Documents, Files, Billing, Requests,
+Client project tabs: Overview, Meetings, Review, Documents, Files, Billing, Requests,
 Results. Staff controls live on the same pages, marked "SKOX only".
 
 Services: Resend (email from portal@skoxsoftware.com), Vercel Blob (private

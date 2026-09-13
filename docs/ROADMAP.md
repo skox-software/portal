@@ -47,15 +47,26 @@ milestones, delivery date with reasons, tasks, weekly updates, audit log.
   access, and content as client to-dos.
 - **Walkthrough videos** (Loom, YouTube, Vimeo) play inline in updates.
 
+### Phase 3, slice 2 (2026-09-13)
+- **Get started flow**: a deposit invoice can be tied to an agreement. It stays
+  locked until the agreement is signed, the client sees a 3-step card
+  (sign → pay → we build), signing shows "Next: pay the deposit", and paying
+  (Stripe or staff "mark paid") moves the project from Kickoff to Building,
+  ticks the kickoff milestone and emails everyone.
+- **Self-ticking to-dos**: "upload" checklist items complete when the client
+  uploads a file.
+- **Client team invites**: approvers invite teammates (view/comment or
+  approve/sign/pay) and remove members from the Overview.
+
 ## Next
 
-### Phase 3, remaining: less typing for SKOX, zero chasing for clients
-1. **Proposal → contract → deposit in one flow**: accept proposal, sign,
-   pay deposit on one page; project auto-moves to Kickoff.
-2. **Stripe**: saved payment method for care plans, auto-billed monthly;
+### Phase 3, remaining
+1. **Stripe**: saved payment method for care plans, auto-billed monthly;
    receipts in Billing; ACH for large invoices. Needs a Stripe account.
-3. **Checklist items that tick themselves** when the file lands in Files.
-4. **Client-side invites**: approvers add their own teammates.
+2. **Kickoff questionnaire**: a short form (goals, audience, must-haves) whose
+   answers land in Files and tick a to-do.
+3. **Proposal page**: pricing options the client picks before the agreement
+   is generated.
 
 ### Phase 4: results that sell renewals
 1. **Live metrics**: connect Google Analytics / Plausible and uptime monitoring

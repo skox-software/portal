@@ -39,18 +39,23 @@ milestones, delivery date with reasons, tasks, weekly updates, audit log.
   referrals inbox, growth settings.
 - **Email**: branded emails for every step via Resend (portal@skoxsoftware.com).
 
+### Phase 3, slice 1 (2026-09-13)
+- **Friday recap email** per client person and project (skipped when there's
+  nothing new and nothing waiting).
+- **Email preferences** page (click your email in the top bar).
+- **Kickoff checklist**: every new project starts with logo/brand files,
+  access, and content as client to-dos.
+- **Walkthrough videos** (Loom, YouTube, Vimeo) play inline in updates.
+
 ## Next
 
-### Phase 3: less typing for SKOX, zero chasing for clients
-1. **Onboarding checklist** at kickoff: brand assets, logins, content, a short
-   questionnaire; each item uploads straight into Files and ticks itself off.
-2. **Proposal → contract → deposit in one flow**: accept proposal, sign,
+### Phase 3, remaining: less typing for SKOX, zero chasing for clients
+1. **Proposal → contract → deposit in one flow**: accept proposal, sign,
    pay deposit on one page; project auto-moves to Kickoff.
-3. **Weekly digest email** (Friday): progress, what's next, open to-dos.
-4. **Notification preferences** per person (instant / weekly digest / off).
-5. **Stripe**: saved payment method for care plans, auto-billed monthly;
-   receipts in Billing; ACH for large invoices.
-6. **Loom/video embeds** inline in updates and the launch kit.
+2. **Stripe**: saved payment method for care plans, auto-billed monthly;
+   receipts in Billing; ACH for large invoices. Needs a Stripe account.
+3. **Checklist items that tick themselves** when the file lands in Files.
+4. **Client-side invites**: approvers add their own teammates.
 
 ### Phase 4: results that sell renewals
 1. **Live metrics**: connect Google Analytics / Plausible and uptime monitoring

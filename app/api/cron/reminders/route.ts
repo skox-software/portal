@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { documents, documentSigners, invoices, projects } from "@/lib/db/schema";
+import { sendWeeklyDigests } from "@/lib/digest";
 import { sendEmail } from "@/lib/email";
 import { formatDate, formatMoney, todayIso } from "@/lib/format";
 import { clientRecipients, portalLink } from "@/lib/notify";
@@ -78,7 +79,10 @@ export async function GET(request: Request) {
     sent++;
   }
 
+  // Fridays (UTC): the weekly recap. Hobby cron runs once a day, so it rides along here.
+  const digests = now.getUTCDay() === 5 || new URL(request.url).searchParams.get("digest") === "force" ? await sendWeeklyDigests(now) : 0;
+
   void gte;
   void inArray;
-  return Response.json({ ok: true, sent });
+  return Response.json({ ok: true, sent, digests });
 }

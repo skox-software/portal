@@ -17,7 +17,9 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
           {isStaff ? <Link href="/admin">Mission control</Link> : <Link href="/">Your projects</Link>}
         </nav>
         <div className="who">
-          <span className="who-email">{viewer.email}</span>
+          <Link href="/settings" className="who-email" title="Email preferences">
+            {viewer.email}
+          </Link>
           <form action={signOut}>
             <button type="submit" className="btn btn-ghost btn-small">
               Sign out

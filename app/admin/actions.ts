@@ -34,6 +34,10 @@ const text = (max: number) => z.string().trim().max(max);
 const isoDate = z.iso.date();
 const optionalUrl = z.union([z.literal(""), z.url({ protocol: /^https?$/ })]);
 
+function addDays(isoDate: string, days: number) {
+  return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 function formFields(formData: FormData) {
   return Object.fromEntries(
     [...formData.entries()].map(([k, v]) => [k, typeof v === "string" ? v : ""]),
@@ -250,6 +254,20 @@ export async function createProject(formData: FormData) {
       },
       { ...base, kind: "launch", title: "Launch", dueOn: input.deliveryDate, position: 2 },
     ]),
+    // The kickoff checklist: what we always need from a client in week one.
+    db.insert(tasks).values(
+      [
+        { title: "Upload your logo and brand files (Files tab)", days: 3 },
+        { title: "Share any logins or access we'll need (Requests tab, never passwords in email)", days: 5 },
+        { title: "Send the text and photos you want on the product", days: 7 },
+      ].map((t) => ({
+        ...base,
+        side: "client" as const,
+        title: t.title,
+        dueOn: addDays(input.startedOn, t.days),
+        createdBy: viewer.userId,
+      })),
+    ),
     eventInsert({
       workspaceId: staff.workspaceId,
       projectId: id,

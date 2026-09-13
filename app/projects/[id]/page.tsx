@@ -4,6 +4,7 @@ import Link from "next/link";
 import { after } from "next/server";
 import { ProgressRing } from "@/components/ProgressRing";
 import { ProjectHeader } from "@/components/ProjectHeader";
+import { VideoEmbed } from "@/components/VideoEmbed";
 import { readMessage } from "@/components/Notice";
 import { summarizeSince } from "@/lib/activity";
 import { getDb } from "@/lib/db";
@@ -293,18 +294,12 @@ export default async function ProjectHome({
                       <p>{latest.update.needed || "Nothing right now."}</p>
                     </div>
                   </div>
-                  {(latest.preview?.url || latest.update.videoUrl) && (
+                  {latest.update.videoUrl && <VideoEmbed url={latest.update.videoUrl} title="This week's walkthrough" />}
+                  {latest.preview?.url && (
                     <div className="update-meta">
-                      {latest.preview?.url && (
-                        <a href={latest.preview.url} target="_blank" rel="noopener noreferrer">
-                          Open the preview{latest.preview.label ? `: ${latest.preview.label}` : ""} ↗
-                        </a>
-                      )}
-                      {latest.update.videoUrl && (
-                        <a href={latest.update.videoUrl} target="_blank" rel="noopener noreferrer">
-                          Watch the walkthrough ↗
-                        </a>
-                      )}
+                      <a href={latest.preview.url} target="_blank" rel="noopener noreferrer">
+                        Open the preview{latest.preview.label ? `: ${latest.preview.label}` : ""} ↗
+                      </a>
                     </div>
                   )}
                 </>

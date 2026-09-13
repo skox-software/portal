@@ -83,7 +83,7 @@ export async function createInvoice(formData: FormData) {
 
   // A deposit waiting on an unsigned agreement is announced by the signing flow instead.
   if (!linkedDoc || linkedDoc.status === "completed") {
-    notifyLater(() => clientRecipients(client.id, { approversOnly: true }), {
+    notifyLater(() => clientRecipients(client.id, { approversOnly: true, actionRequired: true }), {
       subject: `Invoice ${input.number} from SKOX: ${formatMoney(amountCents)}`,
       preheader: `${input.title} · due ${formatDate(input.dueOn)}`,
       heading: `Invoice ${input.number}: ${formatMoney(amountCents)}`,
@@ -176,7 +176,8 @@ export async function setInvoiceStatus(formData: FormData) {
   const [invoice] = await db
     .update(invoices)
     .set({ status: parsed.data.status, paidAt: parsed.data.status === "paid" ? new Date() : null })
-    .where(and(eq(invoices.id, parsed.data.invoiceId), eq(invoices.projectId, project.id)))
+    // Only if nobody (e.g. the Stripe webhook) changed it in the meantime.
+    .where(and(eq(invoices.id, parsed.data.invoiceId), eq(invoices.projectId, project.id), eq(invoices.status, before.status)))
     .returning();
   if (!invoice) return;
   await eventInsert({
@@ -189,7 +190,7 @@ export async function setInvoiceStatus(formData: FormData) {
     payload: { title: invoice.title, amountCents: invoice.amountCents },
   });
   if (parsed.data.status === "paid") {
-    notifyLater(() => clientRecipients(client.id, { approversOnly: true }), {
+    notifyLater(() => clientRecipients(client.id, { approversOnly: true, actionRequired: true }), {
       subject: `Payment received: invoice ${invoice.number}`,
       preheader: "Thank you. Your receipt is in the portal.",
       heading: "Thank you, payment received",
@@ -197,7 +198,11 @@ export async function setInvoiceStatus(formData: FormData) {
       cta: { label: "See billing", href: portalLink(`/projects/${project.id}/billing`) },
     });
     after(async () => {
-      await afterInvoicePaid(invoice);
+      try {
+        await afterInvoicePaid(invoice);
+      } catch (error) {
+        console.error("[billing] kickoff step failed", { invoiceId: invoice.id, error });
+      }
     });
   }
   revalidatePath(`/projects/${project.id}/billing`);

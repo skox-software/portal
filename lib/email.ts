@@ -38,7 +38,7 @@ export function renderEmail(content: EmailContent) {
   const paragraphs = content.paragraphs
     .map(
       (p) =>
-        `<p style="margin:0 0 16px;font:400 16px/1.6 ${font};color:${MUTED};white-space:pre-line">${escapeHtml(p)}</p>`,
+        `<p style="margin:0 0 16px;font:400 16px/1.6 ${font};color:${INK};white-space:pre-line">${escapeHtml(p)}</p>`,
     )
     .join("");
   const cta = content.cta

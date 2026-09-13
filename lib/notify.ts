@@ -11,14 +11,15 @@ import { sendEmail, type EmailContent } from "@/lib/email";
 
 export async function clientRecipients(
   clientId: string,
-  opts: { approversOnly?: boolean; exceptEmail?: string } = {},
+  /** actionRequired: money, signatures, approvals and milestones reach people even with updates turned off. */
+  opts: { approversOnly?: boolean; exceptEmail?: string; actionRequired?: boolean } = {},
 ) {
   const rows = await getDb()
     .select({ email: memberships.email, role: memberships.role, emailUpdates: memberships.emailUpdates })
     .from(memberships)
     .where(eq(memberships.clientId, clientId));
   return rows
-    .filter((r) => r.emailUpdates)
+    .filter((r) => opts.actionRequired || r.emailUpdates)
     .filter((r) => !opts.approversOnly || r.role === "client_approver")
     .filter((r) => r.email !== opts.exceptEmail)
     .map((r) => r.email);

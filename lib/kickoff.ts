@@ -21,8 +21,14 @@ export async function afterInvoicePaid(invoice: {
   const [project] = await db.select().from(projects).where(eq(projects.id, invoice.projectId)).limit(1);
   if (!project || project.status !== "kickoff") return false;
 
+  // Claim the transition first so a webhook and a staff click can't both announce it.
+  const [moved] = await db
+    .update(projects)
+    .set({ status: "building" })
+    .where(and(eq(projects.id, project.id), eq(projects.status, "kickoff")))
+    .returning({ id: projects.id });
+  if (!moved) return false;
   await db.batch([
-    db.update(projects).set({ status: "building" }).where(and(eq(projects.id, project.id), eq(projects.status, "kickoff"))),
     db
       .update(milestones)
       .set({ state: "done" })
@@ -39,8 +45,11 @@ export async function afterInvoicePaid(invoice: {
   ]);
 
   const link = portalLink(`/projects/${project.id}`);
-  const [clientsTo, staffTo] = await Promise.all([clientRecipients(project.clientId), staffRecipients(project.workspaceId)]);
-  await Promise.all([
+  const [clientsTo, staffTo] = await Promise.all([
+    clientRecipients(project.clientId, { actionRequired: true }),
+    staffRecipients(project.workspaceId),
+  ]);
+  await Promise.allSettled([
     sendEmail(clientsTo, {
       subject: `We're building ${project.name}`,
       preheader: "Agreement signed, deposit received. Here's what happens next.",

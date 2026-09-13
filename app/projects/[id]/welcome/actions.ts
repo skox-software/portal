@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -13,7 +13,7 @@ import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
 import { accessFor, questionsFor } from "@/lib/onboarding-content";
 import { canSkip, isComplete, isStepKey, nextStep, stepsFor } from "@/lib/onboarding-flow";
 import { addClientPerson, agreementState, completeOnboarding } from "@/lib/onboarding-server";
-import { canInviteRole, normalizeEmail } from "@/lib/permissions";
+import { can, canInviteRole, normalizeEmail } from "@/lib/permissions";
 import { projectForAction } from "@/lib/project-access";
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -35,6 +35,11 @@ export async function saveWelcomeStep(formData: FormData) {
   const db = getDb();
   const [o] = await db.select().from(onboardings).where(eq(onboardings.projectId, project.id)).limit(1);
   if (!o) redirect(`/projects/${project.id}`);
+  // Setup belongs to the client's approvers (and SKOX). Teammates can look, not edit,
+  // and once it's finished only SKOX can change the answers.
+  if (!access.isStaff && (!can.approve(access) || o.status === "completed")) {
+    backWith(`${base}?step=${step}`, "notice", o.status === "completed" ? "Setup is finished. Ask SKOX if something needs changing." : "Your approver handles setup. You can look around.");
+  }
 
   const text = (key: string, max = 4000) => String(formData.get(key) ?? "").trim().slice(0, max);
   const all = (key: string) => formData.getAll(key).map((v) => String(v).trim()).filter(Boolean);
@@ -147,12 +152,16 @@ export async function saveWelcomeStep(formData: FormData) {
       }
       case "project": {
         const answers: Record<string, string | string[]> = {};
+        let missing: string | null = null;
         for (const q of questionsFor(project.kind)) {
           const value = q.type === "multi" ? all(`q_${q.id}`).slice(0, 20) : text(`q_${q.id}`, 4000);
-          if (q.required && (Array.isArray(value) ? value.length === 0 : !value)) {
-            backWith(here, "error", `Please answer: “${q.label}”`);
-          }
+          if (!missing && q.required && (Array.isArray(value) ? value.length === 0 : !value)) missing = q.label;
           answers[q.id] = value;
+        }
+        if (missing) {
+          // Keep everything they typed, then point at the one that's missing.
+          await db.update(onboardings).set({ answers, lastActivityAt: new Date() }).where(eq(onboardings.id, o.id));
+          backWith(here, "error", `One more: “${missing}”. Everything else you wrote is saved.`);
         }
         patch.answers = answers;
         break;
@@ -196,19 +205,21 @@ export async function saveWelcomeStep(formData: FormData) {
     }
   }
 
-  const steps = { ...o.steps, [step]: state };
   const now = new Date();
-  await db.batch([
+  // Merge in SQL so two tabs (or a double click) never overwrite each other's
+  // steps, and never move a finished setup back to "in progress".
+  const [saved] = await db.batch([
     db
       .update(onboardings)
       .set({
         ...patch,
-        steps,
-        status: o.status === "completed" ? "completed" : "in_progress",
-        startedAt: o.startedAt ?? now,
+        steps: sql`${onboardings.steps} || ${JSON.stringify({ [step]: state })}::jsonb`,
+        status: sql`case when ${onboardings.status} = 'completed' then 'completed'::onboarding_status else 'in_progress'::onboarding_status end`,
+        startedAt: sql`coalesce(${onboardings.startedAt}, now())`,
         lastActivityAt: now,
       })
-      .where(eq(onboardings.id, o.id)),
+      .where(eq(onboardings.id, o.id))
+      .returning({ steps: onboardings.steps, status: onboardings.status }),
     eventInsert({
       workspaceId: project.workspaceId,
       projectId: project.id,
@@ -220,10 +231,11 @@ export async function saveWelcomeStep(formData: FormData) {
     }),
   ]);
 
+  const steps = saved[0]?.steps ?? { ...o.steps, [step]: state };
   const flow = stepsFor({ hasAgreement: agreement.hasAgreement });
   revalidatePath(base);
   revalidatePath(`/projects/${project.id}`);
-  if (o.status !== "completed" && isComplete(steps, flow)) {
+  if (saved[0]?.status !== "completed" && isComplete(steps, flow)) {
     await completeOnboarding({ ...o, ...patch, steps } as Onboarding, viewer.userId);
     redirect(`${base}?step=done`);
   }

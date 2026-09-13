@@ -76,7 +76,7 @@ export default async function FilesPage({
         shell={shell}
         tab="files"
         title="Files"
-        intro="Logos, photos, copy, logins notes: everything for the project in one safe place, instead of lost in email."
+        intro="Logos, photos, copy and anything else for the project, in one private place instead of lost in email."
         error={readMessage(sp.error)}
         notice={readMessage(sp.notice)}
       />

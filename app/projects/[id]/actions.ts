@@ -9,7 +9,9 @@ import { eventInsert } from "@/lib/events";
 import { backWith } from "@/lib/http";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
 import { can, canInviteRole, normalizeEmail } from "@/lib/permissions";
+import { welcomeLink } from "@/lib/onboarding-server";
 import { projectForAction } from "@/lib/project-access";
+import { allow } from "@/lib/rate-limit";
 
 /** Approvers (and SKOX) add teammates from the client's side. */
 export async function inviteTeammate(formData: FormData) {
@@ -30,6 +32,9 @@ export async function inviteTeammate(formData: FormData) {
     .where(and(eq(memberships.clientId, client.id), eq(memberships.email, parsed.data.email)))
     .limit(1);
   if (existing) backWith(back, "notice", `${parsed.data.email} already has access.`);
+  if (!access.isStaff && !(await allow(`invite:${viewer.userId}`, 15, 24 * 60 * 60_000))) {
+    backWith(back, "error", "You've invited a lot of people today. Ask SKOX to add the rest.");
+  }
 
   const id = crypto.randomUUID();
   await db.batch([
@@ -53,14 +58,14 @@ export async function inviteTeammate(formData: FormData) {
   ]);
 
   notifyLater(() => [parsed.data.email], {
-    subject: `${viewer.name ?? viewer.email} invited you to ${project.name}`,
+    subject: `You're invited to ${project.name} on the SKOX portal`,
     preheader: `Follow ${project.name} with SKOX: progress, designs, documents and more.`,
     heading: `You're invited to ${project.name}`,
     paragraphs: [
-      `${viewer.name ?? viewer.email} added you to ${client.name}'s project portal with SKOX.`,
+      `${viewer.email} added you to ${client.name}'s project portal with SKOX.`,
       `Sign in with this email address (${parsed.data.email}). We'll send you a 6-digit code, no password needed.`,
     ],
-    cta: { label: "Open the portal", href: portalLink("/sign-in") },
+    cta: { label: "Open the portal", href: welcomeLink(parsed.data.email) },
   });
   if (!access.isStaff) {
     notifyLater(() => staffRecipients(project.workspaceId), {

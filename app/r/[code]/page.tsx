@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { SubmitButton } from "@/components/SubmitButton";
 import { SkoxLogo } from "@/components/SkoxLogo";
 import { getDb } from "@/lib/db";
 import { clients, memberships } from "@/lib/db/schema";
@@ -74,9 +75,9 @@ export default async function ReferralLanding({
                 <label htmlFor="ref-idea">The idea</label>
                 <textarea id="ref-idea" name="idea" maxLength={3000} placeholder="A sentence or two is plenty" />
               </div>
-              <button className="btn btn-primary btn-block" type="submit">
+              <SubmitButton className="btn btn-primary btn-block" pendingLabel="Sending…">
                 Send to SKOX
-              </button>
+              </SubmitButton>
             </form>
           </>
         )}

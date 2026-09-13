@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { readMessage } from "@/components/Notice";
 import { ProjectHeader } from "@/components/ProjectHeader";
+import { SubmitButton } from "@/components/SubmitButton";
 import { getDb } from "@/lib/db";
 import { documents, invoices } from "@/lib/db/schema";
 import { invoiceLocked } from "@/lib/onboarding";
@@ -169,9 +170,9 @@ export default async function BillingPage({
                         <form action={payInvoice}>
                           <input type="hidden" name="projectId" value={project.id} />
                           <input type="hidden" name="invoiceId" value={inv.id} />
-                          <button className="btn btn-primary btn-small" type="submit">
+                          <SubmitButton className="btn btn-primary btn-small" pendingLabel="Opening checkout…">
                             Pay now
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                       {access.isStaff && (

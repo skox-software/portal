@@ -11,7 +11,7 @@ import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney } from "@/lib/format";
 import { canSign } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
 import { CONSENT_TEXT } from "@/lib/signing";
-import { remindSigners, voidDocument } from "../actions";
+import { remindSigners, retryFinalize, voidDocument } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Document" };
@@ -43,8 +43,9 @@ export default async function DocumentPage({
       .where(and(eq(invoices.documentId, doc.id), eq(invoices.status, "open")))
       .limit(1),
   ]);
-  const mine = signers.find((s) => s.email === viewer.email);
-  const maySign = canSign(viewer.email, doc, mine);
+  const invitedAs = new Set(viewer.memberships.filter((m) => m.workspaceId === doc.workspaceId).map((m) => m.email));
+  const mine = signers.find((s) => invitedAs.has(s.email));
+  const maySign = Boolean(mine) && canSign(mine!.email, doc, mine);
 
   if (mine && !mine.viewedAt) {
     after(async () => {
@@ -142,6 +143,14 @@ export default async function DocumentPage({
               </ul>
               {access.isStaff && doc.status === "out_for_signature" && (
                 <div className="row" style={{ marginTop: 12 }}>
+                  {signers.length > 0 && signers.every((s) => s.status === "signed") && (
+                    <form action={retryFinalize}>
+                      <input type="hidden" name="documentId" value={doc.id} />
+                      <button className="btn btn-primary btn-small" type="submit">
+                        Finish signed copy
+                      </button>
+                    </form>
+                  )}
                   <form action={remindSigners}>
                     <input type="hidden" name="documentId" value={doc.id} />
                     <button className="btn btn-ghost btn-small" type="submit">

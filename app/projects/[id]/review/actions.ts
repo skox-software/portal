@@ -73,7 +73,7 @@ export async function createReviewRound(formData: FormData): Promise<{ ok: boole
     }),
   ] as unknown as Parameters<typeof db.batch>[0]);
 
-  notifyLater(() => clientRecipients(client.id), {
+  notifyLater(() => clientRecipients(client.id, { actionRequired: input.approval !== "none" }), {
     subject: `New designs to review: ${input.label}`,
     preheader: "Click anywhere on the design to leave a comment.",
     heading: `${input.label} is ready for your eyes`,

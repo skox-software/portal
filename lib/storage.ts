@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { get, head, put } from "@vercel/blob";
+import { del, get, head, put } from "@vercel/blob";
 
 /**
  * Private file storage (Vercel Blob, private store). Nothing is ever served
@@ -23,6 +23,15 @@ export async function statPrivate(pathnameOrUrl: string) {
     return await head(pathnameOrUrl);
   } catch {
     return null;
+  }
+}
+
+/** Removes a stored file; never throws (the database row is the source of truth). */
+export async function deletePrivate(pathnameOrUrl: string) {
+  try {
+    await del(pathnameOrUrl);
+  } catch (error) {
+    console.error("[storage] could not delete blob", { pathnameOrUrl, error });
   }
 }
 

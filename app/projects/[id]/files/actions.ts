@@ -9,7 +9,8 @@ import { eventInsert } from "@/lib/events";
 import { clientRecipients, notifyLater, portalLink, staffRecipients } from "@/lib/notify";
 import { can } from "@/lib/permissions";
 import { projectForAction } from "@/lib/project-access";
-import { formatBytes, projectPrefix, statPrivate } from "@/lib/storage";
+import { after } from "next/server";
+import { deletePrivate, formatBytes, projectPrefix, statPrivate } from "@/lib/storage";
 
 export async function registerFile(formData: FormData): Promise<{ ok: boolean; message: string }> {
   const ctx = await projectForAction(formData.get("projectId"));
@@ -122,5 +123,6 @@ export async function deleteFile(formData: FormData) {
       payload: { name: file.name },
     }),
   ]);
+  after(() => deletePrivate(file.storageKey));
   revalidatePath(`/projects/${file.projectId}/files`);
 }

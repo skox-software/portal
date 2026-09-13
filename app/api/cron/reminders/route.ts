@@ -1,9 +1,11 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients, documents, documentSigners, invoices, onboardings, projects } from "@/lib/db/schema";
 import { nextStep, progress, shouldRemind, stepsFor } from "@/lib/onboarding-flow";
 import { agreementState, welcomeLink } from "@/lib/onboarding-server";
+import { timingSafeEqual } from "node:crypto";
 import { sendWeeklyDigests } from "@/lib/digest";
+import { pruneRateEvents } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
 import { formatDate, formatMoney, todayIso } from "@/lib/format";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
@@ -19,20 +21,27 @@ const DAY = 86_400_000;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  const given = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${secret ?? ""}`);
+  if (!secret || given.length !== expected.length || !timingSafeEqual(given, expected)) {
     return new Response("Unauthorized", { status: 401 });
   }
+  await pruneRateEvents().catch(() => {});
   const db = getDb();
   const now = new Date();
   let sent = 0;
 
   const signerDue = new Date(now.getTime() - 3 * DAY);
+  // Onboarding attaches the agreement and deposit quietly; nothing nudges anyone until the welcome is out.
+  const welcomed = or(isNull(onboardings.id), isNotNull(onboardings.welcomeSentAt));
   const pendingSigners = await db
     .select({ signer: documentSigners, doc: documents })
     .from(documentSigners)
     .innerJoin(documents, eq(documents.id, documentSigners.documentId))
+    .leftJoin(onboardings, eq(onboardings.projectId, documents.projectId))
     .where(
       and(
+        welcomed,
         eq(documents.status, "out_for_signature"),
         ne(documentSigners.status, "signed"),
         lt(documentSigners.createdAt, signerDue),
@@ -58,8 +67,13 @@ export async function GET(request: Request) {
     .select({ invoice: invoices, project: projects })
     .from(invoices)
     .innerJoin(projects, eq(projects.id, invoices.projectId))
+    .leftJoin(onboardings, eq(onboardings.projectId, invoices.projectId))
+    .leftJoin(documents, eq(documents.id, invoices.documentId))
     .where(
       and(
+        welcomed,
+        // A deposit stays locked (and unmentioned) until its agreement is signed.
+        or(isNull(invoices.documentId), eq(documents.status, "completed")),
         eq(invoices.status, "open"),
         lte(invoices.dueOn, soon),
         or(isNull(invoices.lastRemindedAt), lt(invoices.lastRemindedAt, invoiceDue)),
@@ -69,7 +83,7 @@ export async function GET(request: Request) {
   const today = todayIso(now);
   for (const { invoice, project } of dueInvoices) {
     const overdue = invoice.dueOn < today;
-    const to = await clientRecipients(project.clientId, { approversOnly: true });
+    const to = await clientRecipients(project.clientId, { approversOnly: true, actionRequired: true });
     await sendEmail(to, {
       subject: `${overdue ? "Overdue" : "Due soon"}: invoice ${invoice.number} (${formatMoney(invoice.amountCents, invoice.currency)})`,
       preheader: `${invoice.title} · due ${formatDate(invoice.dueOn)}`,
@@ -99,7 +113,7 @@ export async function GET(request: Request) {
       const nextTitle = flow.find((s) => s.key === next)?.title ?? "your setup";
       const left = progress(o.steps, flow).minutesLeft;
       await sendEmail(o.invitedEmail, {
-        subject: o.status === "invited" ? `Your SKOX portal is ready for ${project.name}` : `Next up for ${project.name}: ${nextTitle.toLowerCase()}`,
+        subject: o.status === "invited" ? `Your SKOX portal is ready for ${project.name}` : `Pick up your setup for ${project.name}`,
         preheader: `About ${left} minutes to go. It picks up right where you left off.`,
         heading: o.status === "invited" ? "Your portal is ready when you are" : `Next up: ${nextTitle}`,
         paragraphs: [
@@ -137,7 +151,5 @@ export async function GET(request: Request) {
   // Fridays (UTC): the weekly recap. Hobby cron runs once a day, so it rides along here.
   const digests = now.getUTCDay() === 5 || new URL(request.url).searchParams.get("digest") === "force" ? await sendWeeklyDigests(now) : 0;
 
-  void gte;
-  void inArray;
   return Response.json({ ok: true, sent, digests });
 }

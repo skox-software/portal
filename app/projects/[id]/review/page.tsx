@@ -4,6 +4,7 @@ import Link from "next/link";
 import { readMessage } from "@/components/Notice";
 import { PinBoard, type Pin } from "@/components/PinBoard";
 import { ProjectHeader } from "@/components/ProjectHeader";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Uploader } from "@/components/Uploader";
 import { getDb } from "@/lib/db";
 import { approvals, feedback, previews } from "@/lib/db/schema";
@@ -166,12 +167,12 @@ export default async function ReviewPage({
                               <textarea id="ap-note" name="note" maxLength={2000} placeholder="Anything we should know" />
                             </div>
                             <div className="row">
-                              <button className="btn btn-primary" name="decision" value="approved" type="submit">
-                                Approve
-                              </button>
-                              <button className="btn btn-ghost" name="decision" value="changes_requested" type="submit">
+                              <SubmitButton className="btn btn-primary" name="decision" value="approved" pendingLabel="Approving…">
+                                Approve this round
+                              </SubmitButton>
+                              <SubmitButton className="btn btn-ghost" name="decision" value="changes_requested" pendingLabel="Sending…">
                                 Request changes
-                              </button>
+                              </SubmitButton>
                             </div>
                           </form>
                         ) : (

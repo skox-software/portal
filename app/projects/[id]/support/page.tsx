@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Metadata } from "next";
 import { readMessage } from "@/components/Notice";
 import { ProjectHeader } from "@/components/ProjectHeader";
+import { SubmitButton } from "@/components/SubmitButton";
 import { getDb } from "@/lib/db";
 import { comments, supportRequests } from "@/lib/db/schema";
 import { formatDateTime, PRIORITY_LABEL, REQUEST_STATUS_LABEL } from "@/lib/format";
@@ -142,10 +143,10 @@ export default async function SupportPage({
                       <option value="urgent">Urgent: something is broken</option>
                     </select>
                   </div>
-                  <button className="btn btn-primary" type="submit">
+                  <SubmitButton className="btn btn-primary" pendingLabel="Sending…">
                     Send request
-                  </button>
-                  <p className="small muted">Need to attach a screenshot? Add it under Files and mention it here.</p>
+                  </SubmitButton>
+                  <p className="small muted">Need to share a screenshot? Upload it in Files, then mention the file name here.</p>
                 </form>
               </section>
             ) : (

@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db";
 import { clients, memberships, referrals } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
+import { requestFingerprint } from "@/lib/project-access";
+import { allow } from "@/lib/rate-limit";
 
 /** Public: a referred prospect introduces themselves. Staff get the lead instantly. */
 export async function submitReferral(formData: FormData) {
@@ -38,6 +40,13 @@ export async function submitReferral(formData: FormData) {
     .where(eq(memberships.referralCode, code))
     .limit(1);
   if (!referrer) redirect("/sign-in");
+
+  // A shared link shouldn't become a way to flood inboxes: a few per hour per link and per visitor.
+  const { ip } = await requestFingerprint();
+  if (!(await allow(`referral:ip:${ip ?? "unknown"}`, 5, 60 * 60_000)) || !(await allow(`referral:code:${code}`, 10, 60 * 60_000))) {
+    redirect(`/r/${code}?sent=1`);
+  }
+  const firstToday = await allow(`referral:thanks:${code}`, 1, 24 * 60 * 60_000);
 
   const id = crypto.randomUUID();
   const { membership, clientName } = referrer;
@@ -73,12 +82,15 @@ export async function submitReferral(formData: FormData) {
     ],
     cta: { label: "Open mission control", href: portalLink("/admin#referrals") },
   });
-  notifyLater(() => [membership.email], {
-    subject: `Thank you for referring ${parsed.data.name}`,
-    preheader: "We'll look after them.",
-    heading: "Thank you for the referral",
-    paragraphs: [`${parsed.data.name} just reached out through your link. We'll take great care of them and keep you posted.`],
-  });
+  if (firstToday) {
+    // No visitor-typed text here: this lands in the referrer's inbox under SKOX's name.
+    notifyLater(() => [membership.email], {
+      subject: "Thank you for your referral",
+      preheader: "Someone reached out through your link. We'll look after them.",
+      heading: "Thank you for the referral",
+      paragraphs: ["Someone just reached out to SKOX through your referral link. We'll take great care of them and keep you posted."],
+    });
+  }
 
   redirect(`/r/${code}?sent=1`);
 }

@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
 import { ProgressRing } from "@/components/ProgressRing";
+import { SubmitButton } from "@/components/SubmitButton";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { VideoEmbed } from "@/components/VideoEmbed";
 import { readMessage } from "@/components/Notice";
@@ -340,9 +341,9 @@ export default async function ProjectHome({
                         <form action={completeClientTask}>
                           <input type="hidden" name="projectId" value={project.id} />
                           <input type="hidden" name="taskId" value={t.taskId} />
-                          <button className="btn btn-ghost btn-small" type="submit">
+                          <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
                             Mark done
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : (
                         t.href && (
@@ -505,9 +506,9 @@ export default async function ProjectHome({
                       <option value="client_member">Can view and comment</option>
                       <option value="client_approver">Can also approve, sign and pay</option>
                     </select>
-                    <button className="btn btn-ghost btn-small" type="submit">
+                    <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Sending…">
                       Send invite
-                    </button>
+                    </SubmitButton>
                   </div>
                 </form>
               </section>

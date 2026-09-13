@@ -196,20 +196,27 @@ export async function completeOnboarding(onboarding: Onboarding, actorUserId: st
       createdBy: actorUserId,
     }));
 
-  await db.batch([
-    ...(clientTodos.length ? [db.insert(tasks).values(clientTodos)] : []),
-    ...(staffTodos.length ? [db.insert(tasks).values(staffTodos)] : []),
-    eventInsert({
-      workspaceId: project.workspaceId,
-      projectId: project.id,
-      actorId: actorUserId,
-      verb: "onboarding.completed",
-      subjectType: "onboarding",
-      subjectId: onboarding.id,
-      payload: { skipped: Object.entries(onboarding.steps).filter(([, v]) => v === "skipped").map(([k]) => k) },
-    }),
-  ] as unknown as Parameters<typeof db.batch>[0]);
+  try {
+    await db.batch([
+      ...(clientTodos.length ? [db.insert(tasks).values(clientTodos)] : []),
+      ...(staffTodos.length ? [db.insert(tasks).values(staffTodos)] : []),
+      eventInsert({
+        workspaceId: project.workspaceId,
+        projectId: project.id,
+        actorId: actorUserId,
+        verb: "onboarding.completed",
+        subjectType: "onboarding",
+        subjectId: onboarding.id,
+        payload: { skipped: Object.entries(onboarding.steps).filter(([, v]) => v === "skipped").map(([k]) => k) },
+      }),
+    ] as unknown as Parameters<typeof db.batch>[0]);
+  } catch (error) {
+    // Release the claim so the next save can finish it (to-dos are de-duplicated by title).
+    await db.update(onboardings).set({ status: "in_progress", completedAt: null }).where(eq(onboardings.id, onboarding.id));
+    throw error;
+  }
 
+  const agreement = await agreementState(project.id, project.status);
   const contactName = onboarding.contact.name || client.name;
   notifyLater(() => staffRecipients(project.workspaceId), {
     subject: `${client.name} finished onboarding: brief ready`,
@@ -223,11 +230,13 @@ export async function completeOnboarding(onboarding: Onboarding, actorUserId: st
     cta: { label: "Open the brief", href: portalLink(`/admin/projects/${project.id}/brief`) },
   });
   notifyLater(() => [onboarding.invitedEmail], {
-    subject: `You're all set for ${project.name}`,
-    preheader: "Here's exactly what happens next.",
-    heading: "You're all set. Thank you!",
+    subject: agreement.hasAgreement && !agreement.settled ? `Your setup for ${project.name} is saved` : `You're all set for ${project.name}`,
+    preheader: agreement.hasAgreement && !agreement.settled ? "One step left: the agreement and deposit." : "Here's exactly what happens next.",
+    heading: agreement.hasAgreement && !agreement.settled ? "Thank you. One step left." : "You're all set. Thank you!",
     paragraphs: [
-      `We have everything we need to get ${project.name} moving.`,
+      agreement.hasAgreement && !agreement.settled
+        ? `Your answers are saved. Signing the agreement and paying the deposit is all that's left before we start building ${project.name}.`
+        : `We have everything we need to get ${project.name} moving.`,
       [
         onboarding.kickoff.status === "booked" ? "• Kickoff: booked, see you there" : "• Kickoff: we'll reach out within one business day to schedule it",
         "• First progress update: within a week, then every week",

@@ -143,6 +143,7 @@ export const memberships = pgTable(
       .nullsNotDistinct(),
     index("memberships_email_idx").on(t.email),
     index("memberships_user_idx").on(t.userId),
+    index("memberships_client_idx").on(t.clientId),
   ],
 );
 
@@ -409,7 +410,11 @@ export const invoices = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true }),
     lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
   },
-  (t) => [index("invoices_project_idx").on(t.projectId, t.status)],
+  (t) => [
+    index("invoices_project_idx").on(t.projectId, t.status),
+    index("invoices_document_idx").on(t.documentId),
+    index("invoices_workspace_idx").on(t.workspaceId, t.status),
+  ],
 );
 
 /** "Request a change" after (or during) the build. */
@@ -598,6 +603,18 @@ export const onboardings = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("onboardings_workspace_idx").on(t.workspaceId, t.status)],
+);
+
+/** Throttle for anything that sends email on behalf of an anonymous visitor. */
+export const rateEvents = pgTable(
+  "rate_events",
+  {
+    id: id(),
+    /** e.g. "otp:email:jane@x.com", "otp:ip:1.2.3.4", "referral:code:abc" */
+    key: text("key").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("rate_events_key_idx").on(t.key, t.createdAt)],
 );
 
 export type Onboarding = typeof onboardings.$inferSelect;

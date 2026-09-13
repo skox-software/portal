@@ -48,9 +48,20 @@ export default async function SharedStatus({ params }: { params: Promise<{ token
       <h1 className="share-title">{project.name}</h1>
       <section className="date-panel" aria-label="Delivery">
         <div className="date-main">
-          <p className="label">{launched ? "Launched" : "Delivery date"}</p>
-          <p className="date-big">{formatDate(launched ? (project.launchedOn ?? project.deliveryDate) : project.deliveryDate)}</p>
-          <p className="date-countdown">{launched ? STATUS_LABEL.launched : describeDaysUntil(daysUntil(project.deliveryDate))}</p>
+          <p className="label">{launched ? "Launched" : "Launch date"}</p>
+          {!launched && project.dateTentative ? (
+            <>
+              <p className="date-big">Set at kickoff</p>
+              <p className="date-countdown">Agreed together once the plan is walked through</p>
+            </>
+          ) : (
+            <>
+              <p className="date-big">{formatDate(launched ? (project.launchedOn ?? project.deliveryDate) : project.deliveryDate)}</p>
+              <p className="date-countdown">
+                {launched ? STATUS_LABEL.launched : daysUntil(project.deliveryDate) >= 0 ? describeDaysUntil(daysUntil(project.deliveryDate)) : "Launching soon"}
+              </p>
+            </>
+          )}
         </div>
         <div className="date-progress">
           <ProgressRing percent={launched ? 100 : steps.length ? (done / steps.length) * 100 : 0} label="Plan complete" />

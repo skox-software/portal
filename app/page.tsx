@@ -80,10 +80,10 @@ export default async function Home() {
                       <span className="chip">{STATUS_LABEL[project.status]}</span>
                     </td>
                     <td className="num">
-                      {formatDate(project.deliveryDate)}
-                      <div className="muted small">
-                        {describeDaysUntil(daysUntil(project.deliveryDate))}
-                      </div>
+                      {project.dateTentative && project.status !== "launched" ? "Set at kickoff" : formatDate(project.deliveryDate)}
+                      {!project.dateTentative && project.status !== "launched" && daysUntil(project.deliveryDate) >= 0 && (
+                        <div className="muted small">{describeDaysUntil(daysUntil(project.deliveryDate))}</div>
+                      )}
                     </td>
                   </tr>
                 ))}

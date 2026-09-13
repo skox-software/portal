@@ -7,6 +7,8 @@
   --muted: #5c6157;
   --label: #676b62;
   --line: #e4e2d8;
+  /* Form controls need 3:1 against the page (WCAG 1.4.11); dividers keep --line. */
+  --field-border: #8f8c80;
   --line-soft: #edebe3;
   --amber: #e4a907;
   --amber-hover: #f2bc27;
@@ -235,7 +237,7 @@ textarea {
   width: 100%;
   min-height: 42px;
   padding: 9px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: var(--paper);
   color: var(--ink);
@@ -957,6 +959,20 @@ a.doc-title:hover {
 }
 .dropzone:hover {
   border-color: var(--amber-ink);
+}
+.dropzone:focus-within {
+  border-color: var(--amber-ink);
+  box-shadow: 0 0 0 3px rgba(228, 169, 7, 0.35);
+}
+.setup-banner :focus-visible,
+.live-panel :focus-visible {
+  outline-color: var(--amber);
+}
+fieldset.q-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 .dropzone input {
   min-height: 0;
@@ -2446,6 +2462,16 @@ a.doc-title:hover {
   .reveal {
     transition: none;
   }
+  .btn,
+  .promise,
+  .guide-link,
+  .welcome-rail .meter span {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+.road-dot {
+  animation-iteration-count: 3;
 }
 
 @media (max-width: 860px) {

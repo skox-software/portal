@@ -1,10 +1,10 @@
 "use server";
 
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
-import { documents, documentSigners, invoices, memberships } from "@/lib/db/schema";
+import { clients, documents, documentSigners, invoices, memberships, projects } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { DOCUMENT_KIND_LABEL, formatDate, formatMoney } from "@/lib/format";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
@@ -54,7 +54,14 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
   const allowed = await getDb()
     .select({ email: memberships.email })
     .from(memberships)
-    .where(and(eq(memberships.workspaceId, project.workspaceId), inArray(memberships.email, input.signers)));
+    .where(
+      and(
+        eq(memberships.workspaceId, project.workspaceId),
+        inArray(memberships.email, input.signers),
+        // This project's client, or SKOX staff: people from another client could never open it.
+        or(eq(memberships.clientId, project.clientId), isNull(memberships.clientId)),
+      ),
+    );
   const allowedEmails = new Set(allowed.map((a) => a.email));
   if (input.signers.some((s) => !allowedEmails.has(s))) {
     return { ok: false, message: "Every signer needs access to the portal first. Invite them on the client page." };
@@ -130,8 +137,11 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
   const { viewer, project, client } = ctx;
 
   const signers = await db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id));
-  const mine = signers.find((s) => s.email === viewer.email);
-  if (!canSign(viewer.email, doc, mine)) {
+  // Identity comes from the address SKOX invited (the membership), never from
+  // the account's current email, which a user might be able to change.
+  const invitedAs = new Set(viewer.memberships.filter((m) => m.workspaceId === doc.workspaceId).map((m) => m.email));
+  const mine = signers.find((s) => invitedAs.has(s.email));
+  if (!mine || !canSign(mine.email, doc, mine)) {
     return { status: "error", message: "This document isn't waiting for your signature." };
   }
 
@@ -163,9 +173,22 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
       signedSha256: doc.sha256,
       viewedAt: mine!.viewedAt ?? signedAt,
     })
-    .where(and(eq(documentSigners.id, mine!.id), ne(documentSigners.status, "signed")))
+    .where(
+      and(
+        eq(documentSigners.id, mine!.id),
+        ne(documentSigners.status, "signed"),
+        // Still out for signature at the moment of signing (not cancelled meanwhile).
+        sql`exists (select 1 from ${documents} where ${documents.id} = ${doc.id} and ${documents.status} = 'out_for_signature')`,
+      ),
+    )
     .returning({ id: documentSigners.id });
-  if (updated.length === 0) return { status: "signed", complete: false };
+  if (updated.length === 0) {
+    const [now] = await db.select({ status: documents.status }).from(documents).where(eq(documents.id, doc.id)).limit(1);
+    if (now?.status === "void") return { status: "error", message: "SKOX cancelled this document, so there's nothing to sign." };
+    // Already signed: if an earlier finish was interrupted, complete it now.
+    const result = now?.status === "out_for_signature" ? await finalizeDocument(doc.id, viewer.userId) : null;
+    return { status: "signed", complete: Boolean(result), next: result?.next };
+  }
 
   await eventInsert({
     workspaceId: doc.workspaceId,
@@ -177,81 +200,14 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
     payload: { title: doc.title, email: viewer.email, consent: CONSENT_TEXT },
   });
 
-  const fresh = await db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id));
-  const complete = fresh.every((s) => s.status === "signed");
+  const result = await finalizeDocument(doc.id, viewer.userId);
+  const complete = Boolean(result);
 
-  if (complete) {
-    const completedAt = new Date();
-    const signedPdf = await buildSignedPdf({
-      original: bytes,
-      documentId: doc.id,
-      title: doc.title,
-      originalSha256: doc.sha256,
-      projectName: project.name,
-      clientName: client.name,
-      completedAt,
-      signatures: fresh.map((s) => ({
-        email: s.email,
-        typedName: s.typedName ?? s.email,
-        signedAt: s.signedAt ?? completedAt,
-        ip: s.ip,
-        userAgent: s.userAgent,
-        viewedAt: s.viewedAt,
-      })),
-    });
-    const stored = await putPrivate(
-      `${projectPrefix(project.id)}signed/${doc.fileName.replace(/\.pdf$/i, "")}-signed.pdf`,
-      signedPdf,
-      "application/pdf",
-    );
-    await db.batch([
-      db
-        .update(documents)
-        .set({ status: "completed", completedAt, signedStorageKey: stored.pathname, signedSha256: sha256(signedPdf) })
-        .where(eq(documents.id, doc.id)),
-      eventInsert({
-        workspaceId: doc.workspaceId,
-        projectId: doc.projectId,
-        actorId: viewer.userId,
-        verb: "document.completed",
-        subjectType: "document",
-        subjectId: doc.id,
-        payload: { title: doc.title },
-      }),
-    ]);
-
-    const link = portalLink(`/projects/${project.id}/documents/${doc.id}`);
-    const [deposit] = await db
-      .select()
-      .from(invoices)
-      .where(and(eq(invoices.documentId, doc.id), eq(invoices.status, "open")))
-      .limit(1);
-    notifyLater(async () => [...fresh.map((s) => s.email), ...(await staffRecipients(doc.workspaceId))], {
-      subject: `Signed: ${doc.title}`,
-      preheader: deposit
-        ? `Next step: the ${formatMoney(deposit.amountCents, deposit.currency)} deposit, then we start building.`
-        : "Everyone has signed. Your copy with the signature certificate is in the portal.",
-      heading: `${doc.title} is fully signed`,
-      paragraphs: [
-        `Everyone has signed ${doc.title} for ${project.name}.`,
-        deposit
-          ? `One step left: invoice ${deposit.number} for ${formatMoney(deposit.amountCents, deposit.currency)} is now ready to pay. As soon as it's in, we start building.`
-          : "Download the signed copy, with its signature certificate, any time from your portal.",
-      ],
-      cta: deposit
-        ? { label: "Pay the deposit", href: portalLink(`/projects/${project.id}/billing`) }
-        : { label: "Get the signed copy", href: link },
-      footnote: deposit ? `Due ${formatDate(deposit.dueOn)}` : undefined,
-    });
-    revalidatePath(`/projects/${project.id}/billing`);
-    revalidatePath(`/projects/${project.id}/documents`);
-    revalidatePath(`/projects/${project.id}`);
-    return {
-      status: "signed",
-      complete: true,
-      next: deposit ? { label: `Pay the deposit (${formatMoney(deposit.amountCents, deposit.currency)})`, href: `/projects/${project.id}/billing` } : undefined,
-    };
+  if (result) {
+    revalidatePath(`/projects/${project.id}/documents/${doc.id}`);
+    return { status: "signed", complete: true, next: result.next };
   } else {
+    const fresh = await db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id));
     notifyLater(() => staffRecipients(doc.workspaceId), {
       subject: `${typedName} signed ${doc.title}`,
       preheader: `${fresh.filter((s) => s.status !== "signed").length} signature(s) still to go`,
@@ -265,6 +221,142 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
   revalidatePath(`/projects/${project.id}/documents/${doc.id}`);
   revalidatePath(`/projects/${project.id}`);
   return { status: "signed", complete };
+}
+
+/**
+ * Completes a document once every signer has signed. Safe to call repeatedly
+ * and concurrently: only the caller that claims the out_for_signature →
+ * completed transition builds the certificate and sends email. If building or
+ * storing the signed copy fails, the claim is released so a retry can finish it.
+ */
+async function finalizeDocument(documentId: string, actorId: string) {
+  const db = getDb();
+  const [claimed] = await db
+    .update(documents)
+    .set({ status: "completed", completedAt: new Date() })
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.status, "out_for_signature"),
+        sql`not exists (select 1 from ${documentSigners} where ${documentSigners.documentId} = ${documentId} and ${documentSigners.status} <> 'signed')`,
+      ),
+    )
+    .returning();
+  if (!claimed) return null;
+  const doc = claimed;
+  const completedAt = doc.completedAt ?? new Date();
+
+  const [row] = await db
+    .select({ project: projects, client: clients })
+    .from(projects)
+    .innerJoin(clients, eq(clients.id, projects.clientId))
+    .where(eq(projects.id, doc.projectId))
+    .limit(1);
+  const signers = await db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id));
+
+  try {
+    const original = await readPrivateBytes(doc.storageKey);
+    if (!original || !row) throw new Error("original document or project missing");
+    const signedPdf = await buildSignedPdf({
+      original,
+      documentId: doc.id,
+      title: doc.title,
+      originalSha256: doc.sha256,
+      projectName: row.project.name,
+      clientName: row.client.name,
+      completedAt,
+      signatures: signers.map((s) => ({
+        email: s.email,
+        typedName: s.typedName ?? s.email,
+        signedAt: s.signedAt ?? completedAt,
+        ip: s.ip,
+        userAgent: s.userAgent,
+        viewedAt: s.viewedAt,
+      })),
+    });
+    const stored = await putPrivate(
+      `${projectPrefix(doc.projectId)}signed/${doc.fileName.replace(/\.pdf$/i, "")}-signed.pdf`,
+      signedPdf,
+      "application/pdf",
+    );
+    await db.batch([
+      db.update(documents).set({ signedStorageKey: stored.pathname, signedSha256: sha256(signedPdf) }).where(eq(documents.id, doc.id)),
+      eventInsert({
+        workspaceId: doc.workspaceId,
+        projectId: doc.projectId,
+        actorId,
+        verb: "document.completed",
+        subjectType: "document",
+        subjectId: doc.id,
+        payload: { title: doc.title },
+      }),
+    ]);
+  } catch (error) {
+    console.error("[documents] could not finish signed copy", { documentId, error });
+    await db.update(documents).set({ status: "out_for_signature", completedAt: null }).where(eq(documents.id, doc.id));
+    notifyLater(() => staffRecipients(doc.workspaceId), {
+      subject: `Action needed: ${doc.title} is signed but the certificate failed`,
+      preheader: "Every signer has signed. The signed copy couldn't be generated.",
+      heading: "A signed copy needs a retry",
+      paragraphs: [
+        `Everyone signed ${doc.title}, but building the signed PDF failed. The signatures are safe.`,
+        "Open the document and use Finish signed copy to try again. If it keeps failing, the original PDF may be encrypted.",
+      ],
+      cta: { label: "Open the document", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
+    });
+    return null;
+  }
+
+  const [deposit] = await db
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.documentId, doc.id), eq(invoices.status, "open")))
+    .limit(1);
+  const projectName = row!.project.name;
+  const clientContent = {
+    subject: `Signed: ${doc.title}`,
+    preheader: deposit
+      ? `Next step: the ${formatMoney(deposit.amountCents, deposit.currency)} deposit, then we start building.`
+      : "Everyone has signed. Your copy with the signature certificate is in the portal.",
+    heading: `${doc.title} is fully signed`,
+    paragraphs: [
+      `Everyone has signed ${doc.title} for ${projectName}.`,
+      deposit
+        ? `One step left: invoice ${deposit.number} for ${formatMoney(deposit.amountCents, deposit.currency)} is now ready to pay. As soon as it's in, we start building.`
+        : "Download the signed copy, with its signature certificate, any time from your portal.",
+    ],
+    cta: deposit
+      ? { label: "Pay the deposit", href: portalLink(`/projects/${doc.projectId}/billing`) }
+      : { label: "Get the signed copy", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
+    footnote: deposit ? `Due ${formatDate(deposit.dueOn)}` : undefined,
+  };
+  notifyLater(() => signers.map((s) => s.email), clientContent);
+  notifyLater(() => staffRecipients(doc.workspaceId), {
+    subject: `Fully signed: ${doc.title} (${row!.client.name})`,
+    preheader: deposit ? `Deposit ${deposit.number} is now unlocked for payment.` : "The signed copy is in the portal.",
+    heading: `${doc.title} is fully signed`,
+    paragraphs: [
+      `Every signer has signed ${doc.title} for ${projectName}.`,
+      deposit ? `Deposit ${deposit.number} (${formatMoney(deposit.amountCents, deposit.currency)}) is now payable.` : "No deposit is linked to it.",
+    ],
+    cta: { label: "See the document", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
+  });
+  revalidatePath(`/projects/${doc.projectId}/billing`);
+  revalidatePath(`/projects/${doc.projectId}/documents`);
+  revalidatePath(`/projects/${doc.projectId}`);
+  return {
+    next: deposit
+      ? { label: `Pay the deposit (${formatMoney(deposit.amountCents, deposit.currency)})`, href: `/projects/${doc.projectId}/billing` }
+      : undefined,
+  };
+}
+
+/** Staff: retry finishing a document whose signed copy failed to generate. */
+export async function retryFinalize(formData: FormData) {
+  const found = await staffDocument(formData);
+  if (!found || found.doc.status !== "out_for_signature") return;
+  await finalizeDocument(found.doc.id, found.ctx.viewer.userId);
+  revalidatePath(`/projects/${found.doc.projectId}/documents/${found.doc.id}`);
 }
 
 async function staffDocument(formData: FormData) {

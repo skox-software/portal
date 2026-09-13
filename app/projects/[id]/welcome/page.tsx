@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { SubmitButton } from "@/components/SubmitButton";
 import { BrandStudio } from "@/components/BrandStudio";
 import { Notice, readMessage } from "@/components/Notice";
 import { Reveal } from "@/components/Reveal";
@@ -46,16 +47,31 @@ function QuestionField({ q, value }: { q: Question; value: string | string[] | u
     </label>
   );
   const str = Array.isArray(value) ? value.join("\n") : (value ?? "");
+  if (q.type === "choice" || q.type === "multi") {
+    // A fieldset + legend so screen readers announce the question with each option.
+    return (
+      <fieldset className="field q-field">
+        <legend className="q-label">
+          {q.label}
+          {q.required && <span className="req"> *</span>}
+        </legend>
+        {q.help && <span className="hint">{q.help}</span>}
+        {q.type === "choice" ? (
+          <Chips name={id} options={q.options ?? []} type="radio" selected={[str]} />
+        ) : (
+          <Chips name={id} options={q.options ?? []} type="checkbox" selected={Array.isArray(value) ? value : lines(value)} />
+        )}
+      </fieldset>
+    );
+  }
   return (
     <div className="field q-field">
-      {q.type === "choice" || q.type === "multi" ? <p className="q-label">{q.label}{q.required && <span className="req"> *</span>}</p> : label}
+      {label}
       {q.help && <span className="hint">{q.help}</span>}
-      {q.type === "text" && <input id={id} name={id} defaultValue={str} placeholder={q.placeholder} maxLength={4000} />}
+      {q.type === "text" && <input id={id} name={id} defaultValue={str} placeholder={q.placeholder} maxLength={4000} required={q.required} />}
       {(q.type === "textarea" || q.type === "links") && (
-        <textarea id={id} name={id} defaultValue={str} placeholder={q.placeholder} rows={q.type === "links" ? 3 : 4} maxLength={4000} />
+        <textarea id={id} name={id} defaultValue={str} placeholder={q.placeholder} rows={q.type === "links" ? 3 : 4} maxLength={4000} required={q.required} />
       )}
-      {q.type === "choice" && <Chips name={id} options={q.options ?? []} type="radio" selected={[str]} />}
-      {q.type === "multi" && <Chips name={id} options={q.options ?? []} type="checkbox" selected={Array.isArray(value) ? value : lines(value)} />}
     </div>
   );
 }
@@ -99,10 +115,12 @@ export default async function WelcomePage({
       await getDb()
         .update(onboardings)
         .set({
-          status: o.status === "invited" ? "in_progress" : o.status,
+          status: sql`case when ${onboardings.status} = 'invited' then 'in_progress'::onboarding_status else ${onboardings.status} end`,
           startedAt: o.startedAt ?? new Date(),
           lastActivityAt: new Date(),
-          ...(agreement.settled && agreement.hasAgreement ? { steps: { ...o.steps, agreement: "done" as const } } : {}),
+          ...(agreement.settled && agreement.hasAgreement
+            ? { steps: sql`${onboardings.steps} || '{"agreement":"done"}'::jsonb` }
+            : {}),
         })
         .where(eq(onboardings.id, o.id));
     });
@@ -130,8 +148,29 @@ export default async function WelcomePage({
   ]);
   const logo = brandFiles.find((f) => f.category === "logo" && f.contentType?.startsWith("image/"));
 
+  // Teammates without approver rights can look through setup but not change it.
+  const readOnly = !access.isStaff && (!can.approve(access) || complete);
   const footer = (label = "Continue") =>
-    def && (
+    def &&
+    (readOnly ? (
+      <div className="welcome-footer">
+        {nav.prev ? (
+          <Link className="btn btn-link" href={`${base}?step=${nav.prev}`}>
+            ← Back
+          </Link>
+        ) : (
+          <span />
+        )}
+        <div className="row">
+          <span className="muted small">{complete ? "Setup is finished. Ask SKOX if something needs changing." : "Your approver fills this in."}</span>
+          {nav.next && (
+            <Link className="btn btn-ghost" href={`${base}?step=${nav.next}`}>
+              Next →
+            </Link>
+          )}
+        </div>
+      </div>
+    ) : (
       <div className="welcome-footer">
         {nav.prev ? (
           <Link className="btn btn-link" href={`${base}?step=${nav.prev}`}>
@@ -146,12 +185,12 @@ export default async function WelcomePage({
               Do this later
             </button>
           )}
-          <button className="btn btn-primary btn-lg" type="submit" name="intent" value="continue">
+          <SubmitButton className="btn btn-primary btn-lg" name="intent" value="continue" pendingLabel="Saving…">
             {label}
-          </button>
+          </SubmitButton>
         </div>
       </div>
-    );
+    ));
   const hidden = (
     <>
       <input type="hidden" name="projectId" value={project.id} />

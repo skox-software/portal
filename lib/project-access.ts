@@ -37,6 +37,8 @@ export async function projectForAction(projectId: unknown): Promise<
 /** Where a request came from, for signature certificates. */
 export async function requestFingerprint() {
   const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "").split(",")[0]?.trim() || null;
+  // Vercel sets x-real-ip to the connecting client; prefer it over the
+  // client-extendable x-forwarded-for chain.
+  const ip = (h.get("x-real-ip") ?? h.get("x-forwarded-for") ?? "").split(",")[0]?.trim() || null;
   return { ip, userAgent: h.get("user-agent")?.slice(0, 400) ?? null };
 }

@@ -38,6 +38,9 @@ export async function getViewer(): Promise<Viewer | null> {
   }
   const user = session?.user;
   if (!user?.id || !user.email) return null;
+  // The portal only signs people in by emailed code, which verifies the address.
+  // An unverified account (e.g. created some other way) gets no access at all.
+  if (!user.emailVerified) return null;
 
   const email = normalizeEmail(user.email);
   const db = getDb();

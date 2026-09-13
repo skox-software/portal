@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gt, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, ne } from "drizzle-orm";
+import { startSteps } from "@/lib/onboarding";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
@@ -32,10 +33,11 @@ import {
   formatMoney,
   greeting,
   MILESTONE_STATE_LABEL,
+  ROLE_LABEL,
 } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
-import { completeClientTask } from "./actions";
+import { completeClientTask, inviteTeammate, removeTeammate } from "./actions";
 import { createShareLink, revokeShareLinks } from "./results/actions";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +104,25 @@ export default async function ProjectHome({
         : Promise.resolve([]),
     ]);
 
+  const [depositRow] = await db
+    .select({ invoice: invoices, doc: documents })
+    .from(invoices)
+    .leftJoin(documents, eq(documents.id, invoices.documentId))
+    .where(and(eq(invoices.projectId, project.id), ne(invoices.status, "void"), isNotNull(invoices.documentId)))
+    .orderBy(desc(invoices.createdAt))
+    .limit(1);
+  const startPath = depositRow
+    ? startSteps({
+        projectId: project.id,
+        projectStatus: project.status,
+        document: depositRow.doc ? { id: depositRow.doc.id, title: depositRow.doc.title, status: depositRow.doc.status } : null,
+        invoice: { id: depositRow.invoice.id, number: depositRow.invoice.number, status: depositRow.invoice.status },
+      })
+    : null;
+  const team = can.inviteTeammates(access)
+    ? await db.select().from(memberships).where(eq(memberships.clientId, project.clientId)).orderBy(asc(memberships.createdAt))
+    : [];
+
   // Remember this visit for next time ("since your last visit").
   if (clientMembership) {
     after(async () => {
@@ -157,7 +178,8 @@ export default async function ProjectHome({
         key: `task-${t.id}`,
         title: t.title,
         detail: t.dueOn ? `${t.dueOn < today ? "Overdue · was due" : "Due"} ${formatDate(t.dueOn)}` : undefined,
-        taskId: t.id,
+        // Upload to-dos tick themselves off when the file arrives.
+        ...(t.completesOn === "file_upload" ? { href: `${base}/files`, cta: "Upload" } : { taskId: t.id }),
         urgent: Boolean(t.dueOn && t.dueOn < today),
       })),
     ...newIdeas.map((i) => ({
@@ -189,6 +211,38 @@ export default async function ProjectHome({
           </p>
           <p className="hello-line">{headline}</p>
         </section>
+
+        {startPath && (
+          <section className="card start-card" aria-labelledby="start-title">
+            <div className="card-head">
+              <h2 id="start-title">Get started</h2>
+              <span className="muted small">
+                {startPath.filter((s) => s.state === "done").length} of {startPath.length} done
+              </span>
+            </div>
+            <ol className="start-steps">
+              {startPath.map((s, i) => (
+                <li key={s.key} data-state={s.state}>
+                  <span className="start-num" aria-hidden="true">
+                    {s.state === "done" ? "✓" : i + 1}
+                  </span>
+                  <div className="start-text">
+                    <p className="todo-title">{s.label}</p>
+                    <p className="todo-detail">
+                      {s.state === "locked" ? "Unlocks after the step before" : s.detail}
+                      <span className="sr-only"> ({s.state})</span>
+                    </p>
+                  </div>
+                  {s.state === "current" && s.href && (
+                    <Link className="btn btn-primary btn-small" href={s.href}>
+                      {s.key === "sign" ? "Review & sign" : "Pay deposit"}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
 
         {launched ? (
           <section className="live-panel" aria-label="Your product is live">
@@ -378,6 +432,54 @@ export default async function ProjectHome({
                     </li>
                   ))}
                 </ul>
+              </section>
+            )}
+
+            {can.inviteTeammates(access) && (
+              <section className="card" id="team" aria-labelledby="team-title">
+                <div className="card-head">
+                  <h2 id="team-title">Your team</h2>
+                  <span className="muted small">{team.length}</span>
+                </div>
+                <ul className="task-list">
+                  {team.map((m) => (
+                    <li key={m.id}>
+                      <span className="small">
+                        {m.email}
+                        <span className="muted"> · {ROLE_LABEL[m.role]}</span>
+                        {!m.userId && <span className="chip chip-amber" style={{ marginLeft: 6 }}>Invited</span>}
+                      </span>
+                      {m.email !== viewer.email && (access.isStaff || m.role === "client_member") && (
+                        <form action={removeTeammate}>
+                          <input type="hidden" name="projectId" value={project.id} />
+                          <input type="hidden" name="membershipId" value={m.id} />
+                          <button className="btn btn-link small" type="submit">
+                            Remove
+                          </button>
+                        </form>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <form action={inviteTeammate} className="stack" style={{ marginTop: 12 }}>
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <div className="field">
+                    <label htmlFor="tm-email">Invite a teammate</label>
+                    <input id="tm-email" name="email" type="email" required placeholder="name@company.com" />
+                  </div>
+                  <div className="inline-form">
+                    <label className="sr-only" htmlFor="tm-role">
+                      Role
+                    </label>
+                    <select id="tm-role" name="role" defaultValue="client_member">
+                      <option value="client_member">Can view and comment</option>
+                      <option value="client_approver">Can also approve, sign and pay</option>
+                    </select>
+                    <button className="btn btn-ghost btn-small" type="submit">
+                      Send invite
+                    </button>
+                  </div>
+                </form>
               </section>
             )}
 

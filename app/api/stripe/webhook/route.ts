@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { invoices, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
+import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
 import { verifyStripeSignature } from "@/lib/stripe";
 
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
           cta: { label: "Open billing", href: link },
         }),
       ),
+      afterInvoicePaid(row),
     ]);
   }
   return Response.json({ received: true });

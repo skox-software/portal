@@ -257,13 +257,14 @@ export async function createProject(formData: FormData) {
     // The kickoff checklist: what we always need from a client in week one.
     db.insert(tasks).values(
       [
-        { title: "Upload your logo and brand files (Files tab)", days: 3 },
-        { title: "Share any logins or access we'll need (Requests tab, never passwords in email)", days: 5 },
-        { title: "Send the text and photos you want on the product", days: 7 },
+        { title: "Upload your logo and brand files", days: 3, completesOn: "file_upload" as const },
+        { title: "Share any logins or access we'll need (Requests tab, never passwords in email)", days: 5, completesOn: null },
+        { title: "Upload the text and photos you want on the product", days: 7, completesOn: "file_upload" as const },
       ].map((t) => ({
         ...base,
         side: "client" as const,
         title: t.title,
+        completesOn: t.completesOn,
         dueOn: addDays(input.startedOn, t.days),
         createdBy: viewer.userId,
       })),

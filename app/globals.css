@@ -1294,6 +1294,56 @@ a.doc-title:hover {
   color: var(--blush-ink);
 }
 
+.start-card {
+  margin-bottom: 20px;
+  border: 2px solid var(--amber);
+}
+.start-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.start-steps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--fog);
+}
+.start-steps li[data-state="current"] {
+  background: var(--blush);
+}
+.start-steps li[data-state="locked"] {
+  opacity: 0.6;
+}
+.start-num {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--paper);
+  font: 600 13px/1 var(--mono);
+}
+.start-steps li[data-state="current"] .start-num {
+  border-color: var(--ink);
+}
+.start-steps li[data-state="done"] .start-num {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #fff;
+}
+.start-text {
+  flex: 1;
+  min-width: 0;
+}
 .video-embed {
   position: relative;
   margin-top: 16px;

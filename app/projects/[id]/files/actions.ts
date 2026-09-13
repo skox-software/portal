@@ -1,10 +1,10 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
-import { files } from "@/lib/db/schema";
+import { files, tasks } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { clientRecipients, notifyLater, portalLink, staffRecipients } from "@/lib/notify";
 import { can } from "@/lib/permissions";
@@ -25,7 +25,31 @@ export async function registerFile(formData: FormData): Promise<{ ok: boolean; m
 
   const fromClient = !access.isStaff;
   const id = crypto.randomUUID();
-  await getDb().batch([
+  // A client upload ticks off the oldest "upload your files" to-do.
+  const [checklistItem] = fromClient
+    ? await getDb()
+        .select({ id: tasks.id, title: tasks.title })
+        .from(tasks)
+        .where(and(eq(tasks.projectId, project.id), eq(tasks.completesOn, "file_upload"), isNull(tasks.doneAt)))
+        .orderBy(asc(tasks.createdAt))
+        .limit(1)
+    : [];
+  const db = getDb();
+  await db.batch([
+    ...(checklistItem
+      ? [
+          getDb().update(tasks).set({ doneAt: new Date(), doneBy: viewer.userId }).where(eq(tasks.id, checklistItem.id)),
+          eventInsert({
+            workspaceId: project.workspaceId,
+            projectId: project.id,
+            actorId: viewer.userId,
+            verb: "task.completed",
+            subjectType: "task",
+            subjectId: checklistItem.id,
+            payload: { title: checklistItem.title, by: viewer.email, auto: true },
+          }),
+        ]
+      : []),
     getDb().insert(files).values({
       id,
       workspaceId: project.workspaceId,
@@ -47,7 +71,7 @@ export async function registerFile(formData: FormData): Promise<{ ok: boolean; m
       subjectId: id,
       payload: { name: fileName, fromClient: String(fromClient) },
     }),
-  ]);
+  ] as unknown as Parameters<typeof db.batch>[0]);
 
   const link = portalLink(`/projects/${project.id}/files`);
   if (fromClient) {
@@ -69,7 +93,11 @@ export async function registerFile(formData: FormData): Promise<{ ok: boolean; m
   }
 
   revalidatePath(`/projects/${project.id}/files`);
-  return { ok: true, message: `Uploaded ${fileName}.` };
+  revalidatePath(`/projects/${project.id}`);
+  return {
+    ok: true,
+    message: checklistItem ? `Uploaded ${fileName}. Ticked off “${checklistItem.title}”.` : `Uploaded ${fileName}.`,
+  };
 }
 
 export async function deleteFile(formData: FormData) {

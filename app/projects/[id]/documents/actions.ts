@@ -4,9 +4,9 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
-import { documents, documentSigners, memberships } from "@/lib/db/schema";
+import { documents, documentSigners, invoices, memberships } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
-import { DOCUMENT_KIND_LABEL } from "@/lib/format";
+import { DOCUMENT_KIND_LABEL, formatDate, formatMoney } from "@/lib/format";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
 import { canSign, normalizeEmail } from "@/lib/permissions";
 import { projectForAction, requestFingerprint } from "@/lib/project-access";
@@ -109,7 +109,10 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: `Sent to ${signers.length} ${signers.length === 1 ? "person" : "people"}.` };
 }
 
-export type SignState = { status: "idle" } | { status: "error"; message: string } | { status: "signed"; complete: boolean };
+export type SignState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | { status: "signed"; complete: boolean; next?: { label: string; href: string } };
 
 /** A named signer signs. Completes the document when the last signature lands. */
 export async function signDocument(_prev: SignState, formData: FormData): Promise<SignState> {
@@ -215,16 +218,36 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
     ]);
 
     const link = portalLink(`/projects/${project.id}/documents/${doc.id}`);
+    const [deposit] = await db
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.documentId, doc.id), eq(invoices.status, "open")))
+      .limit(1);
     notifyLater(async () => [...fresh.map((s) => s.email), ...(await staffRecipients(doc.workspaceId))], {
       subject: `Signed: ${doc.title}`,
-      preheader: "Everyone has signed. Your copy with the signature certificate is in the portal.",
+      preheader: deposit
+        ? `Next step: the ${formatMoney(deposit.amountCents, deposit.currency)} deposit, then we start building.`
+        : "Everyone has signed. Your copy with the signature certificate is in the portal.",
       heading: `${doc.title} is fully signed`,
       paragraphs: [
         `Everyone has signed ${doc.title} for ${project.name}.`,
-        "Download the signed copy, with its signature certificate, any time from your portal.",
+        deposit
+          ? `One step left: invoice ${deposit.number} for ${formatMoney(deposit.amountCents, deposit.currency)} is now ready to pay. As soon as it's in, we start building.`
+          : "Download the signed copy, with its signature certificate, any time from your portal.",
       ],
-      cta: { label: "Get the signed copy", href: link },
+      cta: deposit
+        ? { label: "Pay the deposit", href: portalLink(`/projects/${project.id}/billing`) }
+        : { label: "Get the signed copy", href: link },
+      footnote: deposit ? `Due ${formatDate(deposit.dueOn)}` : undefined,
     });
+    revalidatePath(`/projects/${project.id}/billing`);
+    revalidatePath(`/projects/${project.id}/documents`);
+    revalidatePath(`/projects/${project.id}`);
+    return {
+      status: "signed",
+      complete: true,
+      next: deposit ? { label: `Pay the deposit (${formatMoney(deposit.amountCents, deposit.currency)})`, href: `/projects/${project.id}/billing` } : undefined,
+    };
   } else {
     notifyLater(() => staffRecipients(doc.workspaceId), {
       subject: `${typedName} signed ${doc.title}`,

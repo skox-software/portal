@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { readMessage } from "@/components/Notice";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { getDb } from "@/lib/db";
-import { invoices } from "@/lib/db/schema";
+import { documents, invoices } from "@/lib/db/schema";
+import { invoiceLocked } from "@/lib/onboarding";
 import { formatDate, formatDateTime, formatMoney, todayIso } from "@/lib/format";
 import { loadProjectShell } from "@/lib/project-shell";
 import { stripeEnabled } from "@/lib/stripe";
@@ -22,7 +23,15 @@ export default async function BillingPage({
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const shell = await loadProjectShell(id);
   const { project, access } = shell;
-  const list = await getDb().select().from(invoices).where(eq(invoices.projectId, project.id)).orderBy(desc(invoices.createdAt));
+  const [list, docs] = await Promise.all([
+    getDb().select().from(invoices).where(eq(invoices.projectId, project.id)).orderBy(desc(invoices.createdAt)),
+    getDb()
+      .select({ id: documents.id, title: documents.title, status: documents.status })
+      .from(documents)
+      .where(eq(documents.projectId, project.id))
+      .orderBy(desc(documents.createdAt)),
+  ]);
+  const docById = new Map(docs.map((d) => [d.id, d]));
   const today = todayIso();
   const open = list.filter((i) => i.status === "open");
   const paid = list.filter((i) => i.status === "paid");
@@ -87,6 +96,20 @@ export default async function BillingPage({
                 <input id="i-pay" name="payUrl" type="url" placeholder="https://buy.stripe.com/…" />
               </div>
               <div className="field">
+                <label htmlFor="i-doc">Deposit for an agreement? (Get started flow)</label>
+                <select id="i-doc" name="documentId" defaultValue="">
+                  <option value="">No, a regular invoice</option>
+                  {docs
+                    .filter((d) => d.status !== "void")
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        Unlocks when “{d.title}” is signed{d.status === "completed" ? " (already signed)" : ""}
+                      </option>
+                    ))}
+                </select>
+                <span className="hint">When it&apos;s paid, the project moves from Kickoff to Building automatically.</span>
+              </div>
+              <div className="field">
                 <label htmlFor="i-notes">Notes</label>
                 <textarea id="i-notes" name="notes" maxLength={2000} placeholder="Payment terms, what's included…" />
               </div>
@@ -109,7 +132,9 @@ export default async function BillingPage({
             <ul className="invoice-list">
               {list.map((inv) => {
                 const overdue = inv.status === "open" && inv.dueOn < today;
-                const canPay = inv.status === "open" && (stripe || inv.payUrl);
+                const linked = inv.documentId ? docById.get(inv.documentId) : undefined;
+                const locked = inv.status === "open" && invoiceLocked(inv, linked?.status);
+                const canPay = inv.status === "open" && !locked && (stripe || inv.payUrl);
                 return (
                   <li key={inv.id} className="invoice" data-status={overdue ? "overdue" : inv.status}>
                     <div className="invoice-main">
@@ -123,6 +148,12 @@ export default async function BillingPage({
                             : `${overdue ? "Overdue · was due" : "Due"} ${formatDate(inv.dueOn)}`}
                       </p>
                       {inv.notes && <p className="small muted" style={{ whiteSpace: "pre-line", marginTop: 4 }}>{inv.notes}</p>}
+                      {locked && linked && (
+                        <p className="small" style={{ marginTop: 4 }}>
+                          Unlocks when{" "}
+                          <a href={`/projects/${project.id}/documents/${linked.id}`}>“{linked.title}”</a> is signed.
+                        </p>
+                      )}
                     </div>
                     <p className="invoice-amount">{formatMoney(inv.amountCents, inv.currency)}</p>
                     <div className="invoice-actions">

@@ -16,10 +16,17 @@ export function SignPanel({ documentId, consentText, defaultName }: { documentId
         </p>
         <h2>Signed. Thank you.</h2>
         <p className="muted">
-          {state.complete
-            ? "Everyone has signed. Your signed copy with its certificate is ready below."
-            : "We'll email you the fully signed copy as soon as everyone else signs."}
+          {state.next
+            ? "Everyone has signed. One step left before we start building."
+            : state.complete
+              ? "Everyone has signed. Your signed copy with its certificate is ready below."
+              : "We'll email you the fully signed copy as soon as everyone else signs."}
         </p>
+        {state.next && (
+          <a className="btn btn-primary" href={state.next.href}>
+            {state.next.label} →
+          </a>
+        )}
       </div>
     );
   }

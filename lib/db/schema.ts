@@ -83,6 +83,7 @@ export const requestStatus = pgEnum("request_status", ["new", "in_progress", "wa
 export const ideaStatus = pgEnum("idea_status", ["proposed", "interested", "not_now", "planned"]);
 export const referralStatus = pgEnum("referral_status", ["new", "contacted", "won", "lost"]);
 export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "login_note"]);
+export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
 
 export const workspaces = pgTable("workspaces", {
   id: id(),
@@ -295,6 +296,8 @@ export const tasks = pgTable(
     projectId: projectId(),
     side: taskSide("side").notNull(),
     title: text("title").notNull(),
+    /** Ticks itself off when this happens (e.g. the client uploads a file). */
+    completesOn: taskTrigger("completes_on"),
     dueOn: date("due_on", { mode: "string" }),
     doneAt: timestamp("done_at", { withTimezone: true }),
     doneBy: text("done_by"),
@@ -387,6 +390,8 @@ export const invoices = pgTable(
     status: invoiceStatus("status").notNull().default("open"),
     /** Stripe payment link, or any pay page. */
     payUrl: text("pay_url"),
+    /** A deposit that unlocks once this agreement is signed ("Get started" flow). */
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
     createdAt: createdAt(),

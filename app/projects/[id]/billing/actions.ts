@@ -3,15 +3,18 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
-import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
 import { getDb } from "@/lib/db";
-import { invoices } from "@/lib/db/schema";
+import { documents, invoices } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { formatDate, formatMoney } from "@/lib/format";
 import { backWith } from "@/lib/http";
+import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, notifyLater, portalLink } from "@/lib/notify";
+import { invoiceLocked } from "@/lib/onboarding";
 import { projectForAction } from "@/lib/project-access";
+import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
 
 export async function createInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
@@ -27,6 +30,7 @@ export async function createInvoice(formData: FormData) {
       dueOn: z.iso.date(),
       payUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ })]),
       notes: z.string().trim().max(2000),
+      documentId: z.union([z.literal(""), z.uuid()]),
     })
     .safeParse({
       number: formData.get("number"),
@@ -35,12 +39,23 @@ export async function createInvoice(formData: FormData) {
       dueOn: formData.get("dueOn"),
       payUrl: formData.get("payUrl") ?? "",
       notes: formData.get("notes") ?? "",
+      documentId: formData.get("documentId") ?? "",
     });
   if (!parsed.success) backWith(back, "error", "Add a number, title, amount and due date. Pay links must start with https://");
   const input = parsed.data;
+
+  let linkedDoc: typeof documents.$inferSelect | undefined;
+  if (input.documentId) {
+    [linkedDoc] = await getDb()
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, input.documentId), eq(documents.projectId, project.id)))
+      .limit(1);
+    if (!linkedDoc || linkedDoc.status === "void") backWith(back, "error", "That agreement isn't on this project.");
+  }
+
   const amountCents = Math.round(input.amount * 100);
   const id = crypto.randomUUID();
-
   await getDb().batch([
     getDb().insert(invoices).values({
       id,
@@ -52,6 +67,7 @@ export async function createInvoice(formData: FormData) {
       dueOn: input.dueOn,
       payUrl: input.payUrl || null,
       notes: input.notes || null,
+      documentId: linkedDoc?.id ?? null,
       createdBy: viewer.userId,
     }),
     eventInsert({
@@ -61,21 +77,31 @@ export async function createInvoice(formData: FormData) {
       verb: "invoice.created",
       subjectType: "invoice",
       subjectId: id,
-      payload: { title: input.title, amountCents },
+      payload: { title: input.title, amountCents, documentId: linkedDoc?.id ?? null },
     }),
   ]);
 
-  notifyLater(() => clientRecipients(client.id, { approversOnly: true }), {
-    subject: `Invoice ${input.number} from SKOX: ${formatMoney(amountCents)}`,
-    preheader: `${input.title} · due ${formatDate(input.dueOn)}`,
-    heading: `Invoice ${input.number}: ${formatMoney(amountCents)}`,
-    paragraphs: [`${input.title} for ${project.name}.`, ...(input.notes ? [input.notes] : [])],
-    cta: { label: input.payUrl ? "View and pay" : "View invoice", href: portalLink(back) },
-    footnote: `Due ${formatDate(input.dueOn)}`,
-  });
+  // A deposit waiting on an unsigned agreement is announced by the signing flow instead.
+  if (!linkedDoc || linkedDoc.status === "completed") {
+    notifyLater(() => clientRecipients(client.id, { approversOnly: true }), {
+      subject: `Invoice ${input.number} from SKOX: ${formatMoney(amountCents)}`,
+      preheader: `${input.title} · due ${formatDate(input.dueOn)}`,
+      heading: `Invoice ${input.number}: ${formatMoney(amountCents)}`,
+      paragraphs: [`${input.title} for ${project.name}.`, ...(input.notes ? [input.notes] : [])],
+      cta: { label: input.payUrl || stripeEnabled() ? "View and pay" : "View invoice", href: portalLink(back) },
+      footnote: `Due ${formatDate(input.dueOn)}`,
+    });
+  }
 
   revalidatePath(back);
-  backWith(back, "notice", `Invoice ${input.number} added and emailed to the approvers.`);
+  revalidatePath(`/projects/${project.id}`);
+  backWith(
+    back,
+    "notice",
+    linkedDoc && linkedDoc.status !== "completed"
+      ? `Invoice ${input.number} added. It unlocks for payment as soon as “${linkedDoc.title}” is signed.`
+      : `Invoice ${input.number} added and emailed to the approvers.`,
+  );
 }
 
 /** Client: pay through Stripe Checkout when configured, else the manual pay link. */
@@ -86,12 +112,20 @@ export async function payInvoice(formData: FormData) {
   const back = `/projects/${project.id}/billing`;
   const invoiceId = String(formData.get("invoiceId") ?? "");
   if (!z.uuid().safeParse(invoiceId).success) return;
-  const [invoice] = await getDb()
+  const db = getDb();
+  const [invoice] = await db
     .select()
     .from(invoices)
     .where(and(eq(invoices.id, invoiceId), eq(invoices.projectId, project.id), eq(invoices.status, "open")))
     .limit(1);
   if (!invoice) backWith(back, "notice", "That invoice is already settled.");
+
+  if (invoice.documentId) {
+    const [doc] = await db.select({ status: documents.status, title: documents.title }).from(documents).where(eq(documents.id, invoice.documentId)).limit(1);
+    if (invoiceLocked(invoice, doc?.status)) {
+      backWith(`/projects/${project.id}/documents/${invoice.documentId}`, "error", `Sign “${doc?.title}” first, then the deposit unlocks.`);
+    }
+  }
 
   let destination: string | null = null;
   if (stripeEnabled()) {
@@ -133,6 +167,12 @@ export async function setInvoiceStatus(formData: FormData) {
   if (!parsed.success) return;
   const { project, viewer, client } = ctx;
   const db = getDb();
+  const [before] = await db
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(and(eq(invoices.id, parsed.data.invoiceId), eq(invoices.projectId, project.id)))
+    .limit(1);
+  if (!before || before.status === parsed.data.status) return;
   const [invoice] = await db
     .update(invoices)
     .set({ status: parsed.data.status, paidAt: parsed.data.status === "paid" ? new Date() : null })
@@ -156,6 +196,10 @@ export async function setInvoiceStatus(formData: FormData) {
       paragraphs: [`We've received ${formatMoney(invoice.amountCents, invoice.currency)} for invoice ${invoice.number} (${invoice.title}).`],
       cta: { label: "See billing", href: portalLink(`/projects/${project.id}/billing`) },
     });
+    after(async () => {
+      await afterInvoicePaid(invoice);
+    });
   }
   revalidatePath(`/projects/${project.id}/billing`);
+  revalidatePath(`/projects/${project.id}`);
 }

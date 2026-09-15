@@ -8,7 +8,8 @@ import { documents, invoices } from "@/lib/db/schema";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceLocked } from "@/lib/onboarding";
 import { loadProjectShell } from "@/lib/project-shell";
-import { stripeEnabled } from "@/lib/stripe";
+import { stripeEnabled, stripeSandbox } from "@/lib/stripe";
+import { canCheckout } from "@/lib/billing-access";
 import { EmbeddedPay } from "./EmbeddedPay";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +25,8 @@ export default async function PayInvoicePage({
   const shell = await loadProjectShell(id);
   const { project, access } = shell;
   const back = `/projects/${project.id}/billing`;
-  // Staff never pay a client's invoice, and without keys there's nothing to mount.
-  if (!stripeEnabled() || access.isStaff) redirect(back);
+  const sandbox = stripeSandbox();
+  if (!stripeEnabled() || !canCheckout(access, sandbox)) redirect(back);
 
   const db = getDb();
   const [invoice] = await db
@@ -58,6 +59,7 @@ export default async function PayInvoicePage({
           <Link href={back}>← Back to billing</Link>
         </p>
         <section className="card" aria-label="Payment">
+          {sandbox && <p className="small" style={{ marginBottom: 16 }}><strong>Sandbox payment — no real money is charged.</strong> Use a Stripe test card. Completing payment updates this invoice and may send project notifications.</p>}
           <EmbeddedPay projectId={project.id} invoiceId={invoice.id} />
         </section>
         <p className="small muted" style={{ marginTop: 12 }}>

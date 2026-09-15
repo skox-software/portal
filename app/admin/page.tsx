@@ -210,9 +210,12 @@ export default async function MissionControl({
             <p className="eyebrow">SKOX team</p>
             <h1>Mission control</h1>
           </div>
+          <div className="row">
+          <Link className="btn btn-ghost" href="/admin/billing">Billing</Link>
           <Link className="btn btn-primary" href="/admin/onboard">
             Onboard a new client →
           </Link>
+          </div>
         </div>
         <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
 

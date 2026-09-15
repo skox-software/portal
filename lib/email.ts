@@ -94,20 +94,20 @@ let resend: Resend | null = null;
  */
 export async function sendEmail(to: string | string[], content: EmailContent) {
   const recipients = [...new Set((Array.isArray(to) ? to : [to]).filter(Boolean))];
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return false;
 
   const key = process.env.RESEND_API_KEY;
   const live = process.env.NODE_ENV === "production" || process.env.EMAIL_SEND_IN_DEV === "1";
   if (!key || !live) {
     console.info("[email] (not sent)", { to: recipients, subject: content.subject });
-    return;
+    return false;
   }
 
   resend ??= new Resend(key);
   const { html, text } = renderEmail(content);
   try {
     // One message per recipient so clients never see each other's addresses.
-    await Promise.all(
+    const results = await Promise.all(
       recipients.map(async (address) => {
         const { error } = await resend!.emails.send({
           from: process.env.EMAIL_FROM ?? "SKOX <portal@skoxsoftware.com>",
@@ -118,9 +118,12 @@ export async function sendEmail(to: string | string[], content: EmailContent) {
           text,
         });
         if (error) console.error("[email] send failed", { to: address, subject: content.subject, error });
+        return !error;
       }),
     );
+    return results.every(Boolean);
   } catch (error) {
     console.error("[email] send threw", { subject: content.subject, error });
+    return false;
   }
 }

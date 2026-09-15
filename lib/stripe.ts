@@ -1,4 +1,6 @@
 import Stripe from "stripe";
+import { createHash } from "node:crypto";
+import { isStripeSandbox } from "./billing-access";
 
 /**
  * Optional Stripe Checkout. With STRIPE_SECRET_KEY set, "Pay now" opens the
@@ -18,6 +20,10 @@ let client: Stripe | undefined;
 
 export function stripeEnabled() {
   return Boolean(process.env.STRIPE_SECRET_KEY);
+}
+
+export function stripeSandbox() {
+  return isStripeSandbox(process.env.STRIPE_SECRET_KEY);
 }
 
 function stripe() {
@@ -65,7 +71,7 @@ export async function createEmbeddedCheckout(input: {
         },
       ],
     },
-    { idempotencyKey: `invoice-${input.invoiceId}-${Math.floor(Date.now() / 600_000)}` },
+    { idempotencyKey: `invoice-${input.invoiceId}-${createHash("sha256").update(JSON.stringify(input)).digest("hex").slice(0, 24)}-${Math.floor(Date.now() / 600_000)}` },
   );
   if (!session.client_secret) throw new Error("Stripe returned no client secret");
   return session.client_secret;

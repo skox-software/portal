@@ -8,18 +8,20 @@ import { z } from "zod";
 import { getDb } from "@/lib/db";
 import { documents, invoices } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
+import { sendEmail } from "@/lib/email";
+import { canCheckout } from "@/lib/billing-access";
 import { formatDate, formatMoney } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, notifyLater, portalLink } from "@/lib/notify";
 import { invoiceLocked } from "@/lib/onboarding";
 import { projectForAction } from "@/lib/project-access";
-import { stripeEnabled } from "@/lib/stripe";
+import { stripeEnabled, stripeSandbox } from "@/lib/stripe";
 
 export async function createInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok || !ctx.access.isStaff) return;
-  const { project, client, viewer } = ctx;
+  const { project, viewer } = ctx;
   const back = `/projects/${project.id}/billing`;
 
   const parsed = z
@@ -81,26 +83,22 @@ export async function createInvoice(formData: FormData) {
     }),
   ]);
 
-  // A deposit waiting on an unsigned agreement is announced by the signing flow instead.
-  if (!linkedDoc || linkedDoc.status === "completed") {
-    notifyLater(() => clientRecipients(client.id, { approversOnly: true, actionRequired: true }), {
-      subject: `Invoice ${input.number} from SKOX: ${formatMoney(amountCents)}`,
-      preheader: `${input.title} · due ${formatDate(input.dueOn)}`,
-      heading: `Invoice ${input.number}: ${formatMoney(amountCents)}`,
-      paragraphs: [`${input.title} for ${project.name}.`, ...(input.notes ? [input.notes] : [])],
-      cta: { label: input.payUrl || stripeEnabled() ? "View and pay" : "View invoice", href: portalLink(back) },
-      footnote: `Due ${formatDate(input.dueOn)}`,
-    });
-  }
-
+  const sendNow = formData.get("delivery") === "email";
   revalidatePath(back);
   revalidatePath(`/projects/${project.id}`);
+  revalidatePath("/admin/billing");
+  if (sendNow && (!linkedDoc || linkedDoc.status === "completed")) {
+    const request = new FormData();
+    request.set("projectId", project.id);
+    request.set("invoiceId", id);
+    await emailInvoice(request);
+  }
   backWith(
     back,
     "notice",
     linkedDoc && linkedDoc.status !== "completed"
       ? `Invoice ${input.number} added. It unlocks for payment as soon as “${linkedDoc.title}” is signed.`
-      : `Invoice ${input.number} added and emailed to the approvers.`,
+      : sendNow ? `Invoice ${input.number} added. Email delivery queued for the approvers.` : `Invoice ${input.number} created. Copy its payment link or email it when you're ready.`,
   );
 }
 
@@ -108,6 +106,7 @@ export async function createInvoice(formData: FormData) {
 export async function payInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok) return;
+  if (!canCheckout(ctx.access, stripeSandbox())) return;
   const { project, viewer } = ctx;
   const back = `/projects/${project.id}/billing`;
   const invoiceId = String(formData.get("invoiceId") ?? "");
@@ -141,6 +140,38 @@ export async function payInvoice(formData: FormData) {
     payload: { number: invoice.number },
   });
   redirect(destination);
+}
+
+/** Owner sends an existing invoice without creating a second invoice. */
+export async function emailInvoice(formData: FormData) {
+  const ctx = await projectForAction(formData.get("projectId"));
+  if (!ctx.ok || !ctx.access.isStaff) return;
+  const { project, client, viewer } = ctx;
+  const back = formData.get("returnTo") === "billing" ? "/admin/billing" : `/projects/${project.id}/billing`;
+  const invoiceId = z.uuid().safeParse(formData.get("invoiceId"));
+  if (!invoiceId.success) return;
+  const [invoice] = await getDb().select().from(invoices)
+    .where(and(eq(invoices.id, invoiceId.data), eq(invoices.projectId, project.id))).limit(1);
+  if (!invoice || invoice.status !== "open") backWith(back, "error", "Only open invoices can be sent for payment.");
+  const recipients = await clientRecipients(client.id, { approversOnly: true, actionRequired: true });
+  if (!recipients.length) backWith(back, "error", "Add a client approver to this project before emailing an invoice.");
+  const sandbox = stripeSandbox();
+  const sent = await sendEmail(recipients, {
+    subject: `${sandbox ? "[Sandbox] " : ""}Invoice ${invoice.number} from SKOX: ${formatMoney(invoice.amountCents, invoice.currency)}`,
+    preheader: `${invoice.title} · due ${formatDate(invoice.dueOn)}`,
+    heading: `Invoice ${invoice.number}: ${formatMoney(invoice.amountCents, invoice.currency)}`,
+    paragraphs: [
+      `${invoice.title} for ${project.name}.`,
+      ...(sandbox ? ["This is a sandbox payment request. Use a Stripe test card; no real money will be charged."] : []),
+      ...(invoice.notes ? [invoice.notes] : []),
+    ],
+    cta: { label: "View invoice", href: portalLink(`/projects/${project.id}/billing/invoices/${invoice.id}`) },
+    footnote: `Due ${formatDate(invoice.dueOn)}`,
+  });
+  if (!sent) backWith(back, "error", "Email delivery could not be confirmed. Copy the payment link or try again.");
+  await eventInsert({ workspaceId: project.workspaceId, projectId: project.id, actorId: viewer.userId,
+    verb: "invoice.emailed", subjectType: "invoice", subjectId: invoice.id, payload: { number: invoice.number } });
+  backWith(back, "notice", `Invoice ${invoice.number} emailed to ${recipients.join(", ")}.`);
 }
 
 export async function setInvoiceStatus(formData: FormData) {

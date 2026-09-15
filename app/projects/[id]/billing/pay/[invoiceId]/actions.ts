@@ -8,7 +8,8 @@ import { eventInsert } from "@/lib/events";
 import { portalLink } from "@/lib/notify";
 import { invoiceLocked } from "@/lib/onboarding";
 import { projectForAction } from "@/lib/project-access";
-import { createEmbeddedCheckout } from "@/lib/stripe";
+import { createEmbeddedCheckout, stripeSandbox } from "@/lib/stripe";
+import { canCheckout } from "@/lib/billing-access";
 
 /**
  * The secret the embedded payment form mounts with.
@@ -20,6 +21,7 @@ import { createEmbeddedCheckout } from "@/lib/stripe";
 export async function checkoutClientSecret(projectId: string, invoiceId: string) {
   const ctx = await projectForAction(projectId);
   if (!ctx.ok) throw new Error("You don't have access to this invoice.");
+  if (!canCheckout(ctx.access, stripeSandbox())) throw new Error("Only client approvers can pay. Staff can test checkout in sandbox mode.");
   const { project, viewer } = ctx;
   if (!z.uuid().safeParse(invoiceId).success) throw new Error("Unknown invoice.");
 

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SkoxLogo } from "@/components/SkoxLogo";
 import { getViewer } from "@/lib/access";
 import { SignInForm } from "./SignInForm";
+import { billingDestination } from "@/lib/sign-in-destination";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Sign in" };
@@ -12,8 +13,9 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (await getViewer()) redirect("/");
-  const { email } = await searchParams;
+  const { email, next } = await searchParams;
+  const destination = billingDestination(next);
+  if (await getViewer()) redirect(destination);
   const prefill = typeof email === "string" && /^[^\s@]+@[^\s@]+$/.test(email) ? email.slice(0, 200) : "";
 
   return (
@@ -31,7 +33,8 @@ export default async function SignInPage({
       <section className="signin-card" aria-labelledby="signin-title">
         <h2 id="signin-title">Sign in</h2>
         <p className="muted">Use the email your invitation went to.</p>
-        <SignInForm defaultEmail={prefill} />
+        {destination !== "/" && <p className="small muted">Sign in to view your invoice and continue to payment.</p>}
+        <SignInForm defaultEmail={prefill} destination={destination} />
       </section>
     </main>
   );

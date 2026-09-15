@@ -15,6 +15,7 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
         </Link>
         <nav className="topnav" aria-label="Main">
           {isStaff ? <Link href="/admin">Mission control</Link> : <Link href="/">Your projects</Link>}
+          {isStaff && <Link href="/admin/billing">Billing</Link>}
         </nav>
         <div className="who">
           <Link href="/settings" className="who-email" title="Email preferences">

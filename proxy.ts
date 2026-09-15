@@ -1,5 +1,6 @@
 import { getAuth } from "@/lib/auth/server";
 import { BASE_PATH } from "@/lib/paths";
+import { billingDestination } from "@/lib/sign-in-destination";
 
 type Middleware = ReturnType<ReturnType<typeof getAuth>["middleware"]>;
 
@@ -12,7 +13,10 @@ type Middleware = ReturnType<ReturnType<typeof getAuth>["middleware"]>;
  * the request URL, so a bare "/sign-in" would land on the marketing site.
  */
 export default function proxy(...args: Parameters<Middleware>) {
-  return getAuth().middleware({ loginUrl: `${BASE_PATH}/sign-in` })(...args);
+  const url = new URL(args[0].url);
+  const next = billingDestination(`${url.pathname}${url.search}`);
+  const loginUrl = `${BASE_PATH}/sign-in${next === "/" ? "" : `?next=${encodeURIComponent(next)}`}`;
+  return getAuth().middleware({ loginUrl })(...args);
 }
 
 export const config = {

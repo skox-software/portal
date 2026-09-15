@@ -20,7 +20,16 @@ const nextConfig: NextConfig = {
   // app, and what the main site forwards here) is never caught by them.
   async redirects() {
     const site = "https://www.skoxsoftware.com/portal";
-    const moved = ["/sign-in", "/settings", "/projects/:path*", "/admin/:path*", "/s/:path*", "/r/:path*"];
+    const moved = [
+      "/sign-in",
+      "/settings",
+      "/projects/:path*",
+      "/admin/:path*",
+      "/s/:path*",
+      "/r/:path*",
+      // Welcome guides and file links in emails already sent.
+      "/api/:path*",
+    ];
     return [
       { source: "/", destination: site, permanent: false, basePath: false as const },
       ...moved.map((source) => ({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { withBase } from "@/lib/paths";
 import { signInWithCode, type SignInState } from "./actions";
 
 export function SignInForm({ defaultEmail = "" }: { defaultEmail?: string }) {
@@ -51,7 +52,7 @@ export function SignInForm({ defaultEmail = "" }: { defaultEmail?: string }) {
           <button className="btn btn-link small" type="submit" name="intent" value="resend" formNoValidate>
             send a new code
           </button>{" "}
-          or <a href="/sign-in">use a different email</a>.
+          or <a href={withBase("/sign-in")}>use a different email</a>.
         </p>
       </form>
     );

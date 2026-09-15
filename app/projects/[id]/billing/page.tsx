@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { readMessage } from "@/components/Notice";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -55,7 +56,7 @@ export default async function BillingPage({
       <main className="shell page page-after-band">
         {sp.from === "welcome" && (
           <p className="small" style={{ marginBottom: 14 }}>
-            <a href={`/projects/${project.id}/welcome?step=agreement`}>← Back to your setup</a>
+            <Link href={`/projects/${project.id}/welcome?step=agreement`}>← Back to your setup</Link>
           </p>
         )}
         <section className="stat-row" aria-label="Billing summary">
@@ -157,7 +158,7 @@ export default async function BillingPage({
                       {locked && linked && (
                         <p className="small" style={{ marginTop: 4 }}>
                           Unlocks when{" "}
-                          <a href={`/projects/${project.id}/documents/${linked.id}`}>“{linked.title}”</a> is signed.
+                          <Link href={`/projects/${project.id}/documents/${linked.id}`}>“{linked.title}”</Link> is signed.
                         </p>
                       )}
                     </div>

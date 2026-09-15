@@ -8,6 +8,7 @@ import { SignPanel } from "@/components/SignPanel";
 import { getDb } from "@/lib/db";
 import { documents, documentSigners, invoices } from "@/lib/db/schema";
 import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { canSign } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
 import { CONSENT_TEXT } from "@/lib/signing";
@@ -110,7 +111,7 @@ export default async function DocumentPage({
                       Next: pay the deposit ({formatMoney(deposit.amountCents, deposit.currency)}) →
                     </Link>
                   )}
-                  <a className={deposit && !access.isStaff ? "btn btn-ghost" : "btn btn-primary"} href={`/api/documents/${doc.id}?signed=1&download=1`}>
+                  <a className={deposit && !access.isStaff ? "btn btn-ghost" : "btn btn-primary"} href={withBase(`/api/documents/${doc.id}?signed=1&download=1`)}>
                     Download signed PDF
                   </a>
                 </div>

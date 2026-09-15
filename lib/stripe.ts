@@ -1,69 +1,99 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import Stripe from "stripe";
 
 /**
- * Optional Stripe Checkout. With STRIPE_SECRET_KEY set, "Pay now" opens a
- * Stripe-hosted checkout for the exact invoice amount (card, Apple/Google Pay,
- * and US bank transfer if enabled in Stripe), and the webhook marks the invoice
- * paid automatically. Without it, invoices use their manual pay link.
- * Plain fetch keeps the dependency list short.
+ * Optional Stripe Checkout. With STRIPE_SECRET_KEY set, "Pay now" opens the
+ * portal's own checkout page, where Stripe's payment form is embedded for the
+ * exact invoice amount (card, Apple/Google Pay, and US bank transfer if enabled
+ * in Stripe), and the webhook marks the invoice paid. Without it, invoices fall
+ * back to their manual pay link.
+ *
+ * Which payment methods appear is decided in the Stripe dashboard, never here:
+ * Stripe ranks the eligible ones per customer.
  */
+
+/** Labels these sessions in Stripe's dashboard so portal payments are legible. */
+const INTEGRATION_ID = "skox-portal-invoice-qhzkmwft";
+
+let client: Stripe | undefined;
 
 export function stripeEnabled() {
   return Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
-export async function createCheckoutSession(input: {
+function stripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+  client ??= new Stripe(key);
+  return client;
+}
+
+/**
+ * Starts a checkout for one invoice and returns the secret its payment form
+ * mounts with. Paying twice in quick succession reuses the same session: the
+ * idempotency key only changes every ten minutes.
+ */
+export async function createEmbeddedCheckout(input: {
   invoiceId: string;
   number: string;
   title: string;
   amountCents: number;
   currency: string;
   customerEmail: string;
-  successUrl: string;
-  cancelUrl: string;
+  returnUrl: string;
 }) {
-  const body = new URLSearchParams({
-    mode: "payment",
-    success_url: input.successUrl,
-    cancel_url: input.cancelUrl,
-    customer_email: input.customerEmail,
-    client_reference_id: input.invoiceId,
-    "metadata[invoice_id]": input.invoiceId,
-    "payment_intent_data[metadata][invoice_id]": input.invoiceId,
-    "payment_intent_data[description]": `SKOX invoice ${input.number}: ${input.title}`,
-    "line_items[0][quantity]": "1",
-    "line_items[0][price_data][currency]": input.currency,
-    "line_items[0][price_data][unit_amount]": String(input.amountCents),
-    "line_items[0][price_data][product_data][name]": `Invoice ${input.number}: ${input.title}`,
-  });
-  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Idempotency-Key": `invoice-${input.invoiceId}-${Math.floor(Date.now() / 600_000)}`,
+  const session = await stripe().checkout.sessions.create(
+    {
+      mode: "payment",
+      ui_mode: "embedded_page",
+      return_url: input.returnUrl,
+      customer_email: input.customerEmail,
+      client_reference_id: input.invoiceId,
+      integration_identifier: INTEGRATION_ID,
+      metadata: { invoice_id: input.invoiceId },
+      payment_intent_data: {
+        metadata: { invoice_id: input.invoiceId },
+        description: `SKOX invoice ${input.number}: ${input.title}`,
+      },
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: input.currency,
+            unit_amount: input.amountCents,
+            product_data: { name: `Invoice ${input.number}: ${input.title}` },
+          },
+        },
+      ],
     },
-    body,
-  });
-  const json = (await res.json()) as { url?: string; error?: { message?: string } };
-  if (!res.ok || !json.url) throw new Error(json.error?.message ?? "Stripe checkout failed");
-  return json.url;
+    { idempotencyKey: `invoice-${input.invoiceId}-${Math.floor(Date.now() / 600_000)}` },
+  );
+  if (!session.client_secret) throw new Error("Stripe returned no client secret");
+  return session.client_secret;
 }
 
-/** Verifies a Stripe webhook signature (v1, 5-minute tolerance). */
-export function verifyStripeSignature(payload: string, header: string | null, secret: string) {
-  if (!header) return false;
-  const parts = Object.fromEntries(header.split(",").map((p) => p.split("=") as [string, string]));
-  const timestamp = Number(parts.t);
-  if (!timestamp || Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
-  const expected = createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex");
-  const signatures = header
-    .split(",")
-    .filter((p) => p.startsWith("v1="))
-    .map((p) => p.slice(3));
-  return signatures.some((sig) => {
-    const a = Buffer.from(sig, "hex");
-    const b = Buffer.from(expected, "hex");
-    return a.length === b.length && timingSafeEqual(a, b);
-  });
+/**
+ * What Stripe says about a finished checkout, for the return page. The invoice
+ * itself is settled by the webhook, never by this read: someone can close the
+ * tab before the return page ever loads.
+ */
+export async function checkoutStatus(sessionId: string) {
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  return {
+    status: session.status,
+    paymentStatus: session.payment_status,
+    invoiceId: session.metadata?.invoice_id ?? null,
+    amountTotal: session.amount_total,
+    currency: session.currency,
+  };
+}
+
+/** Verifies a webhook's signature. Returns null when it doesn't check out. */
+export function stripeEvent(payload: string, signature: string | null, secret: string) {
+  if (!signature) return null;
+  try {
+    return stripe().webhooks.constructEvent(payload, signature, secret);
+  } catch (error) {
+    console.error("[stripe] webhook signature rejected", error);
+    return null;
+  }
 }

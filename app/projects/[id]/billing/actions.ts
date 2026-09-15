@@ -14,7 +14,7 @@ import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, notifyLater, portalLink } from "@/lib/notify";
 import { invoiceLocked } from "@/lib/onboarding";
 import { projectForAction } from "@/lib/project-access";
-import { createCheckoutSession, stripeEnabled } from "@/lib/stripe";
+import { stripeEnabled } from "@/lib/stripe";
 
 export async function createInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
@@ -104,7 +104,7 @@ export async function createInvoice(formData: FormData) {
   );
 }
 
-/** Client: pay through Stripe Checkout when configured, else the manual pay link. */
+/** Client: open the portal's own checkout page when Stripe is on, else the manual pay link. */
 export async function payInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok) return;
@@ -127,24 +127,9 @@ export async function payInvoice(formData: FormData) {
     }
   }
 
-  let destination: string | null = null;
-  if (stripeEnabled()) {
-    try {
-      destination = await createCheckoutSession({
-        invoiceId: invoice.id,
-        number: invoice.number,
-        title: invoice.title,
-        amountCents: invoice.amountCents,
-        currency: invoice.currency,
-        customerEmail: viewer.email,
-        successUrl: portalLink(`${back}?paid=1`),
-        cancelUrl: portalLink(back),
-      });
-    } catch (error) {
-      console.error("[billing] stripe checkout failed", error);
-    }
-  }
-  destination ??= invoice.payUrl;
+  // The payment form itself is mounted on our own page, so this is just a
+  // navigation: the Stripe session is created when that page asks for it.
+  const destination = stripeEnabled() ? `${back}/pay/${invoice.id}` : invoice.payUrl;
   if (!destination) backWith(back, "error", "Online payment isn't set up for this invoice yet. Reply to the invoice email and we'll sort it.");
   await eventInsert({
     workspaceId: project.workspaceId,

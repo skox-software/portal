@@ -10,6 +10,7 @@ import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, documents, invoices, memberships, onboardings, projects } from "@/lib/db/schema";
 import { formatDate, formatMoney, kindLabel, todayIso } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { addDeposit, sendWelcome } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -172,7 +173,7 @@ export default async function PrepareWelcome({
               <Link className="btn btn-link small" href={`/projects/${project.id}/welcome`}>
                 Preview what they&apos;ll see
               </Link>
-              <a className="btn btn-link small" href={`/api/projects/${project.id}/welcome-guide`} target="_blank" rel="noopener noreferrer">
+              <a className="btn btn-link small" href={withBase(`/api/projects/${project.id}/welcome-guide`)} target="_blank" rel="noopener noreferrer">
                 Preview their welcome guide (PDF)
               </a>
             </div>

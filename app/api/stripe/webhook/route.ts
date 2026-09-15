@@ -1,30 +1,44 @@
 import { and, eq } from "drizzle-orm";
+import type Stripe from "stripe";
 import { getDb } from "@/lib/db";
 import { invoices, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
 import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
-import { verifyStripeSignature } from "@/lib/stripe";
+import { stripeEvent } from "@/lib/stripe";
 
-/** Marks an invoice paid when Stripe confirms the checkout payment. */
+/**
+ * Marks an invoice paid when Stripe confirms the checkout payment.
+ *
+ * This, not the return page, is what settles an invoice: a client can close
+ * the tab before ever landing back on the portal, and bank-transfer payments
+ * confirm hours or days later.
+ */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) return new Response("Stripe not configured", { status: 404 });
   const payload = await request.text();
-  if (!verifyStripeSignature(payload, request.headers.get("stripe-signature"), secret)) {
-    return new Response("Bad signature", { status: 400 });
-  }
+  const event = stripeEvent(payload, request.headers.get("stripe-signature"), secret);
+  if (!event) return new Response("Bad signature", { status: 400 });
 
-  const event = JSON.parse(payload) as {
-    type: string;
-    data: { object: { metadata?: { invoice_id?: string }; payment_status?: string; amount_total?: number } };
-  };
-  const paidTypes = ["checkout.session.completed", "checkout.session.async_payment_succeeded"];
-  if (!paidTypes.includes(event.type)) return Response.json({ received: true });
-  const session = event.data.object;
+  const handled = [
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed",
+  ];
+  if (!handled.includes(event.type)) return Response.json({ received: true });
+  const session = event.data.object as Stripe.Checkout.Session;
   const invoiceId = session.metadata?.invoice_id;
-  if (!invoiceId || session.payment_status !== "paid") return Response.json({ received: true });
+  if (!invoiceId) return Response.json({ received: true });
+
+  if (event.type === "checkout.session.async_payment_failed") {
+    await reportFailedPayment(invoiceId, session);
+    return Response.json({ received: true });
+  }
+  // A delayed payment method (e.g. bank transfer) completes the session while
+  // it's still unpaid. Only money that actually arrived settles an invoice.
+  if (session.payment_status === "unpaid") return Response.json({ received: true });
 
   const db = getDb();
   const [row] = await db
@@ -92,4 +106,26 @@ export async function POST(request: Request) {
     ]);
   }
   return Response.json({ received: true });
+}
+
+/**
+ * A delayed payment that failed after checkout. The invoice stays open — the
+ * client saw a "payment started" screen, so someone has to chase it.
+ */
+async function reportFailedPayment(invoiceId: string, session: Stripe.Checkout.Session) {
+  const db = getDb();
+  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId)).limit(1);
+  if (!invoice) return;
+  const [project] = await db.select().from(projects).where(eq(projects.id, invoice.projectId)).limit(1);
+  if (!project) return;
+  await sendEmail(await staffRecipients(project.workspaceId), {
+    subject: `Payment failed: invoice ${invoice.number}`,
+    preheader: `${project.name} started a payment that didn't clear.`,
+    heading: "A payment didn't go through",
+    paragraphs: [
+      `${project.name} started paying invoice ${invoice.number} (${invoice.title}) for ${formatMoney(invoice.amountCents, invoice.currency)}, and Stripe reports the payment failed.`,
+      `This happens with bank transfers that are confirmed later. The invoice is still open${session.customer_email ? `, and the payer was ${session.customer_email}` : ""}.`,
+    ],
+    cta: { label: "Open billing", href: portalLink(`/projects/${project.id}/billing`) },
+  });
 }

@@ -7,7 +7,7 @@ import { ProjectHeader } from "@/components/ProjectHeader";
 import { SignPanel } from "@/components/SignPanel";
 import { getDb } from "@/lib/db";
 import { documents, documentSigners, invoices } from "@/lib/db/schema";
-import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney } from "@/lib/format";
+import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney, timeAgo } from "@/lib/format";
 import { withBase } from "@/lib/paths";
 import { canSign } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
@@ -139,7 +139,11 @@ export default async function DocumentPage({
                       {s.typedName && <span className="muted small"> · {s.email}</span>}
                     </span>
                     <span className={s.status === "signed" ? "chip chip-ok" : s.status === "viewed" ? "chip chip-amber" : "chip"}>
-                      {s.status === "signed" && s.signedAt ? `Signed ${formatDateTime(s.signedAt)}` : s.status === "viewed" ? "Opened" : "Not opened"}
+                      {s.status === "signed" && s.signedAt
+                        ? `Signed ${formatDateTime(s.signedAt)}`
+                        : s.status === "viewed"
+                          ? `Opened ${timeAgo(s.viewedAt) ?? ""}`.trim()
+                          : "Not opened"}
                     </span>
                   </li>
                 ))}

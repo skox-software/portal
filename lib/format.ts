@@ -37,6 +37,29 @@ export function formatDateTime(value: Date) {
   });
 }
 
+/**
+ * "2 hours ago", for the moments staff read as a signal: when a client opened
+ * the agreement, when they were last in the portal. Rounds down, so it never
+ * claims more time has passed than actually has.
+ */
+export function timeAgo(value: Date | null | undefined, now: Date = new Date()) {
+  if (!value) return null;
+  const ms = now.getTime() - value.getTime();
+  if (ms < 0) return "just now";
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} ${months === 1 ? "month" : "months"} ago`;
+  const years = Math.floor(days / 365);
+  return `${years} ${years === 1 ? "year" : "years"} ago`;
+}
+
 /** The midpoint between two calendar dates, used for the default halfway review. */
 export function midpoint(startIso: string, endIso: string) {
   const start = Date.parse(`${startIso}T00:00:00Z`);

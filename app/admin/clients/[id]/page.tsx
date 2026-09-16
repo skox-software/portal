@@ -7,7 +7,7 @@ import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, memberships, projects } from "@/lib/db/schema";
-import { formatDate, kindLabel, PROJECT_KINDS, ROLE_LABEL, STATUS_LABEL, todayIso } from "@/lib/format";
+import { formatDate, formatDateTime, kindLabel, PROJECT_KINDS, ROLE_LABEL, STATUS_LABEL, timeAgo, todayIso } from "@/lib/format";
 import { createProject, deleteClient, inviteMember, removeMember } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -148,8 +148,11 @@ export default async function ClientAdmin({
                         <span className="chip">{ROLE_LABEL[m.role]}</span>
                       </div>
                       <div className="row">
-                        <span className={m.userId ? "chip chip-ok" : "chip chip-amber"}>
-                          {m.userId ? "Signed in" : "Invited"}
+                        <span
+                          className={m.userId ? "chip chip-ok" : "chip chip-amber"}
+                          title={m.lastSeenAt ? formatDateTime(m.lastSeenAt) : undefined}
+                        >
+                          {m.lastSeenAt ? `Last seen ${timeAgo(m.lastSeenAt)}` : m.userId ? "Signed in" : "Invited, not signed in yet"}
                         </span>
                         <form action={removeMember}>
                           <input type="hidden" name="membershipId" value={m.id} />

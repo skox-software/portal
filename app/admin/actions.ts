@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
 import { ensureAuthAccount } from "@/lib/auth/accounts";
@@ -24,6 +25,8 @@ import { midpoint, PROJECT_KINDS } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { googleBookingEmbedUrl, safeBookingUrl } from "@/lib/meetings";
 import { normalizeEmail } from "@/lib/permissions";
+import { deleteProjectInput, projectDeletionQuery, type DeletedProject, type DeleteProjectState } from "@/lib/project-deletion";
+import { deleteProjectFiles } from "@/lib/storage";
 
 /*
  * Every action re-checks that the caller is SKOX staff and that the thing it
@@ -234,6 +237,34 @@ export async function removeMember(formData: FormData) {
 }
 
 /* ---- Projects ---- */
+
+export async function deleteProject(_state: DeleteProjectState, formData: FormData): Promise<DeleteProjectState> {
+  const { viewer, staff } = await requireStaff();
+  const parsed = deleteProjectInput.safeParse(formFields(formData));
+  if (!parsed.success) return { error: "Type the project name to confirm deletion." };
+
+  let deleted: DeletedProject | undefined;
+  try {
+    const result = await getDb().execute<DeletedProject>(projectDeletionQuery({
+      ...parsed.data,
+      workspaceId: staff.workspaceId,
+      actorId: viewer.userId,
+    }));
+    deleted = result.rows[0];
+  } catch (error) {
+    console.error("[projects] could not delete project", error);
+    return { error: "Couldn't delete the project. Please try again." };
+  }
+  if (!deleted) {
+    return { error: "The project name doesn't match, the project was already deleted, or you no longer have access. Refresh Mission control and try again." };
+  }
+
+  const project = deleted;
+  after(() => deleteProjectFiles(project.id));
+  // Refresh staff lists, client views and any open project tabs together.
+  revalidatePath("/", "layout");
+  backWith("/admin", "notice", `${project.name} deleted.`);
+}
 
 export async function createProject(formData: FormData) {
   const { viewer, staff } = await requireStaff();

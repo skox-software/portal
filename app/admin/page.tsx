@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, inArray, isNull, lt, max, ne } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DeleteProjectButton } from "@/components/DeleteProjectButton";
 import { Notice, readMessage } from "@/components/Notice";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
@@ -23,7 +24,7 @@ import {
   workspaces,
 } from "@/lib/db/schema";
 import { daysUntil, describeDaysUntil, formatDate, formatDateTime, formatMoney, kindLabel, nowMs, STATUS_LABEL, todayIso } from "@/lib/format";
-import { createClient, saveWorkspaceSettings, setReferralStatus } from "./actions";
+import { createClient, deleteProject, saveWorkspaceSettings, setReferralStatus } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Mission control" };
@@ -292,6 +293,7 @@ export default async function MissionControl({
                               <th>Status</th>
                               <th>Delivery</th>
                               <th>Signals</th>
+                              <th>Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -324,6 +326,9 @@ export default async function MissionControl({
                                       {late && <span className="chip chip-danger">Past delivery</span>}
                                       {!stale && waitingOnClient === 0 && !late && <span className="chip chip-ok">On track</span>}
                                     </div>
+                                  </td>
+                                  <td>
+                                    <DeleteProjectButton projectId={p.id} projectName={p.name} action={deleteProject} />
                                   </td>
                                 </tr>
                               );

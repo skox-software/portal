@@ -208,6 +208,42 @@ h3 {
   padding: 0 14px;
   font-size: 13px;
 }
+.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+.btn-danger-solid {
+  color: var(--paper);
+  background: var(--danger);
+}
+.btn-danger-solid:hover:not(:disabled) {
+  background: #852316;
+}
+.delete-project-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 20px 80px rgb(28 32 29 / 20%);
+  overflow-wrap: anywhere;
+}
+.delete-project-dialog::backdrop {
+  background: rgb(28 32 29 / 45%);
+}
+.delete-project-dialog h2 {
+  font-size: 28px;
+}
+.delete-project-dialog-actions {
+  justify-content: flex-end;
+}
 .btn-block {
   width: 100%;
 }

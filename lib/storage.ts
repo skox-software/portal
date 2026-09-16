@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { del, get, head, put } from "@vercel/blob";
+import { del, get, head, list, put } from "@vercel/blob";
+import { removeProjectBlobs } from "./project-deletion";
 
 /**
  * Private file storage (Vercel Blob, private store). Nothing is ever served
@@ -32,6 +33,15 @@ export async function deletePrivate(pathnameOrUrl: string) {
     await del(pathnameOrUrl);
   } catch (error) {
     console.error("[storage] could not delete blob", { pathnameOrUrl, error });
+  }
+}
+
+/** Best-effort cleanup after a project is deleted; private downloads already deny access. */
+export async function deleteProjectFiles(projectId: string) {
+  try {
+    await removeProjectBlobs(projectId, { list, delete: del });
+  } catch (error) {
+    console.error("[storage] could not clean up deleted project files", { projectId, error });
   }
 }
 

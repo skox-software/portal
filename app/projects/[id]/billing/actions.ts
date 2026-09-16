@@ -98,7 +98,7 @@ export async function createInvoice(formData: FormData) {
     "notice",
     linkedDoc && linkedDoc.status !== "completed"
       ? `Invoice ${input.number} added. It unlocks for payment as soon as “${linkedDoc.title}” is signed.`
-      : sendNow ? `Invoice ${input.number} added. Email delivery queued for the approvers.` : `Invoice ${input.number} created. Copy its payment link or email it when you're ready.`,
+      : sendNow ? `Invoice ${input.number} added. Email delivery queued for the project contacts.` : `Invoice ${input.number} created. Copy its payment link or email it when you're ready.`,
   );
 }
 
@@ -153,8 +153,10 @@ export async function emailInvoice(formData: FormData) {
   const [invoice] = await getDb().select().from(invoices)
     .where(and(eq(invoices.id, invoiceId.data), eq(invoices.projectId, project.id))).limit(1);
   if (!invoice || invoice.status !== "open") backWith(back, "error", "Only open invoices can be sent for payment.");
-  const recipients = await clientRecipients(client.id, { approversOnly: true, actionRequired: true });
-  if (!recipients.length) backWith(back, "error", "Add a client approver to this project before emailing an invoice.");
+  // Anyone assigned to the project can receive an invoice. Payment permission
+  // remains separate: only client approvers can authorize checkout.
+  const recipients = await clientRecipients(client.id, { actionRequired: true });
+  if (!recipients.length) backWith(back, "error", "Add a client contact to this project before emailing an invoice.");
   const sandbox = stripeSandbox();
   const sent = await sendEmail(recipients, {
     subject: `${sandbox ? "[Sandbox] " : ""}Invoice ${invoice.number} from SKOX: ${formatMoney(invoice.amountCents, invoice.currency)}`,

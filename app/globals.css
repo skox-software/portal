@@ -1501,6 +1501,12 @@ fieldset.q-field {
   }
 }
 @media (max-width: 640px) {
+  .client-block .project-actions {
+    position: sticky;
+    right: 0;
+    background: var(--paper);
+    box-shadow: -8px 0 8px -8px rgb(28 32 29 / 25%);
+  }
   .invoice {
     grid-template-columns: minmax(0, 1fr);
   }

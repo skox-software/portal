@@ -293,7 +293,7 @@ export default async function MissionControl({
                               <th>Status</th>
                               <th>Delivery</th>
                               <th>Signals</th>
-                              <th>Actions</th>
+                              <th className="project-actions">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -327,7 +327,7 @@ export default async function MissionControl({
                                       {!stale && waitingOnClient === 0 && !late && <span className="chip chip-ok">On track</span>}
                                     </div>
                                   </td>
-                                  <td>
+                                  <td className="project-actions">
                                     <DeleteProjectButton projectId={p.id} projectName={p.name} action={deleteProject} />
                                   </td>
                                 </tr>

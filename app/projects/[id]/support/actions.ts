@@ -126,9 +126,9 @@ export async function replyToRequest(formData: FormData) {
   const link = portalLink(`${back}#r-${request.id}`);
   if (access.isStaff) {
     notifyLater(() => [request.createdByEmail], {
-      subject: nextStatus === "done" ? `Done: ${request.title}` : `Update on your request: ${request.title}`,
+      subject: nextStatus === "done" ? `Request completed: ${request.title}` : `Update on your request: ${request.title}`,
       preheader: input.body.slice(0, 140) || REQUEST_STATUS_LABEL[nextStatus],
-      heading: nextStatus === "done" ? "Your request is done" : "We replied to your request",
+      heading: nextStatus === "done" ? "Your request has been completed" : "An update on your request",
       paragraphs: [request.title, ...(input.body ? [input.body] : []), `Status: ${REQUEST_STATUS_LABEL[nextStatus]}`],
       cta: { label: "Open the request", href: link },
     });

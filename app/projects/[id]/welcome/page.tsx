@@ -20,6 +20,7 @@ import { firstName, formatDate, formatMoney, kindLabel, PROJECT_KINDS, ROLE_LABE
 import { ACCESS_STATUS, accessFor, BEST_TIMES, CONTACT_METHODS, lines, questionsFor, TONE_WORDS, type Question } from "@/lib/onboarding-content";
 import { canSkip, isStepKey, neighbours, nextStep, progress, stepsFor, type StepKey } from "@/lib/onboarding-flow";
 import { agreementState } from "@/lib/onboarding-server";
+import { withBase } from "@/lib/paths";
 import { can } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
 import { saveWelcomeStep } from "./actions";
@@ -273,7 +274,7 @@ export default async function WelcomePage({
                 <Link className="btn btn-primary btn-lg" href={`/projects/${project.id}`}>
                   Go to your project →
                 </Link>
-                <a className="btn btn-ghost btn-lg" href={`/api/projects/${project.id}/welcome-guide?download=1`}>
+                <a className="btn btn-ghost btn-lg" href={withBase(`/api/projects/${project.id}/welcome-guide?download=1`)}>
                   Download your welcome guide
                 </a>
               </div>
@@ -326,7 +327,7 @@ export default async function WelcomePage({
                     </div>
                   </Reveal>
                   <Reveal>
-                    <a className="guide-link" href={`/api/projects/${project.id}/welcome-guide`} target="_blank" rel="noopener noreferrer">
+                    <a className="guide-link" href={withBase(`/api/projects/${project.id}/welcome-guide`)} target="_blank" rel="noopener noreferrer">
                       <span className="guide-icon" aria-hidden="true">
                         PDF
                       </span>
@@ -528,7 +529,7 @@ export default async function WelcomePage({
                           <li key={f.id}>
                             {f.contentType?.startsWith("image/") ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={`/api/files/${f.id}`} alt={f.name} />
+                              <img src={withBase(`/api/files/${f.id}`)} alt={f.name} />
                             ) : (
                               <span className="doc-icon">FILE</span>
                             )}
@@ -581,7 +582,7 @@ export default async function WelcomePage({
                   <div className="card safe-card">
                     <p className="label">Safe and simple</p>
                     <p>
-                      Never send us passwords. For each account, invite <strong>founders@skoxsoftware.com</strong> as a user or admin. Not sure
+                      Never send us passwords. For each account, invite <strong>founder@skoxsoftware.com</strong> as a user or admin. Not sure
                       how, or don&apos;t know where it lives? Choose &ldquo;I need help&rdquo; and we&apos;ll sort it together at kickoff.
                     </p>
                   </div>

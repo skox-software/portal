@@ -6,6 +6,7 @@ import { Uploader } from "@/components/Uploader";
 import { getDb } from "@/lib/db";
 import { files } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { loadProjectShell } from "@/lib/project-shell";
 import { formatBytes } from "@/lib/storage";
 import { deleteFile, registerFile } from "./actions";
@@ -45,7 +46,7 @@ export default async function FilesPage({
               {kindOf(f.contentType, f.name)}
             </span>
             <div className="doc-main">
-              <a className="doc-title" href={`/api/files/${f.id}`} target="_blank" rel="noopener noreferrer">
+              <a className="doc-title" href={withBase(`/api/files/${f.id}`)} target="_blank" rel="noopener noreferrer">
                 {f.name}
               </a>
               <p className="small muted">
@@ -53,7 +54,7 @@ export default async function FilesPage({
               </p>
             </div>
             <div className="row">
-              <a className="btn btn-ghost btn-small" href={`/api/files/${f.id}?download=1`}>
+              <a className="btn btn-ghost btn-small" href={withBase(`/api/files/${f.id}?download=1`)}>
                 Download
               </a>
               {(access.isStaff || f.uploadedBy === viewer.userId) && (

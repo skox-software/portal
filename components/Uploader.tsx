@@ -3,6 +3,7 @@
 import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { withBase } from "@/lib/paths";
 
 type Purpose = "file" | "document" | "screenshot";
 
@@ -55,7 +56,7 @@ export function Uploader({
         const safeName = file.name.replace(/[^\w.\- ]+/g, "_").slice(-120) || "file";
         const blob = await upload(`projects/${projectId}/${purpose}/${safeName}`, file, {
           access: "private",
-          handleUploadUrl: "/api/uploads",
+          handleUploadUrl: withBase("/api/uploads"),
           clientPayload: JSON.stringify({ projectId, purpose }),
           onUploadProgress: ({ percentage }) => setState((s) => ({ ...s, progress: Math.round(percentage) })),
         });

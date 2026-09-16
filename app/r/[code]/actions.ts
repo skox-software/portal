@@ -86,9 +86,9 @@ export async function submitReferral(formData: FormData) {
     // No visitor-typed text here: this lands in the referrer's inbox under SKOX's name.
     notifyLater(() => [membership.email], {
       subject: "Thank you for your referral",
-      preheader: "Someone reached out through your link. We'll look after them.",
+      preheader: "We have received an enquiry through your referral link.",
       heading: "Thank you for the referral",
-      paragraphs: ["Someone just reached out to SKOX through your referral link. We'll take great care of them and keep you posted."],
+      paragraphs: ["Thank you for recommending SKOX Software. We have received an enquiry through your referral link and will follow up with them directly. We appreciate your support."],
     });
   }
 

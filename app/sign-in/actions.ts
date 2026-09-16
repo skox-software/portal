@@ -9,6 +9,7 @@ import { memberships } from "@/lib/db/schema";
 import { normalizeEmail } from "@/lib/permissions";
 import { requestFingerprint } from "@/lib/project-access";
 import { allow } from "@/lib/rate-limit";
+import { billingDestination } from "@/lib/sign-in-destination";
 
 export type SignInState =
   | { step: "email"; error?: string }
@@ -85,5 +86,5 @@ export async function signInWithCode(
   } catch (cleanupError) {
     console.error("[sign-in] could not tidy other credentials", cleanupError);
   }
-  redirect("/");
+  redirect(billingDestination(formData.get("next")));
 }

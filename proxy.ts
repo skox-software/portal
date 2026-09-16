@@ -1,4 +1,6 @@
 import { getAuth } from "@/lib/auth/server";
+import { BASE_PATH } from "@/lib/paths";
+import { billingDestination } from "@/lib/sign-in-destination";
 
 type Middleware = ReturnType<ReturnType<typeof getAuth>["middleware"]>;
 
@@ -6,9 +8,15 @@ type Middleware = ReturnType<ReturnType<typeof getAuth>["middleware"]>;
  * Sends signed-out visitors to /sign-in and keeps sessions fresh. This is an
  * optimistic check only: every page and server action still authorizes on
  * the server through lib/access.ts.
+ *
+ * The login URL carries the base path by hand — Neon Auth resolves it against
+ * the request URL, so a bare "/sign-in" would land on the marketing site.
  */
 export default function proxy(...args: Parameters<Middleware>) {
-  return getAuth().middleware({ loginUrl: "/sign-in" })(...args);
+  const url = new URL(args[0].url);
+  const next = billingDestination(`${url.pathname}${url.search}`);
+  const loginUrl = `${BASE_PATH}/sign-in${next === "/" ? "" : `?next=${encodeURIComponent(next)}`}`;
+  return getAuth().middleware({ loginUrl })(...args);
 }
 
 export const config = {

@@ -403,20 +403,20 @@ export default async function MissionControl({
                 <div className="field">
                   <label htmlFor="ws-scheduling">Kickoff booking link</label>
                   <input id="ws-scheduling" name="schedulingUrl" type="url" defaultValue={workspace?.schedulingUrl ?? ""} maxLength={2048} placeholder="https://calendar.google.com/calendar/appointments/schedules/…" />
-                  <span className="hint">Set up a 45-minute kickoff in Google. Its canonical appointment URL embeds here and in onboarding; existing external links open separately.</span>
+                  <span className="hint">Use the shared 30-minute Google booking page. Its canonical appointment URL embeds here and in onboarding; existing external links open separately.</span>
                 </div>
                 <div className="field">
                   <label htmlFor="ws-project-review">Project review booking link</label>
                   <input id="ws-project-review" name="projectReviewSchedulingUrl" type="url" maxLength={2048} defaultValue={workspace?.projectReviewSchedulingUrl ?? ""} placeholder="https://calendar.google.com/calendar/appointments/schedules/…" />
-                  <span className="hint">Set up a 30-minute review in Google. Leave blank until ready.</span>
+                  <span className="hint">Use the same 30-minute Google booking page for project reviews.</span>
                 </div>
                 <div className="field">
                   <label htmlFor="ws-check-in">Check-in booking link</label>
                   <input id="ws-check-in" name="checkInSchedulingUrl" type="url" maxLength={2048} defaultValue={workspace?.checkInSchedulingUrl ?? ""} placeholder="https://calendar.google.com/calendar/appointments/schedules/…" />
-                  <span className="hint">Set up a 15-minute check-in in Google. Leave blank until ready.</span>
+                  <span className="hint">Use the same 30-minute Google booking page for check-ins.</span>
                 </div>
                 <div className="small muted">
-                  In Google Calendar, choose Sharing options → Website embed → Inline booking page and copy only the iframe src URL. Use the same calendar for all three schedules, enable conflict checking, and add a required company/project field. Google manages hours, durations, Meet links, and emails. Save links after testing each schedule.
+                  In Google Calendar, choose Sharing options → Website embed → Inline booking page and copy only the iframe src URL. Use the same 30-minute schedule for all three meeting types and enable conflict checking on the shared founders calendar. Google manages hours, durations, Meet links, and emails. Save links after testing each schedule.
                 </div>
                 <div className="field">
                   <label htmlFor="ws-intro">Team intro</label>

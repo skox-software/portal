@@ -36,7 +36,7 @@ export default async function MeetingsPage({ params, searchParams }: {
         </nav>
         <section className="card meeting-card" aria-labelledby="meeting-title">
           <div className="card-head"><h2 id="meeting-title">{selected.title}</h2></div>
-          {bookingUrl && <p className="small muted meeting-context">When booking, enter <strong>{client.name} · {project.name}</strong> in the company/project field so we can prepare for your call. The booking page shows the current meeting length.</p>}
+          {bookingUrl && <p className="small muted meeting-context">Booking for <strong>{client.name} · {project.name}</strong>. Use your project email address and check the time zone before confirming.</p>}
           <BookingEmbed key={selected.id} url={bookingUrl} title={selected.title} projectId={project.id} />
         </section>
       </main>

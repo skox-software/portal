@@ -2,7 +2,13 @@
 
 The portal embeds Google appointment schedules in Meetings and the kickoff onboarding step. It does not connect to the Calendar API or synchronize events. Kickoff confirmation remains client-reported. Invitations, meeting links, and booking management live in Google and its confirmation emails.
 
-## Before publishing
+## Current SKOX configuration (September 13, 2026)
+
+All three portal meeting types use the existing **Check-In with Skox** Google schedule, with 30-minute calls and Google Meet. Both founders block their busy time on founders@skoxsoftware.com; conflict checking uses that shared calendar. Availability and booking rules are managed in Google Calendar. The same canonical embed URL is saved in all three workspace booking fields. The Gmail signature uses https://calendar.app.google/G91sfEJ7PQ8jQxVw7.
+
+This single-schedule choice supersedes the separate 45/30/15-minute setup below. Do not create extra schedules or change the current availability to match the historical plan.
+
+## Original separate-schedule plan (superseded)
 
 1. Confirm the SKOX Google account and shared calendar to use. Multiple schedules and secondary-calendar scheduling require an eligible Workspace plan: https://support.google.com/calendar/answer/16287038?hl=en. Do not upgrade or purchase a plan automatically.
 2. On that same calendar, create Kickoff (45 minutes), Project review (30 minutes), and Check-in (15 minutes), all with Google Meet.
@@ -19,7 +25,7 @@ Run `npm test`, `npm run lint`, and `npm run build`. Verify unauthorized visitor
 
 No confirmation is inferred from loading or closing an iframe. Keep the manual kickoff selection, notes, reach-out option, and existing agreement/deposit steps. Existing 15-minute onboarding and 1-minute booking-step estimates describe form completion, not meeting lengths.
 
-Google is the source of truth for meeting lengths; the portal's 45/30/15 labels are the initial agreed defaults in `lib/meetings.ts`. If staff later change durations in Google, update these labels to match.
+Google is the source of truth for meeting lengths; the portal labels in `lib/meetings.ts` are all 30 minutes. If staff later change the duration in Google, update these labels to match.
 
 ## Rollback
 

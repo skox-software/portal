@@ -9,6 +9,7 @@ import { Uploader } from "@/components/Uploader";
 import { getDb } from "@/lib/db";
 import { approvals, feedback, previews } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { can } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
 import { createReviewRound, decideApproval, setFeedbackStatus } from "./actions";
@@ -142,7 +143,7 @@ export default async function ReviewPage({
                   <PinBoard
                     projectId={project.id}
                     previewId={selected.id}
-                    imageUrl={`/api/previews/${selected.id}/image`}
+                    imageUrl={withBase(`/api/previews/${selected.id}/image`)}
                     label={selected.label ?? "Design"}
                     pins={pins}
                   />

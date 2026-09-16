@@ -57,7 +57,9 @@ export default async function DocumentPage({
     });
   }
 
-  const pdfUrl = `/api/documents/${doc.id}${doc.status === "completed" ? "?signed=1" : ""}`;
+  // Hand-written, so it needs the base path spelled out: an iframe/anchor src
+  // is not something Next rewrites.
+  const pdfUrl = withBase(`/api/documents/${doc.id}${doc.status === "completed" ? "?signed=1" : ""}`);
 
   return (
     <>

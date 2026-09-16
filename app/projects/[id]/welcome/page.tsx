@@ -556,7 +556,7 @@ export default async function WelcomePage({
                     {hidden}
                     <BrandStudio
                       companyName={client.name.startsWith("New client (") ? project.name : client.name}
-                      logoUrl={logo ? `/api/files/${logo.id}` : null}
+                      logoUrl={logo ? withBase(`/api/files/${logo.id}`) : null}
                       toneWords={TONE_WORDS}
                       initial={{
                         primary: o.brand.primary as string | undefined,

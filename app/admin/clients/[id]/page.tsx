@@ -48,6 +48,7 @@ export default async function ClientAdmin({
               <Link href="/admin">Mission control</Link> / Client
             </p>
             <h1>{client.name}</h1>
+            <p className="muted">{list.length} projects · {people.length} client contacts · Manage access and invoice recipients below.</p>
           </div>
         </div>
         <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
@@ -134,10 +135,10 @@ export default async function ClientAdmin({
           <aside>
             <section className="card" aria-labelledby="people-title">
               <div className="card-head">
-                <h2 id="people-title">People</h2>
+                <h2 id="people-title">Contacts & invoice recipients</h2>
               </div>
               {people.length === 0 ? (
-                <p className="muted">Nobody from {client.name} has access yet.</p>
+                <p className="muted">Add a contact below to give {client.name} portal access and an invoice recipient.</p>
               ) : (
                 <ul className="task-list">
                   {people.map((m) => (
@@ -165,7 +166,7 @@ export default async function ClientAdmin({
 
             <section className="card" aria-labelledby="invite-title">
               <div className="card-head">
-                <h2 id="invite-title">Give someone access</h2>
+                <h2 id="invite-title">Add a client contact</h2>
               </div>
               <form action={inviteMember} className="stack">
                 <input type="hidden" name="clientId" value={client.id} />
@@ -176,10 +177,11 @@ export default async function ClientAdmin({
                 <div className="field">
                   <label htmlFor="m-role">Role</label>
                   <select id="m-role" name="role" defaultValue="client_approver">
-                    <option value="client_approver">Approver: can approve reviews and launch</option>
-                    <option value="client_member">Team member: can view and comment</option>
+                    <option value="client_approver">Approver: can approve, sign, and pay</option>
+                    <option value="client_member">Member: can view invoices and comment</option>
                   </select>
                 </div>
+                <p className="small muted">All client contacts receive invoices when you choose Email invoice. Approver access is required to make a payment.</p>
                 <div>
                   <button className="btn btn-primary" type="submit">
                     Add person

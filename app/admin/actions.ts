@@ -111,7 +111,7 @@ export async function saveWorkspaceSettings(formData: FormData) {
       welcomeVideoUrl: formData.get("welcomeVideoUrl") ?? "",
       teamIntro: formData.get("teamIntro") ?? "",
     });
-  if (!parsed.success) backWith("/admin", "error", parsed.error.issues[0]?.message ?? "Check the workspace settings.");
+  if (!parsed.success) backWith("/admin/settings", "error", parsed.error.issues[0]?.message ?? "Check the workspace settings.");
   await getDb()
     .update(workspaces)
     .set({
@@ -127,7 +127,8 @@ export async function saveWorkspaceSettings(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/projects/[id]/meetings", "page");
   revalidatePath("/projects/[id]/welcome", "page");
-  backWith("/admin", "notice", "Settings saved.");
+  revalidatePath("/admin/settings");
+  backWith("/admin/settings", "notice", "Settings saved.");
 }
 
 export async function setReferralStatus(formData: FormData) {
@@ -151,6 +152,7 @@ export async function setReferralStatus(formData: FormData) {
     }),
   ]);
   revalidatePath("/admin");
+  revalidatePath("/admin/settings");
 }
 
 export async function inviteMember(formData: FormData) {

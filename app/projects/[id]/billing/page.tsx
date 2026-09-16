@@ -2,12 +2,13 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InvoiceOwnerActions } from "@/components/InvoiceOwnerActions";
+import { BillingContacts } from "@/components/BillingContacts";
 import { readMessage } from "@/components/Notice";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { SubmitButton } from "@/components/SubmitButton";
 import { canCheckout } from "@/lib/billing-access";
 import { getDb } from "@/lib/db";
-import { documents, events, invoices } from "@/lib/db/schema";
+import { documents, events, invoices, memberships } from "@/lib/db/schema";
 import { formatDate, formatDateTime, formatMoney, todayIso } from "@/lib/format";
 import { invoiceLocked } from "@/lib/onboarding";
 import { loadProjectShell } from "@/lib/project-shell";
@@ -27,11 +28,12 @@ export default async function BillingPage({ params, searchParams }: {
   const shell = await loadProjectShell(id);
   const { project, client, access } = shell;
   const db = getDb();
-  const [list, docs, sentEvents] = await Promise.all([
+  const [list, docs, sentEvents, contacts] = await Promise.all([
     db.select().from(invoices).where(eq(invoices.projectId, project.id)).orderBy(asc(invoices.dueOn), asc(invoices.createdAt)),
     db.select({ id: documents.id, title: documents.title, status: documents.status }).from(documents).where(eq(documents.projectId, project.id)).orderBy(desc(documents.createdAt)),
     access.isStaff ? db.select({ invoiceId: events.subjectId, at: events.createdAt }).from(events)
       .where(and(eq(events.projectId, project.id), eq(events.verb, "invoice.emailed"))).orderBy(desc(events.createdAt)) : Promise.resolve([]),
+    access.isStaff ? db.select({ email: memberships.email }).from(memberships).where(eq(memberships.clientId, client.id)) : Promise.resolve([]),
   ]);
   const docById = new Map(docs.map((d) => [d.id, d]));
   const locked = (inv: typeof invoices.$inferSelect) => invoiceLocked(inv, inv.documentId ? docById.get(inv.documentId)?.status : undefined);
@@ -71,6 +73,7 @@ export default async function BillingPage({ params, searchParams }: {
       </div>
       <div className="billing-invoice-meta"><span>{isPaid && inv.paidAt ? `Paid ${formatDateTime(inv.paidAt)}` : `Due ${formatDate(inv.dueOn)}`}</span>{access.isStaff && <span>{sent ? `Last emailed ${formatDateTime(sent.at)}` : "No email recorded"}</span>}</div>
       {inv.notes && <p className="billing-invoice-notes">{inv.notes}</p>}
+      {access.isStaff && inv.status === "open" && <BillingContacts clientId={client.id} emails={contacts.map(c=>c.email)} />}
       {isLocked && inv.documentId && <p className="billing-invoice-note">This payment unlocks after <Link href={`/projects/${project.id}/documents/${inv.documentId}`}>the agreement is signed</Link>.</p>}
       <div className="billing-invoice-footer">
         <Link className="billing-text-link" href={detail}>{isPaid ? "View receipt" : "View invoice"} ↗</Link>

@@ -116,7 +116,7 @@ export async function sendEmail(to: string | string[], content: EmailContent) {
       recipients.map(async (address) => {
         const { error } = await resend!.emails.send({
           from: process.env.EMAIL_FROM ?? "SKOX Software <portal@skoxsoftware.com>",
-          replyTo: process.env.EMAIL_REPLY_TO ?? "founders@skoxsoftware.com",
+          replyTo: process.env.EMAIL_REPLY_TO ?? "founder@skoxsoftware.com",
           to: address,
           subject: content.subject,
           html,

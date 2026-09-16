@@ -54,7 +54,7 @@ export default async function Home() {
               <strong>{viewer.email}</strong>.
             </p>
             <p>
-              <a href="mailto:founders@skoxsoftware.com">founders@skoxsoftware.com</a>
+              <a href="mailto:founder@skoxsoftware.com">founder@skoxsoftware.com</a>
             </p>
           </div>
         ) : (

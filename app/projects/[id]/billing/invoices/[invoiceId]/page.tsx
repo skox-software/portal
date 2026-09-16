@@ -56,7 +56,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           {access.isStaff && <InvoiceOwnerActions invoice={invoice} stripe={stripe} sandbox={sandbox} locked={locked} />}
           {!access.isStaff && canCheckout(access, sandbox) && invoice.status === "open" && !locked && (stripe || invoice.payUrl) && <form action={payInvoice}><input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="invoiceId" value={invoice.id} /><SubmitButton className="btn btn-primary" pendingLabel="Opening…">Pay {formatMoney(invoice.amountCents, invoice.currency)}</SubmitButton></form>}
         </div>
-        <footer className="billing-document-footer"><p>SKOX Software · founders@skoxsoftware.com</p><p className="small">Thank you for building with us.</p></footer>
+        <footer className="billing-document-footer"><p>SKOX Software · founder@skoxsoftware.com</p><p className="small">Thank you for building with us.</p></footer>
       </article>
     </main>
   </>;

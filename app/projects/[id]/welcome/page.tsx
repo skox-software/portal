@@ -582,7 +582,7 @@ export default async function WelcomePage({
                   <div className="card safe-card">
                     <p className="label">Safe and simple</p>
                     <p>
-                      Never send us passwords. For each account, invite <strong>founders@skoxsoftware.com</strong> as a user or admin. Not sure
+                      Never send us passwords. For each account, invite <strong>founder@skoxsoftware.com</strong> as a user or admin. Not sure
                       how, or don&apos;t know where it lives? Choose &ldquo;I need help&rdquo; and we&apos;ll sort it together at kickoff.
                     </p>
                   </div>

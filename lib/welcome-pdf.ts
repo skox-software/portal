@@ -368,7 +368,7 @@ export async function buildWelcomeGuide(input: WelcomeGuideInput) {
     page.drawText("We will never ask for your passwords.", { x: M + 24, y: y - 60, size: 22, font: f.serif, color: INK });
     para(
       page,
-      "When we need access to an account (your domain, email, payments, analytics), invite founders@skoxsoftware.com as a user or admin. You stay in control and can remove us any time. Not sure how? Tell us in the portal and we'll set it up together at kickoff.",
+      "When we need access to an account (your domain, email, payments, analytics), invite founder@skoxsoftware.com as a user or admin. You stay in control and can remove us any time. Not sure how? Tell us in the portal and we'll set it up together at kickoff.",
       { x: M + 24, y: y - 86, width: inner - 48, font: f.sans, size: 11, color: BLUSH_INK, leading: 16, maxLines: 4 },
     );
   }
@@ -380,7 +380,7 @@ export async function buildWelcomeGuide(input: WelcomeGuideInput) {
     box(page, M, y, inner, input.schedulingUrl ? 128 : 108, { fill: INK, r: 16 });
     page.drawText("YOUR TEAM AT SKOX", { x: M + 24, y: y - 28, size: 8, font: f.mono, color: AMBER });
     page.drawText(input.teamIntro || "The SKOX founders", { x: M + 24, y: y - 56, size: 22, font: f.serif, color: CANVAS });
-    page.drawText("founders@skoxsoftware.com", { x: M + 24, y: y - 80, size: 12, font: f.medium, color: CANVAS });
+    page.drawText("founder@skoxsoftware.com", { x: M + 24, y: y - 80, size: 12, font: f.medium, color: CANVAS });
     page.drawText(input.portalUrl.replace(/^https?:\/\//, ""), { x: M + 24, y: y - 96, size: 10, font: f.sans, color: COVER_MUTED });
     if (input.schedulingUrl) {
       page.drawText(`Book time: ${input.schedulingUrl.replace(/^https?:\/\//, "")}`, { x: M + 24, y: y - 112, size: 10, font: f.sans, color: AMBER });
@@ -392,7 +392,7 @@ export async function buildWelcomeGuide(input: WelcomeGuideInput) {
       { q: "Can my colleagues join?", a: "Yes. Invite them from Your team on the Overview page, and choose whether they can just view or also approve, sign and pay." },
       { q: "Where do I find my agreement and files?", a: "Documents holds your agreement and signed copies. Files holds everything you and we share, privately." },
       { q: "What if I'm not sure how to answer something?", a: "Answer what you can and choose \"Do this later\". Anything saved for later becomes a simple to-do, and we'll cover it at kickoff." },
-      { q: "What's the fastest way to reach you?", a: "Reply to any email from us, or write to founders@skoxsoftware.com. A founder reads every message." },
+      { q: "What's the fastest way to reach you?", a: "Reply to any email from us, or write to founder@skoxsoftware.com. A founder reads every message." },
     ];
     for (const item of faqs) {
       page.drawText(item.q, { x: M, y, size: 13, font: f.semibold, color: INK });

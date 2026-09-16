@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import { getDb } from "@/lib/db";
 import {
   clients,
   dateChanges,
+  documents,
+  files,
   memberships,
   milestones,
   previews,
@@ -24,6 +26,7 @@ import { midpoint, PROJECT_KINDS } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { googleBookingEmbedUrl, safeBookingUrl } from "@/lib/meetings";
 import { normalizeEmail } from "@/lib/permissions";
+import { deletePrivate } from "@/lib/storage";
 
 /*
  * Every action re-checks that the caller is SKOX staff and that the thing it
@@ -85,6 +88,68 @@ export async function createClient(formData: FormData) {
     }),
   ]);
   redirect(`/admin/clients/${id}`);
+}
+
+/**
+ * Deletes a client and everything under it. Projects, people, invoices,
+ * documents and files all hang off the client row by `on delete cascade`, so
+ * one delete clears the lot; the stored blobs are removed afterwards, since
+ * nothing points at them once their rows are gone. Staff must retype the
+ * client's name, because none of this comes back.
+ */
+export async function deleteClient(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const db = getDb();
+  const clientId = String(formData.get("clientId") ?? "");
+  const client = await ownClient(clientId, staff.workspaceId);
+  if (!client) backWith("/admin/clients", "error", "Unknown client.");
+
+  const typed = String(formData.get("confirmName") ?? "").trim();
+  const back = `/admin/clients/${client.id}`;
+  if (typed.toLowerCase() !== client.name.trim().toLowerCase()) {
+    backWith(back, "error", `Type the client's name exactly (${client.name}) to delete it.`);
+  }
+
+  // Collect the blobs first: after the delete there is no row left to find them by.
+  const owned = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.clientId, client.id));
+  const projectIds = owned.map((p) => p.id);
+  const storageKeys: string[] = [];
+  if (projectIds.length > 0) {
+    const [fileRows, documentRows] = await Promise.all([
+      db.select({ key: files.storageKey }).from(files).where(inArray(files.projectId, projectIds)),
+      db
+        .select({ key: documents.storageKey, signedKey: documents.signedStorageKey })
+        .from(documents)
+        .where(inArray(documents.projectId, projectIds)),
+    ]);
+    for (const row of fileRows) storageKeys.push(row.key);
+    for (const row of documentRows) {
+      storageKeys.push(row.key);
+      if (row.signedKey) storageKeys.push(row.signedKey);
+    }
+  }
+
+  await db.batch([
+    eventInsert({
+      workspaceId: staff.workspaceId,
+      actorId: viewer.userId,
+      verb: "client.deleted",
+      subjectType: "client",
+      subjectId: client.id,
+      payload: { name: client.name, projects: projectIds.length, files: storageKeys.length },
+    }),
+    db.delete(clients).where(eq(clients.id, client.id)),
+  ]);
+
+  // Never throws, so a missing blob cannot strand the client row we just removed.
+  await Promise.all(storageKeys.map((key) => deletePrivate(key)));
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/clients");
+  backWith("/admin/clients", "notice", `Deleted ${client.name} and everything in it.`);
 }
 
 export async function saveWorkspaceSettings(formData: FormData) {

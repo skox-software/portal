@@ -203,6 +203,15 @@ h3 {
 .btn-ghost:hover {
   border-color: var(--ink);
 }
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.btn-danger:hover {
+  background: var(--danger);
+  color: var(--paper);
+}
 .btn-small {
   min-height: 34px;
   padding: 0 14px;

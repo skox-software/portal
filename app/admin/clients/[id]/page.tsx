@@ -8,7 +8,7 @@ import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, memberships, projects } from "@/lib/db/schema";
 import { formatDate, kindLabel, PROJECT_KINDS, ROLE_LABEL, STATUS_LABEL, todayIso } from "@/lib/format";
-import { createProject, inviteMember, removeMember } from "../../actions";
+import { createProject, deleteClient, inviteMember, removeMember } from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Client" };
@@ -185,6 +185,39 @@ export default async function ClientAdmin({
                 <div>
                   <button className="btn btn-primary" type="submit">
                     Add person
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className="card" aria-labelledby="delete-title">
+              <div className="card-head">
+                <h2 id="delete-title">Delete this client</h2>
+              </div>
+              <p className="small muted">
+                This removes {client.name} for good, along with{" "}
+                {list.length === 1 ? "1 project" : `${list.length} projects`} and everything in them:
+                updates, approvals, invoices, signed documents and uploaded files.
+                {people.length > 0
+                  ? ` ${people.length === 1 ? "1 contact loses" : `${people.length} contacts lose`} portal access.`
+                  : ""}{" "}
+                It cannot be undone.
+              </p>
+              <form action={deleteClient} className="stack">
+                <input type="hidden" name="clientId" value={client.id} />
+                <div className="field">
+                  <label htmlFor="delete-confirm">Type <strong>{client.name}</strong> to confirm</label>
+                  <input
+                    id="delete-confirm"
+                    name="confirmName"
+                    required
+                    autoComplete="off"
+                    placeholder={client.name}
+                  />
+                </div>
+                <div>
+                  <button className="btn btn-danger" type="submit">
+                    Delete client
                   </button>
                 </div>
               </form>

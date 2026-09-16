@@ -161,7 +161,7 @@ export async function emailInvoice(formData: FormData) {
     preheader: `${invoice.title} · due ${formatDate(invoice.dueOn)}`,
     heading: `Invoice ${invoice.number}: ${formatMoney(invoice.amountCents, invoice.currency)}`,
     paragraphs: [
-      `${invoice.title} for ${project.name}.`,
+      `Your invoice for ${invoice.title} on ${project.name} is ready. Please review the invoice details and complete payment securely in your client portal.`,
       ...(sandbox ? ["This is a sandbox payment request. Use a Stripe test card; no real money will be charged."] : []),
       ...(invoice.notes ? [invoice.notes] : []),
     ],
@@ -208,8 +208,8 @@ export async function setInvoiceStatus(formData: FormData) {
   if (parsed.data.status === "paid") {
     notifyLater(() => clientRecipients(client.id, { approversOnly: true, actionRequired: true }), {
       subject: `Payment received: invoice ${invoice.number}`,
-      preheader: "Thank you. Your receipt is in the portal.",
-      heading: "Thank you, payment received",
+      preheader: "Thank you for your payment. Your receipt is available in the portal.",
+      heading: "Payment received",
       paragraphs: [`We've received ${formatMoney(invoice.amountCents, invoice.currency)} for invoice ${invoice.number} (${invoice.title}).`],
       cta: { label: "See billing", href: portalLink(`/projects/${project.id}/billing`) },
     });

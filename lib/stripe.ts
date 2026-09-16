@@ -53,6 +53,7 @@ export async function createEmbeddedCheckout(input: {
       ui_mode: "embedded_page",
       return_url: input.returnUrl,
       customer_email: input.customerEmail,
+      name_collection: { individual: { enabled: true } },
       client_reference_id: input.invoiceId,
       integration_identifier: INTEGRATION_ID,
       metadata: { invoice_id: input.invoiceId },
@@ -71,7 +72,7 @@ export async function createEmbeddedCheckout(input: {
         },
       ],
     },
-    { idempotencyKey: `invoice-${input.invoiceId}-${createHash("sha256").update(JSON.stringify(input)).digest("hex").slice(0, 24)}-${Math.floor(Date.now() / 600_000)}` },
+    { idempotencyKey: `invoice-v2-${input.invoiceId}-${createHash("sha256").update(JSON.stringify(input)).digest("hex").slice(0, 24)}-${Math.floor(Date.now() / 600_000)}` },
   );
   if (!session.client_secret) throw new Error("Stripe returned no client secret");
   return session.client_secret;

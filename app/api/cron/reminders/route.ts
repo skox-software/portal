@@ -52,9 +52,9 @@ export async function GET(request: Request) {
   for (const { signer, doc } of pendingSigners) {
     await sendEmail(signer.email, {
       subject: `Reminder: please sign ${doc.title}`,
-      preheader: "It takes under a minute in your portal.",
+      preheader: "Please review and sign your document in the client portal.",
       heading: `${doc.title} is waiting for your signature`,
-      paragraphs: ["A friendly nudge from SKOX. It takes under a minute, right in your portal."],
+      paragraphs: ["This is a reminder that your document is ready for review and signature. Please contact us if you have any questions before signing."],
       cta: { label: "Review and sign", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
     });
     await db.update(documentSigners).set({ lastRemindedAt: now }).where(eq(documentSigners.id, signer.id));
@@ -113,8 +113,8 @@ export async function GET(request: Request) {
       const nextTitle = flow.find((s) => s.key === next)?.title ?? "your setup";
       const left = progress(o.steps, flow).minutesLeft;
       await sendEmail(o.invitedEmail, {
-        subject: o.status === "invited" ? `Your SKOX portal is ready for ${project.name}` : `Pick up your setup for ${project.name}`,
-        preheader: `About ${left} minutes to go. It picks up right where you left off.`,
+        subject: o.status === "invited" ? `Your SKOX portal is ready for ${project.name}` : `Complete your project setup: ${project.name}`,
+        preheader: `Approximately ${left} minutes remain. Your previous progress has been saved.`,
         heading: o.status === "invited" ? "Your portal is ready when you are" : `Next up: ${nextTitle}`,
         paragraphs: [
           o.status === "invited"
@@ -122,7 +122,7 @@ export async function GET(request: Request) {
             : `You're making great progress on your setup for ${project.name}.`,
           `The next step takes about ${flow.find((s) => s.key === next)?.minutes ?? 2} minutes, and it saves as you go.`,
         ],
-        cta: { label: o.status === "invited" ? "Open your portal" : "Pick up where you left off", href: welcomeLink(o.invitedEmail) },
+        cta: { label: o.status === "invited" ? "Open your portal" : "Continue project setup", href: welcomeLink(o.invitedEmail) },
       });
       await db
         .update(onboardings)

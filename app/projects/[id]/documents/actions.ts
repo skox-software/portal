@@ -322,12 +322,12 @@ async function finalizeDocument(documentId: string, actorId: string) {
     paragraphs: [
       `Everyone has signed ${doc.title} for ${projectName}.`,
       deposit
-        ? `One step left: invoice ${deposit.number} for ${formatMoney(deposit.amountCents, deposit.currency)} is now ready to pay. As soon as it's in, we start building.`
+        ? `Deposit invoice ${deposit.number} for ${formatMoney(deposit.amountCents, deposit.currency)} is now available for payment. Work can begin once the deposit has been received.`
         : "Download the signed copy, with its signature certificate, any time from your portal.",
     ],
     cta: deposit
       ? { label: "Pay the deposit", href: portalLink(`/projects/${doc.projectId}/billing`) }
-      : { label: "Get the signed copy", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
+      : { label: "View signed document", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
     footnote: deposit ? `Due ${formatDate(deposit.dueOn)}` : undefined,
   };
   notifyLater(() => signers.map((s) => s.email), clientContent);
@@ -405,9 +405,9 @@ export async function remindSigners(formData: FormData) {
     .where(inArray(documentSigners.id, pending.map((p) => p.id)));
   notifyLater(() => pending.map((p) => p.email), {
     subject: `Reminder: please sign ${doc.title}`,
-    preheader: "It takes under a minute in your portal.",
+    preheader: "Please review and sign your document in the client portal.",
     heading: `${doc.title} is still waiting for your signature`,
-    paragraphs: [`A quick nudge: ${doc.title} for ${ctx.project.name} is ready to sign. It takes under a minute.`],
+    paragraphs: [`This is a reminder to review and sign ${doc.title} for ${ctx.project.name}. Please contact us if you have any questions before signing.`],
     cta: { label: "Review and sign", href: portalLink(`/projects/${doc.projectId}/documents/${doc.id}`) },
   });
   revalidatePath(`/projects/${doc.projectId}/documents/${doc.id}`);

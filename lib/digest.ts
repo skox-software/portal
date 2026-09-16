@@ -70,17 +70,17 @@ export async function sendWeeklyDigests(now = new Date()) {
           : `Launch date ${formatDate(project.deliveryDate)} (${describeDaysUntil(days).toLowerCase()}).`;
       await sendEmail(person.email, {
         subject: `Your week with SKOX: ${project.name}`,
-        preheader: waiting ? `${waiting} thing${waiting === 1 ? "" : "s"} waiting on you` : "Here's what moved this week.",
+        preheader: waiting ? `${waiting} item${waiting === 1 ? "" : "s"} requiring your attention` : "Your weekly project progress and next steps.",
         heading: `${project.name}: this week`,
         paragraphs: [
           opener,
-          lines.length ? lines.join("\n") : "Here's where things stand.",
+          lines.length ? lines.join("\n") : "Your current project status is available in the portal.",
           waiting
-            ? `${waiting} thing${waiting === 1 ? " is" : "s are"} waiting on you in the portal.`
-            : "Nothing is waiting on you. Enjoy the weekend.",
+            ? `${waiting} item${waiting === 1 ? " requires" : "s require"} your attention in the portal.`
+            : "No action is required from you at this time.",
         ],
-        cta: { label: waiting ? "See your to-do" : "Open your portal", href: portalLink(`/projects/${project.id}`) },
-        footnote: "Change what we email you any time under Email preferences in the portal.",
+        cta: { label: waiting ? "Review action items" : "Open your portal", href: portalLink(`/projects/${project.id}`) },
+        footnote: "You can manage project updates under Email preferences in the portal.",
       });
       await db.insert(events).values({
         workspaceId: project.workspaceId,

@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "@/lib/db";
-import { invoices, projects } from "@/lib/db/schema";
+import { clients, invoices, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
 import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
+import { paymentEmailDetails } from "@/lib/payment-email";
 import { stripeEvent } from "@/lib/stripe";
 
 /**
@@ -64,10 +65,12 @@ export async function POST(request: Request) {
     // Paid again, paid after being voided, or a different amount: a person should look.
     const [p] = await db.select().from(projects).where(eq(projects.id, existing.projectId)).limit(1);
     if (p) {
+      const [company] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, p.clientId)).limit(1);
       await sendEmail(await staffRecipients(p.workspaceId), {
         subject: `Check this payment: invoice ${existing.number}`,
-        preheader: "Stripe reported a payment the portal didn't expect.",
-        heading: "A payment needs a look",
+        preheader: "A payment could not be matched to the expected invoice status or amount.",
+        heading: "Payment review required",
+        details: paymentEmailDetails(session, company?.name ?? "Company unavailable", p.name),
         paragraphs: [
           `Stripe reported a payment of ${formatMoney(session.amount_total ?? 0, existing.currency)} for invoice ${existing.number} (${existing.title}) on ${p.name}.`,
           `The invoice is ${existing.status} for ${formatMoney(existing.amountCents, existing.currency)}, so nothing was changed. It may be a duplicate that needs a refund.`,
@@ -80,26 +83,29 @@ export async function POST(request: Request) {
 
   const [project] = await db.select().from(projects).where(eq(projects.id, row.projectId)).limit(1);
   if (project) {
+    const [company] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, project.clientId)).limit(1);
+    const companyName = company?.name ?? "Company unavailable";
     const amount = formatMoney(row.amountCents, row.currency);
     const link = portalLink(`/projects/${project.id}/billing`);
     // Kickoff first: if emails fail, the retry path above still has nothing left to do but notify.
-    await afterInvoicePaid(row);
+    await afterInvoicePaid(row, paymentEmailDetails(session, companyName, project.name));
     await Promise.allSettled([
       clientRecipients(project.clientId, { approversOnly: true, actionRequired: true }).then((to) =>
         sendEmail(to, {
           subject: `Payment received: invoice ${row.number}`,
           preheader: "Thank you. Your receipt is in the portal.",
-          heading: "Thank you, payment received",
+          heading: "Payment received",
           paragraphs: [`We've received ${amount} for invoice ${row.number} (${row.title}).`],
-          cta: { label: "See billing", href: link },
+          cta: { label: "View receipt", href: portalLink(`/projects/${project.id}/billing/invoices/${row.id}`) },
         }),
       ),
       staffRecipients(project.workspaceId).then((to) =>
         sendEmail(to, {
-          subject: `Paid: ${amount} for invoice ${row.number}`,
-          preheader: `${project.name} paid through Stripe`,
+          subject: `${session.livemode ? "" : "[Sandbox] "}Payment received: ${companyName} · ${amount}`,
+          preheader: `${session.customer_details?.individual_name || session.customer_details?.name || session.customer_details?.email || session.customer_email || "Payer"} · Invoice ${row.number}`,
           heading: `${amount} received`,
-          paragraphs: [`Invoice ${row.number} (${row.title}) for ${project.name} was paid through Stripe.`],
+          paragraphs: [`Payment of ${amount} has been received for invoice ${row.number} (${row.title}).`],
+          details: paymentEmailDetails(session, companyName, project.name),
           cta: { label: "Open billing", href: link },
         }),
       ),
@@ -118,10 +124,12 @@ async function reportFailedPayment(invoiceId: string, session: Stripe.Checkout.S
   if (!invoice) return;
   const [project] = await db.select().from(projects).where(eq(projects.id, invoice.projectId)).limit(1);
   if (!project) return;
+  const [company] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, project.clientId)).limit(1);
   await sendEmail(await staffRecipients(project.workspaceId), {
     subject: `Payment failed: invoice ${invoice.number}`,
-    preheader: `${project.name} started a payment that didn't clear.`,
-    heading: "A payment didn't go through",
+    preheader: `Payment for invoice ${invoice.number} was unsuccessful.`,
+    heading: "Payment unsuccessful",
+    details: paymentEmailDetails(session, company?.name ?? "Company unavailable", project.name).map(detail => detail.label === "Paid by" ? { ...detail, label: "Payer" } : detail),
     paragraphs: [
       `${project.name} started paying invoice ${invoice.number} (${invoice.title}) for ${formatMoney(invoice.amountCents, invoice.currency)}, and Stripe reports the payment failed.`,
       `This happens with bank transfers that are confirmed later. The invoice is still open${session.customer_email ? `, and the payer was ${session.customer_email}` : ""}.`,

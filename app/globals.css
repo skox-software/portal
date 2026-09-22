@@ -122,6 +122,8 @@ h3 {
   align-items: center;
   gap: 24px;
   min-height: 64px;
+  flex-wrap: wrap;
+  padding-block: 10px;
 }
 .brand {
   display: flex;
@@ -129,6 +131,7 @@ h3 {
   gap: 12px;
   color: var(--ink);
   text-decoration: none;
+  flex-shrink: 0;
 }
 .brand-logo {
   width: 88px;
@@ -162,10 +165,32 @@ h3 {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
+  min-width: 0;
+}
+.account-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.account-link:hover {
+  color: var(--ink);
+}
+.account-label {
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .who-email {
   color: var(--muted);
   font-size: 13px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- Buttons & forms ---- */
@@ -621,6 +646,15 @@ td.num {
   overflow-x: auto;
   scrollbar-width: none;
   margin-bottom: -1px;
+}
+.project-context {
+  display: inline-block;
+  margin-block: 8px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.project-menu {
+  display: none;
 }
 .project-nav::-webkit-scrollbar {
   display: none;
@@ -1396,6 +1430,49 @@ fieldset.q-field {
 }
 
 /* ---- Mission control ---- */
+.mission-layout {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.mission-layout > div,
+.mission-layout > aside {
+  min-width: 0;
+}
+.directory-tools {
+  margin-top: 32px;
+  scroll-margin-top: 24px;
+}
+.directory-tools .card-head,
+.client-block .card-head {
+  flex-wrap: wrap;
+}
+.directory-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 0.6fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.directory-reset {
+  display: inline-block;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.admin-disclosure > summary {
+  cursor: pointer;
+  padding-block: 6px;
+  min-height: 44px;
+}
+.admin-disclosure > summary h2 {
+  display: inline;
+  margin-left: 6px;
+  font-size: 23px;
+}
+.disclosure-intro {
+  margin-block: 10px 18px;
+}
+.client-block h2 {
+  overflow-wrap: anywhere;
+}
 .attention-list {
   list-style: none;
   margin: 0;
@@ -2485,6 +2562,52 @@ fieldset.q-field {
   .who-email {
     display: none;
   }
+  .project-nav {
+    display: none;
+  }
+  .project-menu {
+    display: block;
+    margin-bottom: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .project-menu summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .project-menu-hint {
+    float: right;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 400;
+  }
+  .project-menu-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .project-menu-links a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 10px;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .project-menu-links a[aria-current="page"] {
+    background: var(--blush);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .project-menu-links a:hover {
+    background: var(--fog);
+  }
   .signin {
     gap: 28px;
     min-height: 0;
@@ -2497,6 +2620,34 @@ fieldset.q-field {
   }
   .brand-name {
     display: none;
+  }
+  .topbar-inner {
+    gap: 4px 12px;
+  }
+  .topnav {
+    order: 3;
+    flex-basis: 100%;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 4px;
+  }
+  .topnav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .who .btn {
+    min-height: 44px;
+  }
+  .directory-search {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .directory-search > .field:first-child {
+    grid-column: 1 / -1;
+  }
+  .attention-list li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
   .signin-card {
     padding: 22px;

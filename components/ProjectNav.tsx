@@ -23,25 +23,35 @@ export function ProjectNav({
   active: ProjectTab;
   counts?: Partial<Record<ProjectTab, number>>;
 }) {
+  const activeTab = TABS.find((t) => t.key === active)!;
+  const links = TABS.map((t) => {
+    const n = counts[t.key] ?? 0;
+    return (
+      <Link
+        key={t.key}
+        href={`/projects/${projectId}${t.path}`}
+        aria-current={active === t.key ? "page" : undefined}
+      >
+        {t.label}
+        {n > 0 && (
+          <span className="nav-count" aria-label={`${n} need your attention`}>
+            {n}
+          </span>
+        )}
+      </Link>
+    );
+  });
+
   return (
-    <nav className="project-nav" aria-label="Project sections">
-      {TABS.map((t) => {
-        const n = counts[t.key] ?? 0;
-        return (
-          <Link
-            key={t.key}
-            href={`/projects/${projectId}${t.path}`}
-            aria-current={active === t.key ? "page" : undefined}
-          >
-            {t.label}
-            {n > 0 && (
-              <span className="nav-count" aria-label={`${n} need you`}>
-                {n}
-              </span>
-            )}
-          </Link>
-        );
-      })}
+    <nav aria-label="Project sections">
+      <div className="project-nav">{links}</div>
+      <details className="project-menu" key={active}>
+        <summary>
+          <span>{activeTab.label}</span>
+          <span className="project-menu-hint">All sections</span>
+        </summary>
+        <div className="project-menu-links">{links}</div>
+      </details>
     </nav>
   );
 }

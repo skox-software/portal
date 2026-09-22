@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Notice, readMessage } from "@/components/Notice";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
+import { filterClientDirectory } from "@/lib/client-directory";
 import { getDb } from "@/lib/db";
 import {
   approvals,
@@ -39,6 +40,8 @@ export default async function MissionControl({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
+  const query = typeof sp.q === "string" ? sp.q.trim().slice(0, 200) : "";
+  const status = typeof sp.status === "string" && Object.hasOwn(STATUS_LABEL, sp.status) ? sp.status : "all";
   const { viewer, staff } = await requireStaff();
   const db = getDb();
   const ws = staff.workspaceId;
@@ -160,7 +163,7 @@ export default async function MissionControl({
     ...referralList
       .filter((r) => r.status === "new")
       .map((r) => ({ key: `ref-${r.id}`, level: "high" as const, text: `New referral: ${r.name} (${r.email})`, href: "#referrals", when: r.createdAt })),
-  ];
+  ].sort((a, b) => Number(b.level === "high") - Number(a.level === "high"));
 
   const outstanding = openInvoices.reduce((s, { invoice }) => s + invoice.amountCents, 0);
   const activeProjects = [...projectById.values()].filter((p) => p.status !== "launched" && p.status !== "paused").length;
@@ -201,6 +204,12 @@ export default async function MissionControl({
     return { score, level: score >= 75 ? "good" : score >= 50 ? "watch" : "risk", reasons };
   }
 
+  const directory = filterClientDirectory(
+    [...grouped.values()].map((entry) => ({ ...entry, health: health(entry.client.id, entry.projects) })),
+    query,
+    status,
+  );
+
   return (
     <>
       <TopBar viewer={viewer} />
@@ -209,6 +218,7 @@ export default async function MissionControl({
           <div>
             <p className="eyebrow">SKOX team</p>
             <h1>Mission control</h1>
+            <p className="page-intro">Priorities, clients and projects in one place.</p>
           </div>
           <Link className="btn btn-primary" href="/admin/onboard">
             Onboard a new client →
@@ -235,7 +245,7 @@ export default async function MissionControl({
           </div>
         </section>
 
-        <div className="split">
+        <div className="split mission-layout">
           <div>
             <section className="card card-todo" aria-labelledby="attention-title">
               <div className="card-head">
@@ -258,13 +268,39 @@ export default async function MissionControl({
               )}
             </section>
 
+            <section className="directory-tools" id="clients" aria-labelledby="directory-title">
+              <div className="card-head">
+                <h2 id="directory-title">Clients &amp; projects</h2>
+                <p className="small muted" role="status">Showing {directory.length} of {grouped.size} clients</p>
+              </div>
+              <form action="/admin#clients" method="get" className="directory-search" role="search" aria-label="Find clients and projects">
+                <div className="field">
+                  <label htmlFor="directory-query">Client or project name</label>
+                  <input key={query} id="directory-query" name="q" type="search" defaultValue={query} maxLength={200} placeholder="Search clients or projects" />
+                </div>
+                <div className="field">
+                  <label htmlFor="directory-status">Project status</label>
+                  <select key={status} id="directory-status" name="status" defaultValue={status}>
+                    <option value="all">All statuses</option>
+                    {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </div>
+                <button className="btn btn-ghost" type="submit">Search</button>
+              </form>
+              {(query || status !== "all") && <Link className="directory-reset" href="/admin#clients">Clear filters</Link>}
+            </section>
+
             {grouped.size === 0 ? (
               <p className="empty" style={{ marginTop: 16 }}>
                 No clients yet. Add your first one.
               </p>
+            ) : directory.length === 0 ? (
+              <div className="empty stack">
+                <p>No clients or projects match these filters.</p>
+                <Link href="/admin#clients">Show all clients and projects</Link>
+              </div>
             ) : (
-              [...grouped.values()].map(({ client, projects: list }) => {
-                const h = health(client.id, list);
+              directory.map(({ client, projects: list, health: h }) => {
                 return (
                   <section key={client.id} className="card client-block" aria-labelledby={`client-${client.id}`} style={{ marginTop: 16 }}>
                     <div className="card-head">
@@ -339,10 +375,9 @@ export default async function MissionControl({
           </div>
 
           <aside>
-            <section className="card" aria-labelledby="new-client">
-              <div className="card-head">
-                <h2 id="new-client">Add a client</h2>
-              </div>
+            <details className="card admin-disclosure" open={Boolean(readMessage(sp.error))}>
+              <summary><h2>Add client manually</h2></summary>
+              <p className="small muted disclosure-intro">Create an empty client record. To prepare a project and welcome email, use “Onboard a new client”.</p>
               <form action={createClient} className="stack">
                 <div className="field">
                   <label htmlFor="client-name">Company name</label>
@@ -354,7 +389,7 @@ export default async function MissionControl({
                   </button>
                 </div>
               </form>
-            </section>
+            </details>
 
             <section className="card" id="referrals" aria-labelledby="referrals-title">
               <div className="card-head">
@@ -395,10 +430,9 @@ export default async function MissionControl({
               )}
             </section>
 
-            <section className="card" aria-labelledby="settings-title">
-              <div className="card-head">
-                <h2 id="settings-title">Workspace settings</h2>
-              </div>
+            <details className="card admin-disclosure" open={Boolean(readMessage(sp.error))}>
+              <summary><h2>Workspace settings</h2></summary>
+              <p className="small muted disclosure-intro">Booking links, welcome content and referral preferences.</p>
               <form action={saveWorkspaceSettings} className="stack">
                 <div className="field">
                   <label htmlFor="ws-scheduling">Kickoff booking link</label>
@@ -440,11 +474,11 @@ export default async function MissionControl({
                 </div>
                 <div>
                   <button className="btn btn-ghost btn-small" type="submit">
-                    Save
+                    Save settings
                   </button>
                 </div>
               </form>
-            </section>
+            </details>
           </aside>
         </div>
       </main>

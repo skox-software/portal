@@ -32,6 +32,11 @@ export function ProjectHeader({
               <p className="eyebrow">
                 {client.name} · {kindLabel(project.kind)}
               </p>
+              {title && title !== project.name && (
+                <Link className="project-context" href={`/projects/${project.id}`}>
+                  ← {project.name}
+                </Link>
+              )}
               <h1>{title ?? project.name}</h1>
               {intro && <p className="page-intro">{intro}</p>}
             </div>

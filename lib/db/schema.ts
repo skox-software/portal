@@ -85,6 +85,18 @@ export const referralStatus = pgEnum("referral_status", ["new", "contacted", "wo
 export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "login_note"]);
 export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
 export const onboardingStatus = pgEnum("onboarding_status", ["invited", "in_progress", "completed"]);
+export const dealStage = pgEnum("deal_stage", [
+  "lead",
+  "proposal_sent",
+  "negotiation",
+  "won",
+  "in_build",
+  "shipped",
+  "lost",
+]);
+export const dealPricing = pgEnum("deal_pricing", ["fixed", "retainer", "hourly"]);
+export const crmActivityType = pgEnum("crm_activity_type", ["note", "call", "meeting", "stage_change", "email"]);
+export const emailDirection = pgEnum("email_direction", ["inbound", "outbound"]);
 
 export const workspaces = pgTable("workspaces", {
   id: id(),
@@ -111,6 +123,11 @@ export const clients = pgTable(
     id: id(),
     workspaceId: workspaceId(),
     name: text("name").notNull(),
+    /** CRM profile. All optional: a client made from onboarding has none of it. */
+    industry: text("industry"),
+    location: text("location"),
+    website: text("website"),
+    source: text("source"),
     createdAt: createdAt(),
   },
   (t) => [index("clients_workspace_idx").on(t.workspaceId)],
@@ -619,6 +636,179 @@ export const rateEvents = pgTable(
   (t) => [index("rate_events_key_idx").on(t.key, t.createdAt)],
 );
 
+/* ---- CRM: the sales side, before and alongside projects ---- */
+
+/** People at a client we talk to. Not the same as memberships (portal access). */
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    role: text("role"),
+    /** Stored normalized (trimmed, lower case) so inbound mail can match it. */
+    email: text("email"),
+    phone: text("phone"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("contacts_client_idx").on(t.clientId),
+    index("contacts_email_idx").on(t.workspaceId, t.email),
+  ],
+);
+
+/**
+ * One piece of work being sold. A client can have many (phase 2, repeat work);
+ * pages always take a deal id rather than assuming "the client's deal".
+ * Once won, a deal links to the portal project that delivers it.
+ */
+export const deals = pgTable(
+  "deals",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    kind: text("kind"),
+    valueCents: integer("value_cents").notNull().default(0),
+    pricing: dealPricing("pricing").notNull().default("fixed"),
+    scope: text("scope"),
+    stage: dealStage("stage").notNull().default("lead"),
+    stageEnteredAt: timestamp("stage_entered_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Staff user id (Neon Auth). */
+    ownerId: text("owner_id"),
+    ownerEmail: text("owner_email"),
+    nextAction: text("next_action"),
+    nextActionOn: date("next_action_on", { mode: "string" }),
+    lostReason: text("lost_reason"),
+    wonAt: timestamp("won_at", { withTimezone: true }),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    lostAt: timestamp("lost_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("deals_workspace_stage_idx").on(t.workspaceId, t.stage),
+    index("deals_client_idx").on(t.clientId),
+  ],
+);
+
+/** The client timeline: notes, calls, stage moves, and a line per email. */
+export const crmActivities = pgTable(
+  "crm_activities",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    dealId: uuid("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    type: crmActivityType("type").notNull(),
+    body: text("body"),
+    meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
+    actorId: text("actor_id"),
+    actorEmail: text("actor_email"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("crm_activities_client_idx").on(t.clientId, t.createdAt)],
+);
+
+/** A conversation. No client means it sits in the inbox's unassigned queue. */
+export const emailThreads = pgTable(
+  "email_threads",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    dealId: uuid("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    subject: text("subject"),
+    /** The outside party, so an unassigned thread can be matched later. */
+    counterpartEmail: text("counterpart_email"),
+    counterpartName: text("counterpart_name"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    unread: boolean("unread").notNull().default(true),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("email_threads_workspace_idx").on(t.workspaceId, t.lastMessageAt),
+    index("email_threads_client_idx").on(t.clientId),
+  ],
+);
+
+export const emailMessages = pgTable(
+  "email_messages",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => emailThreads.id, { onDelete: "cascade" }),
+    direction: emailDirection("direction").notNull(),
+    /** Resend's id: the send response for outbound, email_id for inbound. */
+    resendId: text("resend_id").unique(),
+    /** RFC 5322 Message-ID, "<…>". Outbound sets its own so replies thread. */
+    rfcMessageId: text("rfc_message_id"),
+    inReplyTo: text("in_reply_to"),
+    references: text("rfc_references").array().notNull().default([]),
+    fromEmail: text("from_email").notNull(),
+    fromName: text("from_name"),
+    toEmails: text("to_emails").array().notNull().default([]),
+    ccEmails: text("cc_emails").array().notNull().default([]),
+    subject: text("subject"),
+    textBody: text("text_body"),
+    htmlBody: text("html_body"),
+    snippet: text("snippet"),
+    sentBy: text("sent_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("email_messages_thread_idx").on(t.threadId, t.createdAt),
+    index("email_messages_rfc_idx").on(t.workspaceId, t.rfcMessageId),
+  ],
+);
+
+/** Inbound attachments, copied into private storage because Resend's links expire. */
+export const emailAttachments = pgTable(
+  "email_attachments",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => emailMessages.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    /** Null when the file was too large or could not be copied. */
+    storageKey: text("storage_key"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("email_attachments_message_idx").on(t.messageId)],
+);
+
+/** Raw webhook log: idempotency (one row per Resend email) and a place to debug. */
+export const inboundEvents = pgTable("inbound_events", {
+  id: id(),
+  resendId: text("resend_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  outcome: text("outcome"),
+  error: text("error"),
+  attempts: integer("attempts").notNull().default(1),
+  createdAt: createdAt(),
+});
+
+export type Deal = typeof deals.$inferSelect;
+export type Contact = typeof contacts.$inferSelect;
+export type EmailThread = typeof emailThreads.$inferSelect;
 export type Onboarding = typeof onboardings.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
 export type Project = typeof projects.$inferSelect;

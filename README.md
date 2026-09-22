@@ -71,6 +71,7 @@ git config --local user.email 328514113+skox-software@users.noreply.github.com
 
 Apply reviewed database migrations before deploying code that reads new columns.
 Meeting booking setup and validation are documented in [docs/MEETINGS.md](docs/MEETINGS.md).
+The CRM (pipeline, clients, inbox) and its email setup are in [docs/CRM.md](docs/CRM.md).
 
 ## Neon Auth settings that live in the Neon Console
 

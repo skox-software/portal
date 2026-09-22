@@ -203,7 +203,7 @@ export default async function MissionControl({
 
   return (
     <>
-      <TopBar viewer={viewer} />
+      <TopBar viewer={viewer} current="mission" />
       <main className="shell page">
         <div className="page-head">
           <div>

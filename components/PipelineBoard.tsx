@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
 import { allowedColumns, COLUMNS, type CardType, type ColumnKey } from "@/lib/pipeline";
 
@@ -47,6 +47,31 @@ export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns:
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<BoardCard | null>(null);
   const [over, setOver] = useState<ColumnKey | null>(null);
+  // Phones show one column at a time; the chips jump between them.
+  const board = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState<ColumnKey>(columns[0].key);
+
+  useEffect(() => {
+    const el = board.current;
+    if (!el) return;
+    const onScroll = () => {
+      const pad = parseFloat(getComputedStyle(el).paddingLeft);
+      const cols = [...el.querySelectorAll<HTMLElement>(".pipeline-col")];
+      const nearest = cols.reduce((best, col) =>
+        Math.abs(col.offsetLeft - pad - el.scrollLeft) < Math.abs(best.offsetLeft - pad - el.scrollLeft) ? col : best,
+      );
+      setVisible(nearest.dataset.stage as ColumnKey);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  function jumpTo(key: ColumnKey) {
+    const el = board.current;
+    const col = el?.querySelector<HTMLElement>(`.pipeline-col[data-stage="${key}"]`);
+    if (el && col) el.scrollTo({ left: col.offsetLeft - parseFloat(getComputedStyle(el).paddingLeft), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    setVisible(key);
+  }
 
   function move(card: BoardCard, to: ColumnKey | "lost") {
     if (card.column === to) return;
@@ -73,7 +98,23 @@ export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns:
           {error}
         </p>
       )}
-      <div className="pipeline-board">
+      <div className="pipeline-jump" role="tablist" aria-label="Stages">
+        {columns.map((column) => (
+          <button
+            key={column.key}
+            type="button"
+            role="tab"
+            aria-selected={visible === column.key}
+            data-stage={column.key}
+            onClick={() => jumpTo(column.key)}
+          >
+            <i aria-hidden="true" />
+            {column.label}
+            <span>{optimistic.filter((c) => c.column === column.key).length}</span>
+          </button>
+        ))}
+      </div>
+      <div className="pipeline-board" ref={board}>
         {columns.map((column) => {
           const inColumn = optimistic.filter((c) => c.column === column.key);
           const total = inColumn.reduce((n, c) => n + c.valueCents, 0);

@@ -29,11 +29,14 @@ export const metadata: Metadata = {
     images: [{ url: SHARE_IMAGE, width: 1200, height: 630, alt: "SKOX Client Portal — your project, in one place." }],
   },
   twitter: { card: "summary_large_image", images: [SHARE_IMAGE] },
+  // Added to a home screen, it opens full screen like an app.
+  appleWebApp: { capable: true, title: "SKOX", statusBarStyle: "default" },
   // Private by design: nothing here should ever be indexed.
   robots: { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: "#faf9f6" };
+// viewportFit "cover" lets the tab bar sit under the iPhone home indicator (padded by safe-area insets).
+export const viewport: Viewport = { themeColor: "#faf9f6", viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

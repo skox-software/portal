@@ -123,14 +123,26 @@ export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns:
                       setOver(null);
                     }}
                   >
-                    <div className="pipeline-card-title">
-                      {card.href ? <Link href={card.href}>{card.company}</Link> : <strong>{card.company}</strong>}
-                      {card.contact && <span>{card.contact}</span>}
-                      {card.source && <small>{card.source}</small>}
+                    <div className="pipeline-card-top">
+                      <div className="pipeline-card-title">
+                        {card.href ? <Link href={card.href}>{card.company}</Link> : <strong>{card.company}</strong>}
+                        {card.contact && <span title={card.contact}>{card.contact}</span>}
+                        {card.source && <small>{card.source}</small>}
+                      </div>
+                      {card.owner ? (
+                        <span className="pipeline-owner" title={card.owner.email}>
+                          {card.owner.initials}
+                        </span>
+                      ) : card.type === "project" ? (
+                        <form action={claimProject}>
+                          <input type="hidden" name="projectId" value={card.id} />
+                          <button className="pipeline-claim" title="Set an owner and agreed value" aria-label={`Set an owner for ${card.company}`}>+</button>
+                        </form>
+                      ) : null}
                     </div>
                     <div className="pipeline-card-value">
                       <strong data-empty={card.valueCents ? undefined : ""}>{card.value}</strong>
-                      <span className="pipeline-tag">{card.kind}</span>
+                      <span className="pipeline-tag" title={card.kind}>{card.kind}</span>
                     </div>
                     {card.progress !== null && (
                       <div className="pipeline-progress" role="progressbar" aria-valuenow={card.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Milestones done">
@@ -143,16 +155,6 @@ export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns:
                         {card.paused && " · Paused"}
                         {card.paid && <b className="pipeline-paid"> · Paid</b>}
                       </span>
-                      {card.owner ? (
-                        <span className="pipeline-owner" title={card.owner.email}>
-                          {card.owner.initials}
-                        </span>
-                      ) : card.type === "project" ? (
-                        <form action={claimProject}>
-                          <input type="hidden" name="projectId" value={card.id} />
-                          <button className="pipeline-claim" title="Set an owner and agreed value">+ Owner</button>
-                        </form>
-                      ) : null}
                     </div>
                     {card.onboardHref && (
                       <Link className="pipeline-onboard" href={card.onboardHref}>

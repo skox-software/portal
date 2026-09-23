@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BulkLeadForm } from "@/components/BulkLeadForm";
 import { Notice, readMessage } from "@/components/Notice";
 import { PipelineBoard, type BoardCard } from "@/components/PipelineBoard";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -162,6 +163,7 @@ export default async function PipelinePage({
           </div>
           <div className="pipeline-head-actions">
             <Link className="btn btn-ghost" href="/admin/onboard">Add client</Link>
+            <Link className="btn btn-ghost" href="/admin/pipeline?import=1#bulk-form">Bulk add leads</Link>
             <Link className="btn btn-primary" href="/admin/pipeline?new=1#deal-form">New deal</Link>
           </div>
         </div>
@@ -186,6 +188,16 @@ export default async function PipelinePage({
               </p>
             )}
             <DealForm deal={editing} owners={owners} me={viewer.email} linked={!!linkedProject} />
+          </section>
+        )}
+
+        {sp.import === "1" && (
+          <section className="card pipeline-form" id="bulk-form" aria-labelledby="bulk-form-title">
+            <div className="card-head">
+              <h2 id="bulk-form-title">Bulk add leads</h2>
+              <Link className="btn btn-ghost btn-small" href="/admin/pipeline">Close</Link>
+            </div>
+            <BulkLeadForm owners={owners} me={viewer.email} />
           </section>
         )}
 

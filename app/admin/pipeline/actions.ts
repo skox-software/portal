@@ -10,6 +10,7 @@ import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
+import { dedupeLeads, parseLeadSources } from "@/lib/pipeline-import";
 import {
   columnLabel,
   DEAL_KINDS,
@@ -334,4 +335,74 @@ export async function claimProject(formData: FormData) {
   ]);
   refresh();
   backWith(`${BACK}?deal=${id}`, "notice", "Set the owner, contact and agreed value for this project.");
+}
+
+/**
+ * Adds many leads at once from pasted rows or an uploaded CSV. Rows that are
+ * already in the pipeline (same company or email), or are existing clients,
+ * are skipped rather than duplicated.
+ */
+export async function bulkAddDeals(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const back = `${BACK}?import=1`;
+  const file = formData.get("file");
+  const pasted = String(formData.get("rows") ?? "");
+  let fileText = "";
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 900_000) backWith(back, "error", "That file is over 900 KB. Split it into smaller files.");
+    fileText = await file.text();
+  }
+  const stage = z.enum(["lead", "proposal_sent", "negotiation"]).catch("lead").parse(formData.get("stage"));
+  const ownerEmail = normalizeEmail(String(formData.get("ownerEmail") ?? ""));
+  if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) {
+    backWith(back, "error", "The owner must be on the SKOX team.");
+  }
+
+  const { drafts, skipped, truncated } = parseLeadSources(fileText, pasted);
+  if (!drafts.length) {
+    backWith(back, "error", skipped.length ? "None of those rows had a company name." : "Paste some leads or choose a CSV file first.");
+  }
+
+  const db = getDb();
+  const [existingDeals, existingClients] = await Promise.all([
+    db.select({ company: deals.company, email: deals.contactEmail }).from(deals).where(eq(deals.workspaceId, staff.workspaceId)),
+    db.select({ company: clients.name }).from(clients).where(eq(clients.workspaceId, staff.workspaceId)),
+  ]);
+  const { fresh, duplicates } = dedupeLeads(drafts, [
+    ...existingDeals,
+    ...existingClients.map((c) => ({ company: c.company, email: null })),
+  ]);
+
+  if (fresh.length) {
+    const now = new Date();
+    const rows = fresh.map((d) => ({
+      workspaceId: staff.workspaceId,
+      ...d,
+      stage,
+      source: "import",
+      ownerEmail: ownerEmail || null,
+      stageChangedAt: now,
+      createdBy: viewer.userId,
+    }));
+    await db.batch([
+      db.insert(deals).values(rows),
+      eventInsert({
+        workspaceId: staff.workspaceId,
+        actorId: viewer.userId,
+        verb: "deal.imported",
+        subjectType: "deal",
+        payload: { added: fresh.length, duplicates: duplicates.length, skipped: skipped.length, stage },
+      }),
+    ]);
+    refresh();
+  }
+
+  const parts = [`Added ${fresh.length} ${fresh.length === 1 ? "lead" : "leads"} to ${columnLabel(stage)}.`];
+  if (duplicates.length) {
+    const names = duplicates.slice(0, 3).join(", ") + (duplicates.length > 3 ? ` and ${duplicates.length - 3} more` : "");
+    parts.push(`Skipped ${duplicates.length} already in the pipeline (${names}).`);
+  }
+  if (skipped.length) parts.push(`Skipped ${skipped.length} ${skipped.length === 1 ? "row" : "rows"} with no company name.`);
+  if (truncated) parts.push("Only the first 500 rows were read.");
+  backWith(fresh.length ? BACK : back, fresh.length ? "notice" : "error", parts.join(" "));
 }

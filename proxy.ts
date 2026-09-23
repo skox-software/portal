@@ -21,6 +21,7 @@ export default function proxy(...args: Parameters<Middleware>) {
 
 export const config = {
   // Public: sign-in, read-only status links (/s), referral pages (/r), the
-  // daily reminder cron and Stripe's webhook (both verify their own secrets).
-  matcher: ["/((?!api/auth|api/cron|api/stripe|sign-in|s/|r/|_next/static|_next/image|favicon.ico|icon).*)"],
+  // daily reminder cron and Stripe's webhook (both verify their own secrets),
+  // and the icons and share image that browsers and link previews fetch.
+  matcher: ["/((?!api/auth|api/cron|api/stripe|sign-in|s/|r/|_next/static|_next/image|favicon.ico|icon|apple-icon|share-image).*)"],
 };

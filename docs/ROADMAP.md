@@ -66,6 +66,16 @@ checklist, kickoff agenda); skipped steps become to-dos; reminders and staff
 alerts; the printable project brief; launch dates "set at kickoff" until
 confirmed.
 
+### Sales pipeline (2026-09-22)
+`/admin/pipeline`: a drag-and-drop board (Lead → Proposal sent → Negotiation →
+Won → In build → Shipped) that reads the portal's own data. Projects place
+themselves by status (kickoff = Won, launched = Shipped) with invoiced value,
+milestone progress, due and paid state; unworked referrals appear as leads.
+Only pre-sale deals live in the new `deals` table. "Start onboarding" on a Won
+deal prefills the onboarding form and links the new project to the deal, which
+keeps its owner, contact and agreed value. Moving a project card changes the
+project's status, the same as its status menu.
+
 ## Next
 
 ### Phase 3, remaining

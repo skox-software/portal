@@ -85,6 +85,8 @@ export const referralStatus = pgEnum("referral_status", ["new", "contacted", "wo
 export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "login_note"]);
 export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
 export const onboardingStatus = pgEnum("onboarding_status", ["invited", "in_progress", "completed"]);
+/** Pre-sale stages only. Once a deal becomes a project, the project's status drives the board. */
+export const dealStage = pgEnum("deal_stage", ["lead", "proposal_sent", "negotiation", "won", "lost"]);
 
 export const workspaces = pgTable("workspaces", {
   id: id(),
@@ -607,6 +609,46 @@ export const onboardings = pgTable(
   (t) => [index("onboardings_workspace_idx").on(t.workspaceId, t.status)],
 );
 
+/**
+ * A sale before it becomes a project: the pipeline's Lead → Won columns.
+ * Won deals are onboarded into a client + project, and from then on the
+ * project (status, invoices, milestones) is the source of truth; the deal
+ * keeps only what the project doesn't know: owner, contact, agreed value.
+ */
+export const deals = pgTable(
+  "deals",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    company: text("company").notNull(),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email"),
+    phone: text("phone"),
+    website: text("website"),
+    /** One of PROJECT_KINDS, or "retainer". */
+    kind: text("kind").notNull().default("web-app"),
+    valueCents: integer("value_cents"),
+    stage: dealStage("stage").notNull().default("lead"),
+    /** Staff email; shown as initials on the card. */
+    ownerEmail: text("owner_email"),
+    /** manual | referral | import */
+    source: text("source").notNull().default("manual"),
+    referralId: uuid("referral_id")
+      .unique()
+      .references(() => referrals.id, { onDelete: "set null" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    projectId: uuid("project_id")
+      .unique()
+      .references(() => projects.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    lostReason: text("lost_reason"),
+    stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("deals_workspace_idx").on(t.workspaceId, t.stage)],
+);
+
 /** Throttle for anything that sends email on behalf of an anonymous visitor. */
 export const rateEvents = pgTable(
   "rate_events",
@@ -623,3 +665,4 @@ export type Onboarding = typeof onboardings.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Client = typeof clients.$inferSelect;
+export type Deal = typeof deals.$inferSelect;

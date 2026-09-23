@@ -1,11 +1,11 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Notice, readMessage } from "@/components/Notice";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
-import { clients, documents, invoices, onboardings, projects } from "@/lib/db/schema";
+import { clients, deals, documents, invoices, onboardings, projects } from "@/lib/db/schema";
 import { formatDateTime, nowMs, PROJECT_KINDS } from "@/lib/format";
 import { idleDays, progress, stepsFor } from "@/lib/onboarding-flow";
 import { welcomeLink } from "@/lib/onboarding-server";
@@ -37,6 +37,16 @@ export default async function OnboardPage({
         db.select({ projectId: invoices.projectId }).from(invoices).where(inArray(invoices.projectId, projectIds)),
       ])
     : [[], []];
+  // Coming from a Won card in the pipeline: prefill from the deal and link it.
+  const dealId = typeof sp.deal === "string" && /^[0-9a-f-]{36}$/i.test(sp.deal) ? sp.deal : null;
+  const [deal] = dealId
+    ? await db
+        .select()
+        .from(deals)
+        .where(and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId), isNull(deals.projectId)))
+        .limit(1)
+    : [];
+  const dealKind = deal && PROJECT_KINDS.some((k) => k.value === deal.kind) ? deal.kind : "";
   const withAgreement = new Set([...docs, ...deps].map((d) => d.projectId));
   const now = new Date(nowMs());
 
@@ -64,22 +74,30 @@ export default async function OnboardPage({
               <h2 id="start-title">Start onboarding</h2>
             </div>
             <form action={startOnboarding} className="stack">
+              {deal && (
+                <>
+                  <input type="hidden" name="dealId" value={deal.id} />
+                  <p className="small muted">
+                    From the pipeline: <strong>{deal.company}</strong>. The deal moves with the new project.
+                  </p>
+                </>
+              )}
               <div className="field">
                 <label htmlFor="ob-email">Client&apos;s email</label>
-                <input id="ob-email" name="email" type="email" required autoFocus placeholder="jane@harbordental.com" className="input-lg" />
+                <input id="ob-email" name="email" type="email" required autoFocus defaultValue={deal?.contactEmail ?? ""} placeholder="jane@harbordental.com" className="input-lg" />
                 <span className="hint">That&apos;s all you need. Everything below is optional and they can fill it in themselves.</span>
               </div>
-              <details className="more-details">
+              <details className="more-details" open={!!deal}>
                 <summary>Add details from the call</summary>
                 <div className="stack" style={{ marginTop: 12 }}>
                   <div className="form-grid">
                     <div className="field">
                       <label htmlFor="ob-name">Their name</label>
-                      <input id="ob-name" name="contactName" maxLength={120} placeholder="Jane Alvarez" />
+                      <input id="ob-name" name="contactName" maxLength={120} defaultValue={deal?.contactName ?? ""} placeholder="Jane Alvarez" />
                     </div>
                     <div className="field">
                       <label htmlFor="ob-company">Company</label>
-                      <input id="ob-company" name="companyName" maxLength={120} placeholder="From their email if blank" />
+                      <input id="ob-company" name="companyName" maxLength={120} defaultValue={deal?.company ?? ""} placeholder="From their email if blank" />
                     </div>
                     <div className="field">
                       <label htmlFor="ob-project">Project name</label>
@@ -87,7 +105,7 @@ export default async function OnboardPage({
                     </div>
                     <div className="field">
                       <label htmlFor="ob-kind">Type</label>
-                      <select id="ob-kind" name="kind" defaultValue="">
+                      <select id="ob-kind" name="kind" defaultValue={dealKind}>
                         <option value="">Not sure yet</option>
                         {PROJECT_KINDS.map((k) => (
                           <option key={k.value} value={k.value}>
@@ -115,7 +133,7 @@ export default async function OnboardPage({
                   </div>
                   <div className="field">
                     <label htmlFor="ob-notes">Internal notes (SKOX only)</label>
-                    <textarea id="ob-notes" name="internalNotes" maxLength={4000} rows={3} placeholder="Budget, decision-maker, objections…" />
+                    <textarea id="ob-notes" name="internalNotes" maxLength={4000} rows={3} defaultValue={deal?.notes ?? ""} placeholder="Budget, decision-maker, objections…" />
                   </div>
                 </div>
               </details>

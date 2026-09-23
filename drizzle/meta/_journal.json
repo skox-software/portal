@@ -57,6 +57,13 @@
       "when": 1789312997124,
       "tag": "0007_meeting_booking_links",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790129028600,
+      "tag": "0008_pipeline_deals",
+      "breakpoints": true
     }
   ]
 }

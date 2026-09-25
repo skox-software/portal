@@ -106,6 +106,14 @@ export type Card = {
   since: Date;
   href: string | null;
   source?: string;
+  // For the Clients list
+  clientId: string | null;
+  dealId: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  industry: string | null;
+  location: string | null;
+  leadSource: string | null;
   // Project cards
   progress?: { done: number; total: number };
   dueOn?: string | null;
@@ -130,7 +138,11 @@ export type BoardInput = {
     source: string;
     referralId: string | null;
     projectId: string | null;
+    clientId?: string | null;
     stageChangedAt: Date;
+    industry?: string | null;
+    location?: string | null;
+    leadSource?: string | null;
   }[];
   projects: {
     id: string;
@@ -140,6 +152,8 @@ export type BoardInput = {
     clientId: string;
     clientName: string;
     contact: string | null;
+    contactName?: string | null;
+    contactEmail?: string | null;
     deliveryDate: string;
     dateTentative: boolean;
     launchedOn: string | null;
@@ -157,6 +171,8 @@ export type BoardInput = {
     email: string;
     company: string | null;
     referrerEmail: string | null;
+    /** e.g. the referrer's company, for "Referral · Harbor". */
+    referrerLabel?: string | null;
     status: "new" | "contacted" | "won" | "lost";
     createdAt: Date;
   }[];
@@ -186,6 +202,13 @@ export function buildBoard(input: BoardInput) {
       since: deal?.stageChangedAt ?? p.createdAt,
       href: `/admin/projects/${p.id}`,
       source: deal?.source,
+      clientId: p.clientId,
+      dealId: deal?.id ?? null,
+      contactName: deal?.contactName ?? p.contactName ?? null,
+      contactEmail: deal?.contactEmail ?? p.contactEmail ?? null,
+      industry: deal?.industry ?? null,
+      location: deal?.location ?? null,
+      leadSource: deal?.leadSource ?? null,
       progress: { done: p.milestonesDone, total: p.milestonesTotal },
       dueOn: p.deliveryDate,
       dateTentative: p.dateTentative,
@@ -211,6 +234,13 @@ export function buildBoard(input: BoardInput) {
       since: d.stageChangedAt,
       href: null,
       source: d.source,
+      clientId: d.clientId ?? null,
+      dealId: d.id,
+      contactName: d.contactName,
+      contactEmail: d.contactEmail,
+      industry: d.industry ?? null,
+      location: d.location ?? null,
+      leadSource: d.leadSource ?? null,
       needsOnboarding: d.stage === "won",
     };
     (d.stage === "lost" ? lost : cards).push(card);
@@ -231,6 +261,13 @@ export function buildBoard(input: BoardInput) {
       since: r.createdAt,
       href: null,
       source: r.referrerEmail ? `Referral from ${r.referrerEmail}` : "Referral",
+      clientId: null,
+      dealId: null,
+      contactName: r.name,
+      contactEmail: r.email,
+      industry: null,
+      location: null,
+      leadSource: r.referrerLabel ? `Referral · ${r.referrerLabel}` : "Referral",
     });
   }
 

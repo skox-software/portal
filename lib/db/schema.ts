@@ -641,12 +641,88 @@ export const deals = pgTable(
       .unique()
       .references(() => projects.id, { onDelete: "set null" }),
     notes: text("notes"),
+    /** e.g. "Dental clinics", shown under the company on the Clients list. */
+    industry: text("industry"),
+    /** e.g. "Tampa, FL". */
+    location: text("location"),
+    /** Where the lead came from, in words: "Scoping form", "LinkedIn", "Referral · Harbor". */
+    leadSource: text("lead_source"),
     lostReason: text("lost_reason"),
     stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by").notNull(),
     createdAt: createdAt(),
   },
   (t) => [index("deals_workspace_idx").on(t.workspaceId, t.stage)],
+);
+
+export const emailDirection = pgEnum("email_direction", ["inbound", "outbound"]);
+
+/**
+ * A conversation with someone outside SKOX. Threads belong to a client or a
+ * deal once someone (or a matching address) assigns them; until then they
+ * wait in the Inbox under "Needs a client".
+ */
+export const emailThreads = pgTable(
+  "email_threads",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    subject: text("subject").notNull(),
+    /** The outside person this thread is with. */
+    counterpartEmail: text("counterpart_email").notNull(),
+    counterpartName: text("counterpart_name"),
+    /** The SKOX address the conversation is on, e.g. reiss@skoxsoftware.com. */
+    mailbox: text("mailbox"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    dealId: uuid("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
+    /** Set when a staff member opens the thread after its latest inbound message. */
+    readAt: timestamp("read_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("email_threads_workspace_idx").on(t.workspaceId, t.lastMessageAt),
+    index("email_threads_counterpart_idx").on(t.workspaceId, t.counterpartEmail),
+    index("email_threads_client_idx").on(t.clientId),
+    index("email_threads_deal_idx").on(t.dealId),
+  ],
+);
+
+export const emailMessages = pgTable(
+  "email_messages",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => emailThreads.id, { onDelete: "cascade" }),
+    direction: emailDirection("direction").notNull(),
+    fromEmail: text("from_email").notNull(),
+    fromName: text("from_name"),
+    to: jsonb("to").$type<string[]>().notNull().default([]),
+    cc: jsonb("cc").$type<string[]>().notNull().default([]),
+    subject: text("subject").notNull(),
+    text: text("text").notNull().default(""),
+    /** The RFC 5322 Message-ID, used to thread replies. */
+    messageId: text("message_id"),
+    inReplyTo: text("in_reply_to"),
+    references: text("references"),
+    /** Resend's id for a received email, so a retried webhook never duplicates it. */
+    providerId: text("provider_id").unique(),
+    attachments: jsonb("attachments")
+      .$type<{ name: string; size: number; contentType: string; storageKey: string | null }[]>()
+      .notNull()
+      .default([]),
+    sentBy: text("sent_by"),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("email_messages_thread_idx").on(t.threadId, t.sentAt),
+    index("email_messages_message_id_idx").on(t.workspaceId, t.messageId),
+  ],
 );
 
 /** Throttle for anything that sends email on behalf of an anonymous visitor. */
@@ -666,3 +742,5 @@ export type Membership = typeof memberships.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type Deal = typeof deals.$inferSelect;
+export type EmailThread = typeof emailThreads.$inferSelect;
+export type EmailMessage = typeof emailMessages.$inferSelect;

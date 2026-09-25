@@ -167,6 +167,9 @@ const dealFields = z.object({
   stage: z.enum(["lead", "proposal_sent", "negotiation", "won", "lost"]),
   ownerEmail: z.string().trim().max(200),
   notes: z.string().trim().max(4000),
+  industry: z.string().trim().max(80),
+  location: z.string().trim().max(80),
+  leadSource: z.string().trim().max(80),
 });
 
 function readDeal(formData: FormData) {
@@ -182,6 +185,9 @@ function readDeal(formData: FormData) {
     stage: get("stage") || "lead",
     ownerEmail: normalizeEmail(get("ownerEmail")),
     notes: get("notes"),
+    industry: get("industry"),
+    location: get("location"),
+    leadSource: get("leadSource"),
   });
 }
 
@@ -195,6 +201,9 @@ function dealValues(input: z.infer<typeof dealFields>) {
     kind: input.kind,
     valueCents: input.value === "" ? null : Math.round(input.value * 100),
     notes: input.notes || null,
+    industry: input.industry || null,
+    location: input.location || null,
+    leadSource: input.leadSource || null,
   };
 }
 

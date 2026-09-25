@@ -76,6 +76,19 @@ deal prefills the onboarding form and links the new project to the deal, which
 keeps its owner, contact and agreed value. Moving a project card changes the
 project's status, the same as its status menu.
 
+### Clients list and Inbox (2026-09-25)
+- **Clients** (`/admin/clients`): every account in one table (leads, deals,
+  clients, shipped and lost) with contact, stage, value, days in stage,
+  lead source, owner and last touch. Filters: All / Active / Shipped / Lost.
+  Industry, location and lead source live on the deal.
+- **Inbox** (`/admin/inbox`): email threads with clients and leads. Mail
+  arrives by Resend inbound (`/api/inbound/resend`); a Google Workspace
+  routing rule copies the team's mail to the receiving address. Threads file
+  themselves by contact or company domain; the rest wait under "Needs a
+  client" until assigned, and the address is remembered. Replies send from the
+  staff member's own address, threaded, with a copy to their mailbox.
+  Needs: `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOX_COPY_ADDRESS`.
+
 ## Next
 
 ### Phase 3, remaining

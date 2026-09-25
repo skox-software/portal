@@ -1,4 +1,3 @@
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BulkLeadForm } from "@/components/BulkLeadForm";
@@ -7,12 +6,11 @@ import { PipelineBoard, type BoardCard } from "@/components/PipelineBoard";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
-import { getDb } from "@/lib/db";
-import { clients, deals, invoices, memberships, milestones, onboardings, projects, referrals, type Deal } from "@/lib/db/schema";
+import type { Deal } from "@/lib/db/schema";
 import { formatDate, formatMoney, nowMs, timeAgo } from "@/lib/format";
+import { loadPipeline } from "@/lib/pipeline-data";
 import {
   boardTotals,
-  buildBoard,
   COLUMNS,
   daysSince,
   DEAL_KINDS,
@@ -35,83 +33,14 @@ export default async function PipelinePage({
 }) {
   const sp = await searchParams;
   const { viewer, staff } = await requireStaff();
-  const db = getDb();
   const ws = staff.workspaceId;
 
-  const [dealRows, projectRows, billing, progress, contacts, referralRows, staffRows] = await Promise.all([
-    db.select().from(deals).where(eq(deals.workspaceId, ws)).orderBy(desc(deals.stageChangedAt)),
-    db
-      .select({ project: projects, clientName: clients.name, onboardingContact: onboardings.contact, invitedEmail: onboardings.invitedEmail })
-      .from(projects)
-      .innerJoin(clients, eq(clients.id, projects.clientId))
-      .leftJoin(onboardings, eq(onboardings.projectId, projects.id))
-      .where(eq(projects.workspaceId, ws)),
-    db
-      .select({
-        projectId: invoices.projectId,
-        billed: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int`,
-        count: sql<number>`count(*)::int`,
-        unpaid: sql<number>`count(*) filter (where ${invoices.status} = 'open')::int`,
-        openCents: sql<number>`coalesce(sum(${invoices.amountCents}) filter (where ${invoices.status} = 'open'), 0)::int`,
-      })
-      .from(invoices)
-      .where(and(eq(invoices.workspaceId, ws), ne(invoices.status, "void")))
-      .groupBy(invoices.projectId),
-    db
-      .select({
-        projectId: milestones.projectId,
-        done: sql<number>`count(*) filter (where ${milestones.state} = 'done')::int`,
-        total: sql<number>`count(*)::int`,
-      })
-      .from(milestones)
-      .where(eq(milestones.workspaceId, ws))
-      .groupBy(milestones.projectId),
-    db
-      .select({ clientId: memberships.clientId, email: memberships.email })
-      .from(memberships)
-      .where(and(eq(memberships.workspaceId, ws), eq(memberships.role, "client_approver")))
-      .orderBy(memberships.createdAt),
-    db.select().from(referrals).where(eq(referrals.workspaceId, ws)),
-    db
-      .select({ email: memberships.email })
-      .from(memberships)
-      .where(and(eq(memberships.workspaceId, ws), isNull(memberships.clientId)))
-      .orderBy(memberships.createdAt),
-  ]);
-
-  const billingBy = new Map(billing.map((b) => [b.projectId, b]));
-  const progressBy = new Map(progress.map((p) => [p.projectId, p]));
-  const contactBy = new Map<string, string>();
-  for (const c of contacts) if (c.clientId && !contactBy.has(c.clientId)) contactBy.set(c.clientId, c.email);
-
-  const { columns, lost } = buildBoard({
-    deals: dealRows,
-    projects: projectRows.map(({ project, clientName, onboardingContact, invitedEmail }) => ({
-      id: project.id,
-      name: project.name,
-      kind: project.kind,
-      status: project.status,
-      clientId: project.clientId,
-      clientName,
-      contact: onboardingContact?.name || contactBy.get(project.clientId) || invitedEmail || null,
-      deliveryDate: project.deliveryDate,
-      dateTentative: project.dateTentative,
-      launchedOn: project.launchedOn,
-      createdAt: project.createdAt,
-      billedCents: billingBy.get(project.id)?.billed ?? 0,
-      invoiceCount: billingBy.get(project.id)?.count ?? 0,
-      unpaidCount: billingBy.get(project.id)?.unpaid ?? 0,
-      milestonesDone: progressBy.get(project.id)?.done ?? 0,
-      milestonesTotal: progressBy.get(project.id)?.total ?? 0,
-    })),
-    referrals: referralRows,
-  });
+  const { dealRows, projectRows, billing, columns, lost, owners } = await loadPipeline(ws);
 
   const now = new Date(nowMs());
   const totals = boardTotals(columns, now);
   const outstanding = billing.reduce((n, b) => n + b.openCents, 0);
   const unpaidInvoices = billing.reduce((n, b) => n + b.unpaid, 0);
-  const owners = staffRows.map((s) => s.email);
 
   const view = (card: Card): BoardCard => {
     const days = daysSince(card.since, now);
@@ -259,6 +188,21 @@ function DealForm({ deal, owners, me, linked }: { deal: Deal | null; owners: str
         <div className="field">
           <label htmlFor={f("website")}>Website</label>
           <input id={f("website")} name="website" type="url" defaultValue={deal?.website ?? ""} placeholder="https://" />
+        </div>
+        <div className="field">
+          <label htmlFor={f("industry")}>Industry</label>
+          <input id={f("industry")} name="industry" maxLength={80} defaultValue={deal?.industry ?? ""} placeholder="Dental clinics" />
+        </div>
+        <div className="field">
+          <label htmlFor={f("location")}>Location</label>
+          <input id={f("location")} name="location" maxLength={80} defaultValue={deal?.location ?? ""} placeholder="Tampa, FL" />
+        </div>
+        <div className="field">
+          <label htmlFor={f("leadSource")}>Lead source</label>
+          <input id={f("leadSource")} name="leadSource" maxLength={80} list="lead-sources" defaultValue={deal?.leadSource ?? ""} placeholder="Scoping form" />
+          <datalist id="lead-sources">
+            {["Scoping form", "Referral", "Cold outbound", "LinkedIn", "Apollo visit", "Website chat", "Event"].map((s) => <option key={s} value={s} />)}
+          </datalist>
         </div>
         <div className="field">
           <label htmlFor={f("kind")}>Type</label>

@@ -139,7 +139,10 @@ export async function moveCard(type: string, id: string, to: string): Promise<Mo
   if (!deal) return { ok: false, error: "That deal doesn't exist." };
   if (deal.stage === stage) return { ok: true };
   await db.batch([
-    db.update(deals).set({ stage, stageChangedAt: new Date() }).where(eq(deals.id, deal.id)),
+    db
+      .update(deals)
+      .set({ stage, stageChangedAt: new Date(), ...(stage === "won" && !deal.wonAt ? { wonAt: new Date() } : {}) })
+      .where(eq(deals.id, deal.id)),
     ...(deal.referralId && (stage === "won" || stage === "lost")
       ? [db.update(referrals).set({ status: stage }).where(eq(referrals.id, deal.referralId))]
       : []),
@@ -286,6 +289,7 @@ export async function saveDeal(formData: FormData) {
         stage,
         lostReason: stage === "lost" ? String(formData.get("lostReason") ?? "").trim().slice(0, 300) || null : null,
         ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
+        ...(stage === "won" && !deal.wonAt ? { wonAt: new Date() } : {}),
       })
       .where(eq(deals.id, deal.id)),
     eventInsert({

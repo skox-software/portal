@@ -8,6 +8,7 @@ import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
 import type { Deal } from "@/lib/db/schema";
 import { formatDate, formatMoney, nowMs, timeAgo } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { loadPipeline } from "@/lib/pipeline-data";
 import {
   boardTotals,
@@ -68,7 +69,7 @@ export default async function PipelinePage({
       meta,
       stalled,
       href: card.type === "deal" ? `/admin/pipeline?deal=${card.id}#deal-form` : card.href,
-      source: card.source === "import" ? "Imported lead" : card.source === "referral" ? "Referral" : card.source?.startsWith("Referral") ? card.source : null,
+      source: card.source === "import" ? "Imported lead" : card.source === "website" ? card.leadSource ?? "Website" : card.source === "referral" ? "Referral" : card.source?.startsWith("Referral") ? card.source : null,
       progress: card.type === "project" && card.column === "in_build" && total ? Math.round(((card.progress?.done ?? 0) / total) * 100) : null,
       paid: card.type === "project" && card.column === "shipped" && !!card.paid,
       paused: !!card.paused,
@@ -93,6 +94,10 @@ export default async function PipelinePage({
           <div className="pipeline-head-actions">
             <Link className="btn btn-ghost" href="/admin/onboard">Add client</Link>
             <Link className="btn btn-ghost" href="/admin/pipeline?import=1#bulk-form">Bulk add leads</Link>
+            {/* Won deals from ad clicks, for Google Ads → Goals → Conversions → Uploads. */}
+            <a className="btn btn-ghost" href={withBase("/api/pipeline/google-ads")} download title="Won deals that came from a Google Ads click, as Google's upload file">
+              Google Ads upload
+            </a>
             <Link className="btn btn-primary" href="/admin/pipeline?new=1#deal-form">New deal</Link>
           </div>
         </div>
@@ -201,7 +206,7 @@ function DealForm({ deal, owners, me, linked }: { deal: Deal | null; owners: str
           <label htmlFor={f("leadSource")}>Lead source</label>
           <input id={f("leadSource")} name="leadSource" maxLength={80} list="lead-sources" defaultValue={deal?.leadSource ?? ""} placeholder="Scoping form" />
           <datalist id="lead-sources">
-            {["Scoping form", "Referral", "Cold outbound", "LinkedIn", "Apollo visit", "Website chat", "Event"].map((s) => <option key={s} value={s} />)}
+            {["Website", "Scoping form", "Referral", "Cold outbound", "LinkedIn", "Apollo visit", "Website chat", "Event"].map((s) => <option key={s} value={s} />)}
           </datalist>
         </div>
         <div className="field">

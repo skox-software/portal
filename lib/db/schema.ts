@@ -631,7 +631,7 @@ export const deals = pgTable(
     stage: dealStage("stage").notNull().default("lead"),
     /** Staff email; shown as initials on the card. */
     ownerEmail: text("owner_email"),
-    /** manual | referral | import */
+    /** manual | referral | import | website */
     source: text("source").notNull().default("manual"),
     referralId: uuid("referral_id")
       .unique()
@@ -647,6 +647,12 @@ export const deals = pgTable(
     location: text("location"),
     /** Where the lead came from, in words: "Scoping form", "LinkedIn", "Referral · Harbor". */
     leadSource: text("lead_source"),
+    /** Google's click id from a website lead, for uploading the deal back to Google Ads when it's won. */
+    gclid: text("gclid"),
+    /** Website leads: campaign tags, pages viewed, device and the Clarity recording tag (lib/inbound-lead.ts). */
+    attribution: jsonb("attribution"),
+    /** First time it reached Won. Fixed, unlike stageChangedAt, so a Google Ads re-upload is recognised as the same conversion. */
+    wonAt: timestamp("won_at", { withTimezone: true }),
     lostReason: text("lost_reason"),
     stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by").notNull(),

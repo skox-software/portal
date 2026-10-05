@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
@@ -117,7 +117,7 @@ export async function startOnboarding(formData: FormData) {
       ? [
           db
             .update(deals)
-            .set({ clientId, projectId, stage: "won" })
+            .set({ clientId, projectId, stage: "won", wonAt: sql`coalesce(${deals.wonAt}, now())` })
             .where(and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId), isNull(deals.projectId))),
         ]
       : []),

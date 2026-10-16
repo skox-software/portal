@@ -58,6 +58,7 @@ export function BulkLeadForm({ owners, me }: { owners: string[]; me: string }) {
           <label htmlFor="bulk-stage">Add to</label>
           <select id="bulk-stage" name="stage" defaultValue="lead">
             <option value="lead">Lead</option>
+            <option value="initial_outreach">Initial outreach</option>
             <option value="proposal_sent">Proposal sent</option>
             <option value="negotiation">Negotiation</option>
           </select>

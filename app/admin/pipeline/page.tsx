@@ -104,7 +104,7 @@ export default async function PipelinePage({
         <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
 
         <section className="admin-metrics" aria-label="Pipeline summary">
-          <div className="admin-metric"><span>Open pipeline</span><strong>{formatMoney(totals.openCents)}</strong><small>Lead, proposal and negotiation</small></div>
+          <div className="admin-metric"><span>Open pipeline</span><strong>{formatMoney(totals.openCents)}</strong><small>Lead, outreach, proposal and negotiation</small></div>
           <div className="admin-metric"><span>Won / in build</span><strong>{formatMoney(totals.wonCents)}</strong><small>Agreed or invoiced</small></div>
           <div className="admin-metric"><span>Stalled &gt;10 days</span><strong className={totals.stalled ? "pipeline-metric-warn" : undefined}>{totals.stalled}</strong><small>Deals nobody has moved</small></div>
           <Link className="admin-metric" href="/admin/billing?status=open"><span>Outstanding invoices</span><strong>{formatMoney(outstanding)}</strong><small>{unpaidInvoices} unpaid</small></Link>

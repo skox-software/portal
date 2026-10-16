@@ -25,7 +25,7 @@ import { normalizeEmail } from "@/lib/permissions";
  */
 
 const ACTOR = "website";
-const OPEN = ["lead", "proposal_sent", "negotiation"] as const;
+const OPEN = ["lead", "initial_outreach", "proposal_sent", "negotiation"] as const;
 
 function authorised(request: Request): boolean {
   const secret = process.env.LEADS_INGEST_SECRET;

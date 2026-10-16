@@ -28,7 +28,7 @@ import {
 
 const BACK = "/admin/pipeline";
 const KINDS = DEAL_KINDS.map((k) => k.value) as [string, ...string[]];
-const columnKey = z.enum(["lead", "proposal_sent", "negotiation", "won", "in_build", "shipped", "lost"]);
+const columnKey = z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "in_build", "shipped", "lost"]);
 
 type MoveResult = { ok: true } | { ok: false; error: string };
 
@@ -167,7 +167,7 @@ const dealFields = z.object({
   website: z.union([z.literal(""), z.url({ protocol: /^https?$/ }).max(300)]),
   kind: z.enum(KINDS),
   value: z.union([z.literal(""), z.coerce.number().min(0).max(10_000_000)]),
-  stage: z.enum(["lead", "proposal_sent", "negotiation", "won", "lost"]),
+  stage: z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]),
   ownerEmail: z.string().trim().max(200),
   notes: z.string().trim().max(4000),
   industry: z.string().trim().max(80),
@@ -365,7 +365,7 @@ export async function bulkAddDeals(formData: FormData) {
     if (file.size > 900_000) backWith(back, "error", "That file is over 900 KB. Split it into smaller files.");
     fileText = await file.text();
   }
-  const stage = z.enum(["lead", "proposal_sent", "negotiation"]).catch("lead").parse(formData.get("stage"));
+  const stage = z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation"]).catch("lead").parse(formData.get("stage"));
   const ownerEmail = normalizeEmail(String(formData.get("ownerEmail") ?? ""));
   if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) {
     backWith(back, "error", "The owner must be on the SKOX team.");

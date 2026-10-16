@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
@@ -10,6 +10,7 @@ import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
+import { OUTCOMES, outcomeLabel, stageAfterCall, type Outcome } from "@/lib/follow-up";
 import { dedupeLeads, parseLeadSources } from "@/lib/pipeline-import";
 import {
   columnLabel,
@@ -42,6 +43,8 @@ async function staffEmails(workspaceId: string) {
 
 /** The board's filters, carried through a save so the view comes back as it was. */
 function backTo(formData: FormData, extra: Record<string, string> = {}) {
+  // Leads open from the Pipeline or from Clients; go back to whichever it was.
+  const base = formData.get("base") === "/admin/clients" ? "/admin/clients" : BACK;
   const from = new URLSearchParams(String(formData.get("back") ?? "").replace(/^\?/, ""));
   const p = new URLSearchParams();
   for (const k of ["view", "q", "owner", "stage"]) {
@@ -50,11 +53,12 @@ function backTo(formData: FormData, extra: Record<string, string> = {}) {
   }
   for (const [k, v] of Object.entries(extra)) p.set(k, v);
   const s = p.toString();
-  return s ? `${BACK}?${s}` : BACK;
+  return s ? `${base}?${s}` : base;
 }
 
 function refresh() {
   revalidatePath(BACK);
+  revalidatePath("/admin/clients");
   revalidatePath("/admin");
 }
 
@@ -186,6 +190,8 @@ const dealFields = z.object({
   industry: z.string().trim().max(80),
   location: z.string().trim().max(80),
   leadSource: z.string().trim().max(80),
+  nextStep: z.string().trim().max(200),
+  nextStepOn: z.union([z.literal(""), z.iso.date()]),
 });
 
 function readDeal(formData: FormData) {
@@ -204,6 +210,8 @@ function readDeal(formData: FormData) {
     industry: get("industry"),
     location: get("location"),
     leadSource: get("leadSource"),
+    nextStep: get("nextStep"),
+    nextStepOn: get("nextStepOn"),
   });
 }
 
@@ -220,6 +228,8 @@ function dealValues(input: z.infer<typeof dealFields>) {
     industry: input.industry || null,
     location: input.location || null,
     leadSource: input.leadSource || null,
+    nextStep: input.nextStep || null,
+    nextStepOn: input.nextStepOn || null,
   };
 }
 
@@ -435,4 +445,129 @@ export async function bulkAddDeals(formData: FormData) {
   if (skipped.length) parts.push(`Skipped ${skipped.length} ${skipped.length === 1 ? "row" : "rows"} with no company name.`);
   if (truncated) parts.push("Only the first 500 rows were read.");
   backWith(fresh.length ? BACK : back, fresh.length ? "notice" : "error", parts.join(" "));
+}
+
+/**
+ * Logs a call, voicemail or email in one step: stamps "last contacted",
+ * records the outcome on the deal's history, moves a fresh lead to Initial
+ * outreach (or closes it as not interested) and sets the follow-up.
+ */
+export async function logCall(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!z.uuid().safeParse(dealId).success) backWith(BACK, "error", "Unknown deal.");
+  const back = backTo(formData, { deal: dealId });
+  const parsed = z
+    .object({
+      outcome: z.enum(OUTCOMES.map((o) => o.value) as [Outcome, ...Outcome[]]),
+      note: z.string().trim().max(1000),
+      followUp: z.union([z.literal(""), z.iso.date()]),
+      nextStep: z.string().trim().max(200),
+    })
+    .safeParse({
+      outcome: formData.get("outcome"),
+      note: String(formData.get("note") ?? ""),
+      followUp: String(formData.get("followUp") ?? ""),
+      nextStep: String(formData.get("nextStep") ?? ""),
+    });
+  if (!parsed.success) backWith(back, "error", "Pick what happened on the call.");
+  const { outcome, note, followUp, nextStep } = parsed.data;
+
+  const db = getDb();
+  const [deal] = await db
+    .select()
+    .from(deals)
+    .where(and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId)))
+    .limit(1);
+  if (!deal) backWith(BACK, "error", "That deal doesn't exist.");
+
+  // Once onboarded, the project owns the stage.
+  const stage = deal.projectId || deal.stage === "won" || deal.stage === "lost" ? deal.stage : stageAfterCall(deal.stage, outcome);
+  const closed = stage === "lost";
+  await db.batch([
+    db
+      .update(deals)
+      .set({
+        lastContactedAt: new Date(),
+        stage,
+        nextStepOn: closed ? null : followUp || null,
+        nextStep: closed ? null : nextStep || null,
+        ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
+        ...(closed && deal.stage !== "lost" ? { lostReason: note || "Not interested" } : {}),
+      })
+      .where(eq(deals.id, deal.id)),
+    eventInsert({
+      workspaceId: staff.workspaceId,
+      projectId: deal.projectId,
+      actorId: viewer.userId,
+      verb: "deal.call_logged",
+      subjectType: "deal",
+      subjectId: deal.id,
+      payload: {
+        company: deal.company,
+        outcome,
+        ...(note ? { note } : {}),
+        ...(followUp && !closed ? { followUp } : {}),
+        ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}),
+      },
+    }),
+  ]);
+  refresh();
+  const message = `${outcomeLabel(outcome)} logged for ${deal.company}${stage !== deal.stage ? ` · moved to ${stage === "lost" ? "Lost" : columnLabel(stage)}` : ""}.`;
+  const nextId = String(formData.get("nextId") ?? "");
+  if (formData.get("intent") === "next" && z.uuid().safeParse(nextId).success) backWith(backTo(formData, { deal: nextId }), "notice", message);
+  backWith(back, "notice", message);
+}
+
+type BulkResult = { ok: true; count: number } | { ok: false; error: string };
+
+/** Changes the stage, owner or follow-up of several deals at once. Onboarded deals keep their project's stage. */
+export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ownerEmail?: string; nextStepOn?: string }): Promise<BulkResult> {
+  const { viewer, staff } = await requireStaff();
+  const parsed = z
+    .object({
+      ids: z.array(z.uuid()).min(1).max(500),
+      stage: z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]).optional(),
+      ownerEmail: z.string().trim().max(200).optional(),
+      nextStepOn: z.union([z.literal(""), z.iso.date()]).optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Pick some deals and a change to make." };
+  const { ids, stage, nextStepOn } = parsed.data;
+  const ownerEmail = parsed.data.ownerEmail === undefined ? undefined : normalizeEmail(parsed.data.ownerEmail);
+  if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) return { ok: false, error: "The owner must be on the SKOX team." };
+  if (stage === undefined && ownerEmail === undefined && nextStepOn === undefined) return { ok: false, error: "Choose what to change." };
+
+  const db = getDb();
+  const rows = await db
+    .select({ id: deals.id, stage: deals.stage, projectId: deals.projectId, wonAt: deals.wonAt })
+    .from(deals)
+    .where(and(eq(deals.workspaceId, staff.workspaceId), inArray(deals.id, ids)));
+  if (!rows.length) return { ok: false, error: "Those deals don't exist." };
+  const now = new Date();
+  const writes = rows.map((d) => {
+    const nextStage = stage && !d.projectId && stage !== d.stage ? stage : undefined;
+    return db
+      .update(deals)
+      .set({
+        ...(nextStage ? { stage: nextStage, stageChangedAt: now, ...(nextStage === "won" && !d.wonAt ? { wonAt: now } : {}) } : {}),
+        ...(ownerEmail !== undefined ? { ownerEmail: ownerEmail || null } : {}),
+        ...(nextStepOn !== undefined ? { nextStepOn: nextStepOn || null } : {}),
+      })
+      .where(eq(deals.id, d.id));
+  });
+  await db.batch([
+    writes[0],
+    ...writes.slice(1),
+    eventInsert({
+      workspaceId: staff.workspaceId,
+      actorId: viewer.userId,
+      verb: "deal.bulk_updated",
+      subjectType: "deal",
+      subjectId: null,
+      payload: { count: rows.length, ...(stage ? { stage } : {}), ...(ownerEmail !== undefined ? { ownerEmail } : {}), ...(nextStepOn !== undefined ? { nextStepOn } : {}) },
+    }),
+  ]);
+  refresh();
+  return { ok: true, count: rows.length };
 }

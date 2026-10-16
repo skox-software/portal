@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
 import { allowedColumns, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
@@ -33,6 +32,9 @@ export type BoardCard = {
   phone: string | null;
   email: string | null;
   website: string | null;
+  /** "Due today", "Overdue 2d"… for deals with a follow-up set. */
+  followUp: string | null;
+  followUpState: "overdue" | "today" | "upcoming" | "none";
   location: string | null;
   industry: string | null;
   /** Lower-cased text the search box matches against. */
@@ -62,7 +64,6 @@ export function PipelineBoard({
   me: string;
   initial: BoardView;
 }) {
-  const router = useRouter();
   const [optimistic, applyMove] = useOptimistic(cards, (state, move: { key: string; to: ColumnKey | "lost" }) =>
     move.to === "lost"
       ? state.filter((c) => c.key !== move.key)
@@ -166,27 +167,14 @@ export function PipelineBoard({
       </span>
     );
 
-  const listRows = shown
-    .filter((c) => !v.stage || c.column === v.stage)
-    .sort((a, b) => columns.findIndex((c) => c.key === a.column) - columns.findIndex((c) => c.key === b.column));
-
   return (
     <>
       <div className="pipeline-toolbar">
         <nav className="crm-views pipeline-views" aria-label="Layout">
-          {(["board", "list"] as const).map((view) => (
-            <a
-              key={view}
-              href={`/portal/admin/pipeline${viewQuery({ ...v, view })}`}
-              aria-current={v.view === view ? "page" : undefined}
-              onClick={(e) => {
-                e.preventDefault();
-                setV({ ...v, view });
-              }}
-            >
-              {view === "board" ? "Board" : "List"}
-            </a>
-          ))}
+          <a href="/portal/admin/pipeline" aria-current="page">
+            Board
+          </a>
+          <Link href="/admin/clients">List</Link>
         </nav>
         <label className="sr-only" htmlFor="pipeline-search">
           Search the pipeline
@@ -228,89 +216,7 @@ export function PipelineBoard({
         </p>
       )}
 
-      {v.view === "list" ? (
-        <>
-          <nav className="crm-views pipeline-stage-filter" aria-label="Stage">
-            {[{ key: "", label: "All" }, ...columns].map((c) => (
-              <a
-                key={c.key}
-                href={`/portal/admin/pipeline${viewQuery({ ...v, stage: c.key })}`}
-                aria-current={v.stage === c.key ? "page" : undefined}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setV({ ...v, stage: c.key });
-                }}
-              >
-                {c.label} <span>{c.key ? shown.filter((card) => card.column === c.key).length : shown.length}</span>
-              </a>
-            ))}
-          </nav>
-          <section className="crm-table-card">
-            <table className="crm-table pipeline-list">
-              <thead>
-                <tr>
-                  <th scope="col">Company</th>
-                  <th scope="col">Reach</th>
-                  <th scope="col">Location</th>
-                  <th scope="col">Stage</th>
-                  <th scope="col">In stage</th>
-                  <th scope="col" className="crm-num">Value</th>
-                  <th scope="col">
-                    <span className="sr-only">Owner</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {listRows.map((card) => {
-                  const href = open(card);
-                  return (
-                    <tr
-                      key={card.key}
-                      onClick={(e) => {
-                        if (!href || (e.target as HTMLElement).closest("a,select,button,label")) return;
-                        router.push(href, { scroll: false });
-                      }}
-                      data-clickable={href ? "" : undefined}
-                    >
-                      <td className="crm-client" data-label="Company">
-                        {href ? (
-                          <Link href={href} scroll={false}>
-                            {card.company}
-                          </Link>
-                        ) : (
-                          <strong>{card.company}</strong>
-                        )}
-                        <small>{[card.contact, card.industry].filter(Boolean).join(" · ") || "No contact yet"}</small>
-                      </td>
-                      <td data-label="Reach">
-                        {reach(card) || <span className="muted">—</span>}
-                        {card.phone && <small className="pipeline-phone">{card.phone}</small>}
-                      </td>
-                      <td data-label="Location">{card.location ?? <span className="muted">—</span>}</td>
-                      <td data-label="Stage">{stageSelect(card)}</td>
-                      <td className="crm-mono" data-label="In stage">
-                        <span className={card.stalled ? "pipeline-stalled" : undefined}>{card.meta}</span>
-                      </td>
-                      <td className="crm-num crm-mono" data-label="Value">
-                        {card.value ?? <span className="muted">—</span>}
-                      </td>
-                      <td data-label="Owner">
-                        {card.owner && (
-                          <span className="crm-owner" title={card.owner.email}>
-                            {card.owner.initials}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {!listRows.length && <p className="pipeline-empty">{filtering ? "Nothing matches that search." : "Nothing here."}</p>}
-          </section>
-        </>
-      ) : (
-        <>
+      <>
           <div className="pipeline-jump" role="tablist" aria-label="Stages">
             {columns.map((column) => (
               <button
@@ -336,6 +242,7 @@ export function PipelineBoard({
                 <section
                   key={column.key}
                   className="pipeline-col"
+                  data-empty={!inColumn.length && !dragging ? "" : undefined}
                   data-stage={column.key}
                   data-over={over === column.key && canDrop ? "" : undefined}
                   data-blocked={dragging && !canDrop ? "" : undefined}
@@ -416,6 +323,11 @@ export function PipelineBoard({
                           {reach(card)}
                           <div className="pipeline-card-meta">
                             {card.value && <strong className="pipeline-card-money">{card.value}</strong>}
+                            {card.followUp && (
+                              <span className="lead-due" data-state={card.followUpState}>
+                                {card.followUp}
+                              </span>
+                            )}
                             <span className={card.stalled ? "pipeline-stalled" : undefined}>
                               {card.meta}
                               {card.paused && " · Paused"}
@@ -438,7 +350,6 @@ export function PipelineBoard({
             })}
           </div>
         </>
-      )}
     </>
   );
 }

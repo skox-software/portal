@@ -2,44 +2,45 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/app/admin/actions";
+import { ClientsList, type ClientRow, type ClientGroup } from "@/components/ClientsList";
+import { DealPanel } from "@/components/DealPanel";
 import { Notice, readMessage } from "@/components/Notice";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { emailThreads, events } from "@/lib/db/schema";
-import { formatMoney, nowMs } from "@/lib/format";
-import { columnLabel, daysSince, initials, STALL_DAYS, type Card, type ColumnKey } from "@/lib/pipeline";
+import { nowMs } from "@/lib/format";
+import { describeFollowUp, followUpState, salesToday, untouchedFor } from "@/lib/follow-up";
+import { daysSince, PRESALE, searchText, STALL_DAYS, type Card, type ColumnKey } from "@/lib/pipeline";
 import { loadPipeline } from "@/lib/pipeline-data";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Clients · SKOX" };
 
 type Stage = ColumnKey | "lost" | "none";
-type Row = {
-  key: string;
-  name: string;
-  href: string;
-  subtitle: string | null;
-  contactName: string | null;
-  contactEmail: string | null;
-  stage: Stage;
-  valueCents: number;
-  days: number | null;
-  source: string | null;
-  owner: string | null;
-  lastTouch: Date | null;
-};
 
+/** Saved views: the ways the team works the list. */
 const VIEWS = [
   { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "lead", label: "Leads" },
-  { key: "initial_outreach", label: "Initial outreach" },
-  { key: "shipped", label: "Shipped" },
-  { key: "lost", label: "Lost" },
+  { key: "open", label: "Open deals" },
+  { key: "mine", label: "My leads" },
+  { key: "due", label: "Due today" },
+  { key: "untouched", label: "Untouched 7+ days" },
 ] as const;
 type View = (typeof VIEWS)[number]["key"];
 
-const stageLabel = (stage: Stage) => (stage === "lost" ? "Lost" : stage === "none" ? "No project yet" : columnLabel(stage));
+/** The order status groups appear in. */
+const GROUPS: { key: Stage; label: string }[] = [
+  { key: "lead", label: "Lead" },
+  { key: "initial_outreach", label: "Initial outreach" },
+  { key: "proposal_sent", label: "Proposal sent" },
+  { key: "negotiation", label: "Negotiation" },
+  { key: "won", label: "Won" },
+  { key: "in_build", label: "In build" },
+  { key: "shipped", label: "Shipped" },
+  { key: "none", label: "No project yet" },
+  { key: "lost", label: "Lost" },
+];
+const OLD_STAGE_VIEWS = new Set(["lead", "initial_outreach", "shipped", "lost"]);
 
 function sourceLabel(card: Card) {
   if (card.leadSource) return card.leadSource;
@@ -48,14 +49,12 @@ function sourceLabel(card: Card) {
   return null;
 }
 
-const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
-  const { staff } = await requireStaff();
+  const { viewer, staff } = await requireStaff();
   const ws = staff.workspaceId;
   const db = getDb();
-  const [{ columns, lost, clientRows }, projectTouches, dealTouches, clientMail, dealMail] = await Promise.all([
+  const [{ columns, lost, clientRows, dealRows, projectRows, owners }, projectTouches, dealTouches, clientMail, dealMail] = await Promise.all([
     loadPipeline(ws),
     db
       .select({ id: events.projectId, at: sql<Date>`max(${events.createdAt})` })
@@ -87,175 +86,256 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const latest = (...dates: (Date | undefined | null)[]) =>
     dates.filter((d): d is Date => !!d && !Number.isNaN(d.getTime())).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
   const now = new Date(nowMs());
+  const today = salesToday(now);
+  const dealById = new Map(dealRows.map((d) => [d.id, d]));
 
-  const toRow = (card: Card, stage: Stage): Row => ({
-    key: card.key,
-    name: card.company,
-    href:
-      card.type === "project" && card.clientId
-        ? `/admin/clients/${card.clientId}`
-        : card.type === "deal"
-          ? `/admin/pipeline?deal=${card.id}`
-          : "/admin/pipeline",
-    subtitle: [card.industry, card.location].filter(Boolean).join(" · ") || null,
-    contactName: card.contactName,
-    contactEmail: card.contactEmail,
-    stage,
-    valueCents: card.valueCents,
-    days: daysSince(card.since, now),
-    source: sourceLabel(card),
-    owner: card.ownerEmail,
-    lastTouch: latest(
+  // ---- Filters, all in the URL so a lead's panel and every save keep them ----
+  const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).trim().slice(0, 200) : "");
+  const rawView = str("view");
+  const view: View = VIEWS.some((v) => v.key === rawView) ? (rawView as View) : rawView === "active" ? "open" : "all";
+  // Old links (?view=lead) become a status filter.
+  const stage = (GROUPS.some((g) => g.key === str("stage")) ? str("stage") : OLD_STAGE_VIEWS.has(rawView) ? rawView : "") as Stage | "";
+  const q = str("q").toLowerCase();
+  const owner = str("owner");
+  const listQuery = (extra: Record<string, string> = {}) => {
+    const p = new URLSearchParams();
+    if (view !== "all") p.set("view", view);
+    if (stage) p.set("stage", stage);
+    if (q) p.set("q", q);
+    if (owner) p.set("owner", owner);
+    for (const [k, v] of Object.entries(extra)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    const s = p.toString();
+    return s ? `?${s}` : "";
+  };
+
+  const toRow = (card: Card, stage: Stage): ClientRow => {
+    const deal = card.type === "deal" ? dealById.get(card.id) : card.dealId ? dealById.get(card.dealId) : undefined;
+    const isDeal = card.type === "deal";
+    const days = daysSince(card.since, now);
+    const lastTouch = latest(
       card.type === "project" ? projectAt.get(card.id) : undefined,
       card.dealId ? dealAt.get(card.dealId) : undefined,
       card.dealId ? dealMailAt.get(card.dealId) : undefined,
       card.clientId ? clientMailAt.get(card.clientId) : undefined,
+      deal?.lastContactedAt,
       card.since,
-    ),
-  });
+    );
+    const working = isDeal && stage !== "won" && stage !== "lost";
+    return {
+      key: card.key,
+      dealId: isDeal ? card.id : null,
+      name: card.company,
+      href: card.type === "project" && card.clientId ? `/admin/clients/${card.clientId}` : isDeal ? `/admin/clients${listQuery({ deal: card.id })}` : "/admin/pipeline",
+      subtitle: [card.industry, card.location].filter(Boolean).join(" · ") || null,
+      contactName: card.contactName,
+      contactEmail: card.contactEmail,
+      phone: deal?.phone ?? null,
+      website: deal?.website ?? null,
+      stage,
+      valueCents: card.valueCents,
+      days,
+      slow: PRESALE.includes(stage as ColumnKey) && days > STALL_DAYS,
+      source: sourceLabel(card),
+      owner: card.ownerEmail,
+      followUp: working ? describeFollowUp(deal?.nextStepOn ?? null, today) : null,
+      followUpState: working ? followUpState(deal?.nextStepOn ?? null, today) : "none",
+      followUpOn: working ? deal?.nextStepOn ?? null : null,
+      nextStep: working ? deal?.nextStep ?? null : null,
+      lastTouch: lastTouch?.toISOString() ?? null,
+      contacted: !!deal?.lastContactedAt,
+      untouched: working && PRESALE.includes(stage as ColumnKey) && untouchedFor(deal?.lastContactedAt ?? null, card.since, now, 7),
+      search: searchText([card.company, card.contactName, card.contactEmail, deal?.phone, deal?.website, card.location, card.industry, card.leadSource, deal?.notes]),
+    };
+  };
 
   const cardRows = [...columns.flatMap((c) => c.cards.map((card) => toRow(card, c.key))), ...lost.map((card) => toRow(card, "lost"))];
   // Companies added by name only, with no project or deal yet.
   const shown = new Set(columns.flatMap((c) => c.cards).concat(lost).map((c) => c.clientId).filter(Boolean));
-  const bare: Row[] = clientRows
+  const bare: ClientRow[] = clientRows
     .filter((c) => !shown.has(c.id))
     .map((c) => ({
       key: `client:${c.id}`,
+      dealId: null,
       name: c.name,
       href: `/admin/clients/${c.id}`,
       subtitle: null,
       contactName: null,
       contactEmail: null,
+      phone: null,
+      website: null,
       stage: "none",
       valueCents: 0,
       days: null,
+      slow: false,
       source: null,
       owner: null,
-      lastTouch: latest(clientMailAt.get(c.id), c.createdAt),
+      followUp: null,
+      followUpState: "none",
+      followUpOn: null,
+      nextStep: null,
+      lastTouch: latest(clientMailAt.get(c.id), c.createdAt)?.toISOString() ?? null,
+      contacted: false,
+      untouched: false,
+      search: c.name.toLowerCase(),
     }));
-  const all = [...cardRows, ...bare].sort((a, b) => (b.lastTouch?.getTime() ?? 0) - (a.lastTouch?.getTime() ?? 0));
+  const all = [...cardRows, ...bare];
 
-  const view: View = VIEWS.some((v) => v.key === sp.view) ? (sp.view as View) : "all";
-  const q = typeof sp.q === "string" ? sp.q.trim().toLowerCase().slice(0, 200) : "";
-  const matchesView = (r: Row, v: View) =>
+  const inView = (r: ClientRow, v: View) =>
     v === "all" ||
-    (v === "active" && !["shipped", "lost"].includes(r.stage)) ||
-    (v === "shipped" && r.stage === "shipped") ||
-    (v === "lead" && r.stage === "lead") ||
-    (v === "initial_outreach" && r.stage === "initial_outreach") ||
-    (v === "lost" && r.stage === "lost");
-  const rows = all.filter(
-    (r) => matchesView(r, view) && (!q || [r.name, r.contactName, r.contactEmail, r.subtitle, r.source].some((v) => v?.toLowerCase().includes(q))),
-  );
-  const href = (next: View) => {
-    const params = new URLSearchParams({ ...(next !== "all" ? { view: next } : {}), ...(q ? { q } : {}) }).toString();
-    return params ? `/admin/clients?${params}` : "/admin/clients";
-  };
+    (v === "open" && !["shipped", "lost", "none"].includes(r.stage)) ||
+    (v === "mine" && r.owner === viewer.email && r.stage !== "lost") ||
+    (v === "due" && (r.followUpState === "overdue" || r.followUpState === "today")) ||
+    (v === "untouched" && r.untouched);
+  const matches = (r: ClientRow) =>
+    (!q || q.split(/\s+/).every((w) => r.search.includes(w))) && (!owner || (owner === "none" ? !r.owner : r.owner === owner));
+  const base = all.filter((r) => inView(r, view) && matches(r));
+  const rows = base.filter((r) => !stage || r.stage === stage);
+
+  // Within a status: follow-ups due first, then the soonest follow-up, then most recently touched.
+  const rank = { overdue: 0, today: 1, upcoming: 2, none: 3 } as const;
+  const order = (a: ClientRow, b: ClientRow) =>
+    rank[a.followUpState] - rank[b.followUpState] ||
+    (a.followUpOn ?? "9999").localeCompare(b.followUpOn ?? "9999") ||
+    (b.lastTouch ?? "").localeCompare(a.lastTouch ?? "");
+  const groups: ClientGroup[] = GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.stage === g.key).sort(order) })).filter((g) => g.rows.length);
+
+  // ---- The open lead, with next and previous inside its status ----
+  const editing = str("deal") ? dealRows.find((d) => d.id === str("deal")) ?? null : null;
+  const creating = sp.new === "1";
+  const linked = editing?.projectId ? projectRows.find((p) => p.project.id === editing.projectId) : null;
+  const group = editing ? groups.find((g) => g.rows.some((r) => r.dealId === editing.id)) : undefined;
+  const workable = group ? group.rows.filter((r) => r.dealId) : [];
+  const at = editing ? workable.findIndex((r) => r.dealId === editing.id) : -1;
+  const next = at >= 0 ? workable[at + 1] : undefined;
+  const prev = at > 0 ? workable[at - 1] : undefined;
+  const closeHref = `/admin/clients${listQuery()}`;
+  const panelOpen = Boolean(editing || creating);
+
+  const viewHref = (v: View) => `/admin/clients${listQuery({ view: v === "all" ? "" : v, stage: "" }).replace(/^\?$/, "")}`;
+  const stageHref = (s: Stage | "") => `/admin/clients${listQuery({ stage: s })}`;
 
   return (
-    <main className="shell page">
-      <div className="page-head">
+    <main className="shell page crm-page">
+      <div className="crm-head">
         <div>
           <p className="eyebrow">Sales</p>
           <h1>Clients</h1>
         </div>
-        <nav className="crm-views" aria-label="Show">
-          {VIEWS.map((v) => (
-            <Link key={v.key} href={href(v.key)} aria-current={view === v.key ? "page" : undefined}>
-              {v.label}
-              <span>{all.filter((r) => matchesView(r, v.key)).length}</span>
-            </Link>
-          ))}
+        <nav className="crm-views" aria-label="Views">
+          {VIEWS.map((v) => {
+            const n = all.filter((r) => inView(r, v.key)).length;
+            return (
+              <Link key={v.key} href={viewHref(v.key)} aria-current={view === v.key ? "page" : undefined} data-alert={v.key === "due" && n ? "" : undefined}>
+                {v.label}
+                <span>{n}</span>
+              </Link>
+            );
+          })}
         </nav>
       </div>
-      <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
+      {!panelOpen && <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />}
 
-      <form className="admin-filter" action="/portal/admin/clients">
-        {view !== "all" && <input type="hidden" name="view" value={view} />}
-        <label className="sr-only" htmlFor="crm-search">Search clients</label>
-        <input id="crm-search" name="q" defaultValue={q} placeholder="Search company, contact, email or source…" />
-        <button className="btn btn-ghost">Search</button>
-        <Link className="btn btn-ghost" href="/admin/pipeline?new=1">New deal</Link>
-        <Link className="btn btn-primary" href="/admin/onboard">Add client</Link>
-      </form>
+      <div className="crm-split" data-panel={panelOpen ? "" : undefined}>
+        <div className="crm-split-list">
+          <form className="admin-filter crm-filter" action="/portal/admin/clients">
+            {view !== "all" && <input type="hidden" name="view" value={view} />}
+            {stage && <input type="hidden" name="stage" value={stage} />}
+            <label className="sr-only" htmlFor="crm-search">
+              Search clients
+            </label>
+            <input id="crm-search" name="q" type="search" defaultValue={q} placeholder="Search company, contact, phone, city, notes…  ( / )" />
+            <label className="sr-only" htmlFor="crm-owner">
+              Owner
+            </label>
+            <select id="crm-owner" name="owner" defaultValue={owner} data-autosubmit="">
+              <option value="">Everyone&apos;s</option>
+              <option value={viewer.email}>Mine</option>
+              {owners
+                .filter((o) => o !== viewer.email)
+                .map((o) => (
+                  <option key={o} value={o}>
+                    {o.split("@")[0]}&apos;s
+                  </option>
+                ))}
+              <option value="none">Unassigned</option>
+            </select>
+            <button className="btn btn-ghost">Search</button>
+            {(q || owner) && (
+              <Link className="btn btn-ghost" href={`/admin/clients${listQuery({ q: "", owner: "" })}`}>
+                Clear
+              </Link>
+            )}
+            <Link className="btn btn-primary" href={`/admin/clients${listQuery({ new: "1" })}`} scroll={false}>
+              + New deal
+            </Link>
+          </form>
 
-      <section className="crm-table-card">
-        {rows.length ? (
-          <table className="crm-table">
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Contact</th>
-                <th>Stage</th>
-                <th className="crm-num">Value</th>
-                <th>In stage</th>
-                <th>Source</th>
-                <th>Owner</th>
-                <th>Last touch</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const slow = r.days !== null && r.days > STALL_DAYS && !["shipped", "lost", "none"].includes(r.stage);
-                return (
-                  <tr key={r.key}>
-                    <td className="crm-client">
-                      <Link href={r.href}>{r.name}</Link>
-                      {r.subtitle && <small>{r.subtitle}</small>}
-                    </td>
-                    <td className="crm-contact">
-                      {r.contactName || r.contactEmail ? (
-                        <>
-                          <span>{r.contactName ?? r.contactEmail}</span>
-                          {r.contactName && r.contactEmail && <small>{r.contactEmail}</small>}
-                        </>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td className="crm-stage-cell" data-label="Stage">
-                      <span className="crm-stage" data-stage={r.stage}>
-                        <i aria-hidden="true" />
-                        {stageLabel(r.stage)}
-                      </span>
-                    </td>
-                    <td className="crm-num crm-mono" data-label="Value">{r.valueCents ? formatMoney(r.valueCents) : "—"}</td>
-                    <td className="crm-mono" data-label="In stage">
-                      <span className={slow ? "crm-slow" : undefined}>{r.days === null ? "—" : `${r.days}d`}</span>
-                    </td>
-                    <td data-label="Source">{r.source ?? <span className="muted">—</span>}</td>
-                    <td data-label="Owner">
-                      {r.owner ? (
-                        <span className="crm-owner" title={r.owner} data-tone={initials(r.owner).charCodeAt(0) % 2 ? "amber" : "ink"}>
-                          {initials(r.owner)}
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td className="crm-mono" data-label="Last touch">{r.lastTouch ? shortDate(r.lastTouch) : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <p className="admin-empty">{q || view !== "all" ? "No matches. Try another search or view." : "No clients or leads yet. Add a deal or onboard a client."}</p>
+          <nav className="crm-stages" aria-label="Status">
+            <Link href={stageHref("")} aria-current={!stage ? "page" : undefined}>
+              All statuses <span>{base.length}</span>
+            </Link>
+            {GROUPS.map((g) => {
+              const n = base.filter((r) => r.stage === g.key).length;
+              if (!n && stage !== g.key) return null;
+              return (
+                <Link key={g.key} href={stageHref(g.key)} aria-current={stage === g.key ? "page" : undefined} data-stage={g.key}>
+                  <i aria-hidden="true" />
+                  {g.label} <span>{n}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <ClientsList
+            groups={groups}
+            openDealId={editing?.id ?? null}
+            panelOpen={panelOpen}
+            owners={owners}
+            me={viewer.email}
+            empty={q || owner || view !== "all" || stage ? "No matches. Try another search or view." : "No clients or leads yet. Add a deal or onboard a client."}
+          />
+
+          <details className="card admin-section-space" id="add-client">
+            <summary>Add a company by name only</summary>
+            <form action={createClient} className="stack admin-section-space">
+              <div className="field">
+                <label htmlFor="new-company">Company name</label>
+                <input id="new-company" name="name" maxLength={120} required placeholder="Company name" />
+              </div>
+              <div>
+                <button className="btn btn-primary">Add company</button>
+              </div>
+            </form>
+          </details>
+        </div>
+
+        {panelOpen && (
+          <aside className="crm-split-panel" id="deal-form" aria-labelledby="deal-form-title">
+            <DealPanel
+              deal={editing}
+              owners={owners}
+              me={viewer.email}
+              linkedProject={linked ? { id: linked.project.id, name: linked.project.name } : null}
+              nav={{
+                base: "/admin/clients",
+                back: listQuery(),
+                closeHref,
+                nextId: next?.dealId ?? null,
+                nextHref: next?.dealId ? `/admin/clients${listQuery({ deal: next.dealId })}` : null,
+                prevHref: prev?.dealId ? `/admin/clients${listQuery({ deal: prev.dealId })}` : null,
+                position: group && at >= 0 ? `${at + 1} of ${workable.length} in ${group.label}` : null,
+              }}
+              today={today}
+              now={now}
+              notice={readMessage(sp.notice)}
+              error={readMessage(sp.error)}
+            />
+          </aside>
         )}
-      </section>
-
-      <details className="card admin-section-space" id="add-client">
-        <summary>Add a company by name only</summary>
-        <form action={createClient} className="stack admin-section-space">
-          <div className="field">
-            <label htmlFor="new-company">Company name</label>
-            <input id="new-company" name="name" maxLength={120} required placeholder="Company name" />
-          </div>
-          <div>
-            <button className="btn btn-primary">Add company</button>
-          </div>
-        </form>
-      </details>
+      </div>
     </main>
   );
 }

@@ -24,6 +24,9 @@ export type DealStage = "lead" | "initial_outreach" | "proposal_sent" | "negotia
 export type ProjectStatus = "kickoff" | "building" | "review" | "launched" | "paused";
 export type CardType = "deal" | "project" | "referral";
 
+/** The board shows only these; builds and launches live on Projects. */
+export const SALES_COLUMNS: readonly ColumnKey[] = ["lead", "initial_outreach", "proposal_sent", "negotiation", "won"];
+
 /** Pre-sale columns, where a card can sit untouched for too long. */
 export const PRESALE: readonly ColumnKey[] = ["lead", "initial_outreach", "proposal_sent", "negotiation"];
 export const STALL_DAYS = 10;

@@ -85,6 +85,13 @@
       "when": 1792182116774,
       "tag": "0011_deal_stage_initial_outreach",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792186816733,
+      "tag": "0012_deal_follow_ups",
+      "breakpoints": true
     }
   ]
 }

@@ -654,11 +654,16 @@ export const deals = pgTable(
     /** First time it reached Won. Fixed, unlike stageChangedAt, so a Google Ads re-upload is recognised as the same conversion. */
     wonAt: timestamp("won_at", { withTimezone: true }),
     lostReason: text("lost_reason"),
+    /** The follow-up: what to do next and the day it's due. Drives the Today queue. */
+    nextStep: text("next_step"),
+    nextStepOn: date("next_step_on"),
+    /** Last call, voicemail or email logged against the deal. */
+    lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
     stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by").notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index("deals_workspace_idx").on(t.workspaceId, t.stage)],
+  (t) => [index("deals_workspace_idx").on(t.workspaceId, t.stage), index("deals_next_step_idx").on(t.workspaceId, t.nextStepOn)],
 );
 
 export const emailDirection = pgEnum("email_direction", ["inbound", "outbound"]);

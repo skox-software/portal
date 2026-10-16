@@ -40,6 +40,19 @@ async function staffEmails(workspaceId: string) {
   return new Set(rows.map((r) => r.email));
 }
 
+/** The board's filters, carried through a save so the view comes back as it was. */
+function backTo(formData: FormData, extra: Record<string, string> = {}) {
+  const from = new URLSearchParams(String(formData.get("back") ?? "").replace(/^\?/, ""));
+  const p = new URLSearchParams();
+  for (const k of ["view", "q", "owner", "stage"]) {
+    const v = from.get(k);
+    if (v) p.set(k, v.slice(0, 200));
+  }
+  for (const [k, v] of Object.entries(extra)) p.set(k, v);
+  const s = p.toString();
+  return s ? `${BACK}?${s}` : BACK;
+}
+
 function refresh() {
   revalidatePath(BACK);
   revalidatePath("/admin");
@@ -239,14 +252,14 @@ export async function createDeal(formData: FormData) {
     }),
   ]);
   refresh();
-  backWith(BACK, "notice", `${input.company} added to ${input.stage === "lost" ? "lost deals" : columnLabel(input.stage)}.`);
+  backWith(backTo(formData), "notice", `${input.company} added to ${input.stage === "lost" ? "lost deals" : columnLabel(input.stage)}.`);
 }
 
 export async function saveDeal(formData: FormData) {
   const { viewer, staff } = await requireStaff();
   const dealId = String(formData.get("dealId") ?? "");
   if (!z.uuid().safeParse(dealId).success) backWith(BACK, "error", "Unknown deal.");
-  const back = `${BACK}?deal=${dealId}`;
+  const back = backTo(formData, { deal: dealId });
   const db = getDb();
   const [deal] = await db
     .select()
@@ -269,7 +282,7 @@ export async function saveDeal(formData: FormData) {
       }),
     ]);
     refresh();
-    backWith(BACK, "notice", `Removed ${deal.company} from the pipeline.`);
+    backWith(backTo(formData), "notice", `Removed ${deal.company} from the pipeline.`);
   }
 
   const parsed = readDeal(formData);
@@ -303,7 +316,11 @@ export async function saveDeal(formData: FormData) {
     }),
   ]);
   refresh();
-  backWith(BACK, "notice", `${input.company} saved.`);
+  const nextId = String(formData.get("nextId") ?? "");
+  if (formData.get("intent") === "next" && z.uuid().safeParse(nextId).success) {
+    backWith(backTo(formData, { deal: nextId }), "notice", `${input.company} saved.`);
+  }
+  backWith(backTo(formData), "notice", `${input.company} saved.`);
 }
 
 /** Gives an existing project an owner and agreed value by creating its deal. */

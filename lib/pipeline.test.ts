@@ -3,11 +3,13 @@ import { test } from "node:test";
 import {
   boardTotals,
   buildBoard,
+  cardMatches,
   columnForProject,
   dealStageForColumn,
   initials,
   isStalled,
   projectStatusForColumn,
+  searchText,
   type BoardInput,
 } from "./pipeline.ts";
 
@@ -123,4 +125,16 @@ test("initials come from a name or the local part of an email", () => {
   assert.equal(initials("josh.fox@x.com"), "JF");
   assert.equal(initials("Reiss Smith"), "RS");
   assert.equal(initials(null), "");
+});
+
+test("search matches every word anywhere on the card; owner narrows to one person or nobody", () => {
+  const card = { search: searchText(["Brinkerhoff Property Management", "Eric Brinkerhoff", "(386) 258-3802", "Daytona Beach, FL", null]), ownerEmail: "reiss@skoxsoftware.com" };
+  assert.equal(cardMatches(card, { q: "", owner: "" }), true);
+  assert.equal(cardMatches(card, { q: "daytona eric", owner: "" }), true);
+  assert.equal(cardMatches(card, { q: "258-3802", owner: "" }), true);
+  assert.equal(cardMatches(card, { q: "tampa", owner: "" }), false);
+  assert.equal(cardMatches(card, { q: "", owner: "reiss@skoxsoftware.com" }), true);
+  assert.equal(cardMatches(card, { q: "", owner: "founders@skoxsoftware.com" }), false);
+  assert.equal(cardMatches(card, { q: "", owner: "none" }), false);
+  assert.equal(cardMatches({ ...card, ownerEmail: null }, { q: "", owner: "none" }), true);
 });

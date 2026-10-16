@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
-import { allowedColumns, COLUMNS, type CardType, type ColumnKey } from "@/lib/pipeline";
+import { allowedColumns, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
+
+export type { BoardView };
 
 export type BoardCard = {
   key: string;
@@ -12,19 +15,28 @@ export type BoardCard = {
   column: ColumnKey;
   company: string;
   contact: string | null;
-  value: string;
+  /** Empty when there's no value yet, so the card stays quiet. */
+  value: string | null;
   valueCents: number;
   kind: string;
   owner: { initials: string; email: string } | null;
-  /** "3d in stage", "Due Oct 14", "Shipped Sep 1"… */
+  /** "3d", "Due Oct 14", "Shipped Sep 1"… */
   meta: string;
   stalled: boolean;
+  /** Where the card opens; deals open in the side panel. */
   href: string | null;
   source: string | null;
   progress: number | null;
   paid: boolean;
   paused: boolean;
   onboardHref: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  location: string | null;
+  industry: string | null;
+  /** Lower-cased text the search box matches against. */
+  search: string;
 };
 
 type Column = { key: ColumnKey; label: string };
@@ -37,19 +49,44 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
 
-export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns: Column[] }) {
+export function PipelineBoard({
+  cards,
+  columns,
+  owners,
+  me,
+  initial,
+}: {
+  cards: BoardCard[];
+  columns: Column[];
+  owners: string[];
+  me: string;
+  initial: BoardView;
+}) {
+  const router = useRouter();
   const [optimistic, applyMove] = useOptimistic(cards, (state, move: { key: string; to: ColumnKey | "lost" }) =>
     move.to === "lost"
       ? state.filter((c) => c.key !== move.key)
-      : state.map((c) => (c.key === move.key ? { ...c, column: move.to as ColumnKey, stalled: false } : c)),
+      : state.map((c) => (c.key === move.key ? { ...c, column: move.to as ColumnKey, stalled: false, meta: "0d" } : c)),
   );
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<BoardCard | null>(null);
   const [over, setOver] = useState<ColumnKey | null>(null);
+  const [v, setV] = useState<BoardView>(initial);
   // Phones show one column at a time; the chips jump between them.
   const board = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState<ColumnKey>(columns[0].key);
+
+  // Keep the filters in the address, so opening a lead and coming back keeps them.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    for (const k of ["view", "q", "owner", "stage"]) url.searchParams.delete(k);
+    for (const [k, val] of new URLSearchParams(viewQuery(v))) url.searchParams.set(k, val);
+    window.history.replaceState(window.history.state, "", url);
+  }, [v]);
+
+  const shown = useMemo(() => optimistic.filter((c) => cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, v)), [optimistic, v]);
+  const filtering = Boolean(v.q || v.owner);
 
   useEffect(() => {
     const el = board.current;
@@ -64,7 +101,7 @@ export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns:
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [v.view]);
 
   function jumpTo(key: ColumnKey) {
     const el = board.current;
@@ -91,140 +128,317 @@ export function PipelineBoard({ cards, columns }: { cards: BoardCard[]; columns:
     });
   }
 
+  const open = (card: BoardCard) => (card.type === "deal" ? `/admin/pipeline${viewQuery(v, { deal: card.id })}` : card.href);
+
+  const stageSelect = (card: BoardCard) => (
+    <>
+      <label className="sr-only" htmlFor={`stage-${card.key}`}>
+        Stage for {card.company}
+      </label>
+      <select id={`stage-${card.key}`} className="pipeline-stage" value={card.column} onChange={(e) => move(card, e.target.value as ColumnKey | "lost")}>
+        {allowedColumns(card.type).map((key) => (
+          <option key={key} value={key}>
+            {STAGE_LABEL[key]}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+
+  const reach = (card: BoardCard) =>
+    (card.website || card.phone || card.email) && (
+      <span className="pipeline-reach">
+        {card.website && (
+          <a href={card.website} target="_blank" rel="noreferrer" title={`Website: ${card.website}`} aria-label={`${card.company} website`}>
+            Site ↗
+          </a>
+        )}
+        {card.phone && (
+          <a href={`tel:${card.phone.replace(/[^\d+]/g, "")}`} title={`Call ${card.phone}`} aria-label={`Call ${card.company}, ${card.phone}`}>
+            Call
+          </a>
+        )}
+        {card.email && (
+          <a href={`mailto:${card.email}`} title={`Email ${card.email}`} aria-label={`Email ${card.company}`}>
+            Email
+          </a>
+        )}
+      </span>
+    );
+
+  const listRows = shown
+    .filter((c) => !v.stage || c.column === v.stage)
+    .sort((a, b) => columns.findIndex((c) => c.key === a.column) - columns.findIndex((c) => c.key === b.column));
+
   return (
     <>
+      <div className="pipeline-toolbar">
+        <nav className="crm-views pipeline-views" aria-label="Layout">
+          {(["board", "list"] as const).map((view) => (
+            <a
+              key={view}
+              href={`/portal/admin/pipeline${viewQuery({ ...v, view })}`}
+              aria-current={v.view === view ? "page" : undefined}
+              onClick={(e) => {
+                e.preventDefault();
+                setV({ ...v, view });
+              }}
+            >
+              {view === "board" ? "Board" : "List"}
+            </a>
+          ))}
+        </nav>
+        <label className="sr-only" htmlFor="pipeline-search">
+          Search the pipeline
+        </label>
+        <input
+          id="pipeline-search"
+          type="search"
+          value={v.q}
+          onChange={(e) => setV({ ...v, q: e.target.value })}
+          placeholder="Search company, contact, phone, city, notes…"
+          autoComplete="off"
+        />
+        <label className="sr-only" htmlFor="pipeline-owner">
+          Owner
+        </label>
+        <select id="pipeline-owner" value={v.owner} onChange={(e) => setV({ ...v, owner: e.target.value })}>
+          <option value="">Everyone&apos;s</option>
+          <option value={me}>Mine</option>
+          {owners.filter((o) => o !== me).map((o) => (
+            <option key={o} value={o}>
+              {o.split("@")[0]}&apos;s
+            </option>
+          ))}
+          <option value="none">Unassigned</option>
+        </select>
+        {filtering && (
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setV({ ...v, q: "", owner: "" })}>
+            Clear
+          </button>
+        )}
+        <span className="pipeline-count" aria-live="polite">
+          {filtering ? `${shown.length} of ${optimistic.length}` : `${optimistic.length} cards`}
+        </span>
+      </div>
+
       {error && (
         <p className="notice notice-error" role="alert">
           {error}
         </p>
       )}
-      <div className="pipeline-jump" role="tablist" aria-label="Stages">
-        {columns.map((column) => (
-          <button
-            key={column.key}
-            type="button"
-            role="tab"
-            aria-selected={visible === column.key}
-            data-stage={column.key}
-            onClick={() => jumpTo(column.key)}
-          >
-            <i aria-hidden="true" />
-            {column.label}
-            <span>{optimistic.filter((c) => c.column === column.key).length}</span>
-          </button>
-        ))}
-      </div>
-      <div className="pipeline-board" ref={board}>
-        {columns.map((column) => {
-          const inColumn = optimistic.filter((c) => c.column === column.key);
-          const total = inColumn.reduce((n, c) => n + c.valueCents, 0);
-          const canDrop = dragging ? allowedColumns(dragging.type).includes(column.key) : false;
-          return (
-            <section
-              key={column.key}
-              className="pipeline-col"
-              data-stage={column.key}
-              data-over={over === column.key && canDrop ? "" : undefined}
-              data-blocked={dragging && !canDrop ? "" : undefined}
-              aria-label={`${column.label}: ${inColumn.length} cards, ${money(total)}`}
-              onDragOver={(e) => {
-                if (!canDrop) return;
-                e.preventDefault();
-                setOver(column.key);
-              }}
-              onDragLeave={() => setOver((o) => (o === column.key ? null : o))}
-              onDrop={(e) => {
-                e.preventDefault();
-                setOver(null);
-                if (dragging) move(dragging, column.key);
-                setDragging(null);
-              }}
-            >
-              <header className="pipeline-col-head">
-                <h2>
-                  <i aria-hidden="true" />
-                  {column.label} <span>{inColumn.length}</span>
-                </h2>
-                <strong>{money(total)}</strong>
-              </header>
-              <ul className="pipeline-cards">
-                {inColumn.map((card) => (
-                  <li
-                    key={card.key}
-                    className="pipeline-card"
-                    draggable
-                    data-dragging={dragging?.key === card.key ? "" : undefined}
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", card.key);
-                      setDragging(card);
-                    }}
-                    onDragEnd={() => {
-                      setDragging(null);
-                      setOver(null);
-                    }}
-                  >
-                    <div className="pipeline-card-top">
-                      <div className="pipeline-card-title">
-                        {card.href ? <Link href={card.href}>{card.company}</Link> : <strong>{card.company}</strong>}
-                        {card.contact && <span title={card.contact}>{card.contact}</span>}
-                        {card.source && <small>{card.source}</small>}
-                      </div>
-                      {card.owner ? (
-                        <span className="pipeline-owner" title={card.owner.email}>
-                          {card.owner.initials}
-                        </span>
-                      ) : card.type === "project" ? (
-                        <form action={claimProject}>
-                          <input type="hidden" name="projectId" value={card.id} />
-                          <button className="pipeline-claim" title="Set an owner and agreed value" aria-label={`Set an owner for ${card.company}`}>+</button>
-                        </form>
-                      ) : null}
-                    </div>
-                    <div className="pipeline-card-value">
-                      <strong data-empty={card.valueCents ? undefined : ""}>{card.value}</strong>
-                      <span className="pipeline-tag" title={card.kind}>{card.kind}</span>
-                    </div>
-                    {card.progress !== null && (
-                      <div className="pipeline-progress" role="progressbar" aria-valuenow={card.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Milestones done">
-                        <span style={{ width: `${card.progress}%` }} />
-                      </div>
-                    )}
-                    <div className="pipeline-card-meta">
-                      <span className={card.stalled ? "pipeline-stalled" : undefined}>
-                        {card.meta}
-                        {card.paused && " · Paused"}
-                        {card.paid && <b className="pipeline-paid"> · Paid</b>}
-                      </span>
-                    </div>
-                    {card.onboardHref && (
-                      <Link className="pipeline-onboard" href={card.onboardHref}>
-                        Start onboarding →
-                      </Link>
-                    )}
-                    <label className="sr-only" htmlFor={`stage-${card.key}`}>
-                      Stage for {card.company}
-                    </label>
-                    <select
-                      id={`stage-${card.key}`}
-                      className="pipeline-stage"
-                      value={card.column}
-                      onChange={(e) => move(card, e.target.value as ColumnKey | "lost")}
+
+      {v.view === "list" ? (
+        <>
+          <nav className="crm-views pipeline-stage-filter" aria-label="Stage">
+            {[{ key: "", label: "All" }, ...columns].map((c) => (
+              <a
+                key={c.key}
+                href={`/portal/admin/pipeline${viewQuery({ ...v, stage: c.key })}`}
+                aria-current={v.stage === c.key ? "page" : undefined}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setV({ ...v, stage: c.key });
+                }}
+              >
+                {c.label} <span>{c.key ? shown.filter((card) => card.column === c.key).length : shown.length}</span>
+              </a>
+            ))}
+          </nav>
+          <section className="crm-table-card">
+            <table className="crm-table pipeline-list">
+              <thead>
+                <tr>
+                  <th scope="col">Company</th>
+                  <th scope="col">Reach</th>
+                  <th scope="col">Location</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">In stage</th>
+                  <th scope="col" className="crm-num">Value</th>
+                  <th scope="col">
+                    <span className="sr-only">Owner</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {listRows.map((card) => {
+                  const href = open(card);
+                  return (
+                    <tr
+                      key={card.key}
+                      onClick={(e) => {
+                        if (!href || (e.target as HTMLElement).closest("a,select,button,label")) return;
+                        router.push(href, { scroll: false });
+                      }}
+                      data-clickable={href ? "" : undefined}
                     >
-                      {allowedColumns(card.type).map((key) => (
-                        <option key={key} value={key}>
-                          {STAGE_LABEL[key]}
-                        </option>
-                      ))}
-                    </select>
-                  </li>
-                ))}
-              </ul>
-              {!inColumn.length && <p className="pipeline-empty">{dragging && canDrop ? "Drop here" : "Nothing here"}</p>}
-            </section>
-          );
-        })}
-      </div>
+                      <td className="crm-client" data-label="Company">
+                        {href ? (
+                          <Link href={href} scroll={false}>
+                            {card.company}
+                          </Link>
+                        ) : (
+                          <strong>{card.company}</strong>
+                        )}
+                        <small>{[card.contact, card.industry].filter(Boolean).join(" · ") || "No contact yet"}</small>
+                      </td>
+                      <td data-label="Reach">
+                        {reach(card) || <span className="muted">—</span>}
+                        {card.phone && <small className="pipeline-phone">{card.phone}</small>}
+                      </td>
+                      <td data-label="Location">{card.location ?? <span className="muted">—</span>}</td>
+                      <td data-label="Stage">{stageSelect(card)}</td>
+                      <td className="crm-mono" data-label="In stage">
+                        <span className={card.stalled ? "pipeline-stalled" : undefined}>{card.meta}</span>
+                      </td>
+                      <td className="crm-num crm-mono" data-label="Value">
+                        {card.value ?? <span className="muted">—</span>}
+                      </td>
+                      <td data-label="Owner">
+                        {card.owner && (
+                          <span className="crm-owner" title={card.owner.email}>
+                            {card.owner.initials}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!listRows.length && <p className="pipeline-empty">{filtering ? "Nothing matches that search." : "Nothing here."}</p>}
+          </section>
+        </>
+      ) : (
+        <>
+          <div className="pipeline-jump" role="tablist" aria-label="Stages">
+            {columns.map((column) => (
+              <button
+                key={column.key}
+                type="button"
+                role="tab"
+                aria-selected={visible === column.key}
+                data-stage={column.key}
+                onClick={() => jumpTo(column.key)}
+              >
+                <i aria-hidden="true" />
+                {column.label}
+                <span>{shown.filter((c) => c.column === column.key).length}</span>
+              </button>
+            ))}
+          </div>
+          <div className="pipeline-board" ref={board}>
+            {columns.map((column) => {
+              const inColumn = shown.filter((c) => c.column === column.key);
+              const total = inColumn.reduce((n, c) => n + c.valueCents, 0);
+              const canDrop = dragging ? allowedColumns(dragging.type).includes(column.key) : false;
+              return (
+                <section
+                  key={column.key}
+                  className="pipeline-col"
+                  data-stage={column.key}
+                  data-over={over === column.key && canDrop ? "" : undefined}
+                  data-blocked={dragging && !canDrop ? "" : undefined}
+                  aria-label={`${column.label}: ${inColumn.length} cards, ${money(total)}`}
+                  onDragOver={(e) => {
+                    if (!canDrop) return;
+                    e.preventDefault();
+                    setOver(column.key);
+                  }}
+                  onDragLeave={() => setOver((o) => (o === column.key ? null : o))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setOver(null);
+                    if (dragging) move(dragging, column.key);
+                    setDragging(null);
+                  }}
+                >
+                  <header className="pipeline-col-head">
+                    <h2>
+                      <i aria-hidden="true" />
+                      {column.label} <span>{inColumn.length}</span>
+                    </h2>
+                    {total > 0 && <strong>{money(total)}</strong>}
+                  </header>
+                  <ul className="pipeline-cards">
+                    {inColumn.map((card) => {
+                      const href = open(card);
+                      return (
+                        <li
+                          key={card.key}
+                          className="pipeline-card"
+                          draggable
+                          data-dragging={dragging?.key === card.key ? "" : undefined}
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", card.key);
+                            setDragging(card);
+                          }}
+                          onDragEnd={() => {
+                            setDragging(null);
+                            setOver(null);
+                          }}
+                        >
+                          <div className="pipeline-card-top">
+                            <div className="pipeline-card-title">
+                              {href ? (
+                                <Link href={href} scroll={false}>
+                                  {card.company}
+                                </Link>
+                              ) : (
+                                <strong>{card.company}</strong>
+                              )}
+                              {(card.contact || card.location) && (
+                                <span title={[card.contact, card.location].filter(Boolean).join(" · ")}>
+                                  {[card.contact, card.location].filter(Boolean).join(" · ")}
+                                </span>
+                              )}
+                              {card.source && <small>{card.source}</small>}
+                            </div>
+                            {card.owner ? (
+                              <span className="pipeline-owner" title={card.owner.email}>
+                                {card.owner.initials}
+                              </span>
+                            ) : card.type === "project" ? (
+                              <form action={claimProject}>
+                                <input type="hidden" name="projectId" value={card.id} />
+                                <button className="pipeline-claim" title="Set an owner and agreed value" aria-label={`Set an owner for ${card.company}`}>
+                                  +
+                                </button>
+                              </form>
+                            ) : null}
+                          </div>
+                          {card.progress !== null && (
+                            <div className="pipeline-progress" role="progressbar" aria-valuenow={card.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Milestones done">
+                              <span style={{ width: `${card.progress}%` }} />
+                            </div>
+                          )}
+                          {reach(card)}
+                          <div className="pipeline-card-meta">
+                            {card.value && <strong className="pipeline-card-money">{card.value}</strong>}
+                            <span className={card.stalled ? "pipeline-stalled" : undefined}>
+                              {card.meta}
+                              {card.paused && " · Paused"}
+                              {card.paid && <b className="pipeline-paid"> · Paid</b>}
+                            </span>
+                            {stageSelect(card)}
+                          </div>
+                          {card.onboardHref && (
+                            <Link className="pipeline-onboard" href={card.onboardHref}>
+                              Start onboarding →
+                            </Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {!inColumn.length && <p className="pipeline-empty">{dragging && canDrop ? "Drop here" : filtering ? "No matches" : "Nothing here"}</p>}
+                </section>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 }

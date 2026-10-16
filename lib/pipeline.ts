@@ -290,3 +290,32 @@ export function boardTotals(columns: ReturnType<typeof buildBoard>["columns"], n
     stalled: columns.flatMap((c) => c.cards).filter((card) => isStalled(card.column, card.since, now)).length,
   };
 }
+
+/** Search and owner filters, shared by the board, the list and "Save & next". */
+export type BoardFilter = { q: string; owner: string };
+
+/** `owner` is "" for everyone, "none" for unassigned, or a team email. */
+export function cardMatches(card: { search: string; ownerEmail: string | null }, { q, owner }: BoardFilter) {
+  if (owner === "none" ? card.ownerEmail : owner && card.ownerEmail !== owner) return false;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  return words.every((w) => card.search.includes(w));
+}
+
+/** The text a card is searched by: names, contact details, place, notes. */
+export function searchText(parts: (string | null | undefined)[]) {
+  return parts.filter(Boolean).join(" \u0001 ").toLowerCase();
+}
+
+export type BoardView = { view: "board" | "list"; q: string; owner: string; stage: string };
+
+/** The view's query string, minus defaults, for links that keep the filters. */
+export function viewQuery(v: BoardView, extra: Record<string, string> = {}) {
+  const p = new URLSearchParams();
+  if (v.view === "list") p.set("view", "list");
+  if (v.q) p.set("q", v.q);
+  if (v.owner) p.set("owner", v.owner);
+  if (v.view === "list" && v.stage) p.set("stage", v.stage);
+  for (const [k, val] of Object.entries(extra)) p.set(k, val);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}

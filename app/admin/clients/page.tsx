@@ -32,6 +32,8 @@ type Row = {
 const VIEWS = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
+  { key: "lead", label: "Leads" },
+  { key: "initial_outreach", label: "Initial outreach" },
   { key: "shipped", label: "Shipped" },
   { key: "lost", label: "Lost" },
 ] as const;
@@ -93,7 +95,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       card.type === "project" && card.clientId
         ? `/admin/clients/${card.clientId}`
         : card.type === "deal"
-          ? `/admin/pipeline?deal=${card.id}#deal-form`
+          ? `/admin/pipeline?deal=${card.id}`
           : "/admin/pipeline",
     subtitle: [card.industry, card.location].filter(Boolean).join(" · ") || null,
     contactName: card.contactName,
@@ -139,6 +141,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     v === "all" ||
     (v === "active" && !["shipped", "lost"].includes(r.stage)) ||
     (v === "shipped" && r.stage === "shipped") ||
+    (v === "lead" && r.stage === "lead") ||
+    (v === "initial_outreach" && r.stage === "initial_outreach") ||
     (v === "lost" && r.stage === "lost");
   const rows = all.filter(
     (r) => matchesView(r, view) && (!q || [r.name, r.contactName, r.contactEmail, r.subtitle, r.source].some((v) => v?.toLowerCase().includes(q))),
@@ -171,7 +175,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         <label className="sr-only" htmlFor="crm-search">Search clients</label>
         <input id="crm-search" name="q" defaultValue={q} placeholder="Search company, contact, email or source…" />
         <button className="btn btn-ghost">Search</button>
-        <Link className="btn btn-ghost" href="/admin/pipeline?new=1#deal-form">New deal</Link>
+        <Link className="btn btn-ghost" href="/admin/pipeline?new=1">New deal</Link>
         <Link className="btn btn-primary" href="/admin/onboard">Add client</Link>
       </form>
 

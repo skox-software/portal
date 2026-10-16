@@ -167,7 +167,7 @@ export default async function PipelinePage({
 function DealForm({ deal, owners, me, linked }: { deal: Deal | null; owners: string[]; me: string; linked: boolean }) {
   const f = (id: string) => `deal-${id}`;
   return (
-    <form action={deal ? saveDeal : createDeal} className="stack">
+    <form key={deal?.id ?? "new"} action={deal ? saveDeal : createDeal} className="stack">
       {deal && <input type="hidden" name="dealId" value={deal.id} />}
       <div className="form-grid">
         <div className="field">

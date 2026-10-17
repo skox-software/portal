@@ -96,3 +96,34 @@
 
 @media(prefers-reduced-motion:reduce){.fticker-flash,.fticker-state i,.ffeed-list li.is-new{animation:none}.odo-strip{transition:none}.fticker-flash{display:none}}
 @media(max-width:760px){.fticker{padding:16px;gap:16px}.fticker-items{gap:16px 24px}.fticker-items dd{font-size:18px}.ffeed-head,.ffeed-list li{padding-inline:16px}}
+
+/* Money flow (Sankey). Bands stretch horizontally; labels are HTML so they stay readable. */
+.fflow{display:grid;gap:16px}
+.fflow-plot{position:relative}
+.fflow-plot svg{display:block;width:100%;height:100%;overflow:visible}
+.fflow-band{fill:var(--amber);fill-opacity:.28;transition:fill-opacity .2s var(--ease-out);animation:fflow-in .4s var(--ease-out) both;animation-delay:calc(var(--i,0) * 60ms)}
+.fflow-band:hover{fill-opacity:.55}
+.fflow-band[data-kind=kept]{fill:var(--ok)}
+.fflow-band[data-kind=refunds]{fill:var(--danger)}
+.fflow-band[data-kind=fees]{fill:var(--muted)}
+.fflow-band[data-kind=share]{fill:var(--ink);fill-opacity:.16}
+.fflow-band[data-kind=share]:hover{fill-opacity:.32}
+.fflow-node{fill:var(--amber)}
+.fflow-node[data-kind=kept]{fill:var(--ok)}
+.fflow-node[data-kind=refunds]{fill:var(--danger)}
+.fflow-node[data-kind=fees]{fill:var(--muted)}
+.fflow-node[data-kind=share]{fill:var(--ink)}
+@keyframes fflow-in{from{opacity:0}}
+.fflow-labels{position:absolute;inset:0;pointer-events:none}
+.fflow-label{position:absolute;display:grid;gap:2px;font-size:12px;line-height:1.3;color:var(--muted);white-space:nowrap;text-shadow:0 0 4px var(--paper),0 0 2px var(--paper)}
+.fflow-label b{font:500 15px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.fflow-label-end{display:block;transform:translateY(-50%);text-align:right}
+.fflow-label-end b{font-size:13px;margin-left:6px}
+.fflow-list{display:none;margin:0;grid-template-columns:1fr 1fr;gap:8px 16px}
+.fflow-list div{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.fflow-list dt{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.fflow-list dt i{width:8px;height:8px;border-radius:2px;background:var(--amber)}
+.fflow-list [data-kind=kept] i{background:var(--ok)}.fflow-list [data-kind=refunds] i{background:var(--danger)}.fflow-list [data-kind=fees] i{background:var(--muted)}.fflow-list [data-kind=share] i{background:var(--ink)}
+.fflow-list dd{margin:0;font:500 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+@media(max-width:760px){.fflow-plot{height:220px!important}.fflow-labels{display:none}.fflow-list{display:grid;grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.fflow-band{animation:none;transition:none}}

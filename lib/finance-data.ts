@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clients, deals, events, invoiceRefunds, invoices, projects } from "@/lib/db/schema";
+import { clients, commissionEntries, deals, events, invoiceRefunds, invoices, projects, repProfiles } from "@/lib/db/schema";
 import { repTotals, workspaceReps, EMPTY_TOTALS } from "@/lib/commissions";
 import { bucketKeys, STAGE_WEIGHTS, type PeriodRange } from "@/lib/finance-periods";
 import { SALES_TZ, salesToday } from "@/lib/follow-up";
@@ -217,4 +217,28 @@ export async function liveEvents(ws: string, limit = 25): Promise<LiveEvent[]> {
     const line = describeEvent(r.verb, payload);
     return line ? [{ ...line, id: r.id, verb: r.verb, at: r.at.toISOString() }] : [];
   });
+}
+
+/** Invoices raised in the period (anything not voided), by the day they were created. */
+export async function invoicedInPeriod(ws: string, range: PeriodRange) {
+  const [row] = await getDb()
+    .select({ cents: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), ne(invoices.status, "void"), inPeriod(invoices.createdAt, range)));
+  return Number(row?.cents ?? 0);
+}
+
+/**
+ * Commission earned in the period per person: Reiss's partner share and any
+ * rep's, net of clawbacks, voided lines left out. Dated by when the money
+ * moved (`earned_at`), like the statements.
+ */
+export async function sharesByOwner(ws: string, range: PeriodRange) {
+  const rows = await getDb()
+    .select({ id: commissionEntries.repMembershipId, name: repProfiles.displayName, cents: sql<number>`coalesce(sum(${commissionEntries.amountCents}), 0)::int` })
+    .from(commissionEntries)
+    .innerJoin(repProfiles, eq(repProfiles.membershipId, commissionEntries.repMembershipId))
+    .where(and(eq(commissionEntries.workspaceId, ws), ne(commissionEntries.status, "void"), inPeriod(commissionEntries.earnedAt, range)))
+    .groupBy(commissionEntries.repMembershipId, repProfiles.displayName);
+  return rows.map((r) => ({ id: r.id, name: r.name, cents: Number(r.cents) })).filter((r) => r.cents > 0).sort((a, b) => b.cents - a.cents);
 }

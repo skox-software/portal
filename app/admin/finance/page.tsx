@@ -9,7 +9,8 @@ import { ActivityFeed } from "@/components/finance/ActivityFeed";
 import { LiveProvider } from "@/components/finance/LiveProvider";
 import { LiveTicker } from "@/components/finance/LiveTicker";
 import { requireStaff } from "@/lib/access";
-import { collectedByBucket, dealsWonByOwner, invoicesByPaymentIntent, leaderboard, outstanding, refundsByBucket, weightedPipeline } from "@/lib/finance-data";
+import { MoneyFlow } from "@/components/finance/MoneyFlow";
+import { collectedByBucket, dealsWonByOwner, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, outstanding, refundsByBucket, sharesByOwner, weightedPipeline } from "@/lib/finance-data";
 import { liveSnapshot } from "@/lib/finance-live";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
 import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, stripeTreasury, type StripeRead } from "@/lib/finance-stripe";
@@ -36,7 +37,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const range = periodRange(period);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -49,6 +50,8 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     stripeCharges(range, fresh),
     stripeTreasury(fresh),
     liveSnapshot(ws),
+    invoicedInPeriod(ws, range),
+    sharesByOwner(ws, range),
   ]);
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
@@ -92,6 +95,16 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const wonValue = won.reduce((s, w) => s + w.valueCents, 0);
 
   const notDue = owed.openCents - owed.overdueCents;
+  const flowInput = {
+    pipelineCents: pipeline.weightedCents,
+    wonCents: wonValue,
+    invoicedCents: invoiced,
+    paidCents: collectedTotal,
+    // Stripe's view of fees and refunds when it answers; the portal's refunds otherwise.
+    feesCents: activity.ok ? activity.data.totals.fees : 0,
+    refundsCents: activity.ok ? activity.data.totals.refunds : refundTotal,
+    shares,
+  };
 
   return (
     <LiveProvider initial={live}>
@@ -135,7 +148,14 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         <Link className="admin-metric" href="/admin/billing?status=overdue"><span>Outstanding</span><strong>{formatMoney(owed.openCents)}</strong><small>{owed.overdueCount} overdue · {formatMoney(owed.overdueCents)}</small></Link>
       </section>
 
-      <section className="admin-panel" aria-labelledby="revenue-title">
+      <section className="admin-panel fpanel-hero" aria-labelledby="flow-title">
+        <div className="admin-panel-head">
+          <div><h2 id="flow-title">Money flow</h2><p>Open pipeline (weighted), won, invoiced and paid in {range.label.toLowerCase()}, then where the paid money went. Hover a band for the amount.</p></div>
+        </div>
+        <div className="finance-body"><MoneyFlow input={flowInput} periodLabel={range.label} /></div>
+      </section>
+
+      <section className="admin-panel finance-section" aria-labelledby="revenue-title">
         <div className="admin-panel-head">
           <div><h2 id="revenue-title">Revenue</h2><p>Paid invoices by {range.bucket}, from the portal. The line is Stripe&apos;s net after fees and refunds.</p></div>
         </div>

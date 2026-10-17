@@ -176,3 +176,27 @@ client refunds reverse the corresponding earnings. See `docs/REPS.md`.
 Lorenzen Motors has two paid $625 invoices credited to Reiss: $1,250 earned.
 The separately incurred $300 business expense changes available cash, not
 that ownership amount. Commission owed and the business balance are distinct.
+
+## Gross earnings and withdrawals
+
+Finance and Commissions now show lifetime gross earnings separately from cash
+available to withdraw. Actual Stripe balance-transaction fees are allocated by
+the recorded earning rate. Legacy imported invoices without PaymentIntent IDs
+match a unique paid USD charge by invoice metadata (or the exact portal invoice
+number prefix), amount and a one-day window around payment; ambiguous matches
+show Unavailable. No percentage estimate is substituted for missing Stripe data.
+
+`withdrawal_expenses` records spending allocated to one person's withdrawal,
+without altering gross ownership, statements, or the account balance. Migration
+0018 creates this table. `record-google-ads-expense.mjs --apply` idempotently
+records the user-confirmed $300 against Reiss, with an audit event. This is an
+existing expense, not another payment or an adjustment to the commission ledger.
+
+Available is unpaid ledger balance less lifetime invoice fees and allocated
+expenses, floored at zero. Total availability is capped by live business cash;
+shortfalls are divided proportionally, rounded down. Unknown fee or cash data
+suppresses availability instead of treating missing data as zero. This is an
+informational cash estimate; statement approval and payment remain separate.
+The existing statement workflow still uses gross amounts; consult this
+breakdown before making a withdrawal. Revenue period filters do not change
+lifetime earnings or withdrawal balances.

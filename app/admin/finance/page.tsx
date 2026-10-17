@@ -1,3 +1,5 @@
+import { financeWithdrawals } from "@/lib/finance-withdrawals";
+import { EarningsBreakdown } from "@/components/finance/EarningsBreakdown";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BarChart } from "@/components/charts/BarChart";
@@ -38,12 +40,13 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const heat: HeatMetric = HEAT_METRICS.includes(sp.heat as HeatMetric) ? (sp.heat as HeatMetric) : "cash";
   const connected = stripeEnabled();
 
-  const [m, owed, leaders, payouts, charges] = await Promise.all([
+  const [m, owed, leaders, payouts, charges, withdrawals] = await Promise.all([
     loadMission(ws, range, heat, fresh),
     outstanding(ws),
     leaderboard(ws, range),
     stripePayouts(fresh),
     stripeCharges(range, fresh),
+    financeWithdrawals(ws, fresh),
   ]);
   const { collected, refunds, won, pipeline, balance, activity, treasury, hasTreasury, collectedTotal, refundTotal, wonValue } = m.reads;
   const live = m.live;
@@ -132,6 +135,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                 <Link className="admin-metric" href="/admin/billing?status=overdue"><span>Outstanding</span><strong>{formatMoney(owed.openCents)}</strong><small>{owed.overdueCount} overdue · {formatMoney(owed.overdueCents)}</small></Link>
               </section>
 
+              <EarningsBreakdown data={withdrawals} people={leaders.flatMap(l => l.repMembershipId ? [{ id: l.repMembershipId, name: l.name }] : [])} />
               <FlowPanel m={m} />
 
               <div className="fmission-cols">
@@ -270,7 +274,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
 
               <section className="admin-panel" aria-labelledby="team-title">
                 <div className="admin-panel-head">
-                  <div><h2 id="team-title">Team</h2><p>Deals and cash for {range.label.toLowerCase()}. Commission owed is everything not yet paid.</p></div>
+                  <div><h2 id="team-title">Team</h2><p>Deals and cash for {range.label.toLowerCase()}. Gross earnings are all-time, after refunds and before expenses. See the withdrawal breakdown above for available cash.</p></div>
                   <Link href="/admin/commissions">Commissions</Link>
                 </div>
                 {leaders.length === 0 ? (
@@ -278,7 +282,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                 ) : (
                   <div className="finance-table-scroll">
                     <table className="finance-table">
-                      <thead><tr><th>Person</th><th className="num">Deals won</th><th className="num">Won value</th><th className="num">Collected</th><th className="num">Commission owed</th></tr></thead>
+                      <thead><tr><th>Person</th><th className="num">Deals won</th><th className="num">Won value</th><th className="num">Collected</th><th className="num">Gross earnings</th></tr></thead>
                       <tbody>
                         {leaders.map((l) => (
                           <tr key={l.email ?? "none"}>
@@ -286,7 +290,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                             <td className="num">{l.dealsWon}</td>
                             <td className="num">{formatMoney(l.wonValueCents)}</td>
                             <td className="num">{formatMoney(l.collectedCents)}</td>
-                            <td className="num">{l.owedCents === null ? "—" : l.repMembershipId ? <Link href={`/admin/commissions?rep=${l.repMembershipId}#ledger`}>{formatMoney(l.owedCents)}</Link> : formatMoney(l.owedCents)}</td>
+                            <td className="num">{l.owedCents === null ? "—" : l.repMembershipId ? <Link href={`/admin/commissions?rep=${l.repMembershipId}#ledger`}>{formatMoney(withdrawals.rows.get(l.repMembershipId ?? "")?.grossCents ?? 0)}</Link> : formatMoney(withdrawals.rows.get(l.repMembershipId ?? "")?.grossCents ?? 0)}</td>
                           </tr>
                         ))}
                       </tbody>

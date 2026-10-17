@@ -127,6 +127,13 @@
       "when": 1792271992570,
       "tag": "0017_client_follow_ups",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792272713044,
+      "tag": "0018_withdrawal_expenses",
+      "breakpoints": true
     }
   ]
 }

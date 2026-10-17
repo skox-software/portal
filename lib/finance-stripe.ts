@@ -158,3 +158,25 @@ export function stripeCharges(range: PeriodRange, fresh = false) {
     }));
   });
 }
+
+/** Exact invoice fees, including historical invoices imported without a PaymentIntent ID. */
+export function stripeInvoiceFee(invoice: { id: string; number: string; intent: string | null; paidAt: Date; amount: number }, fresh = false) {
+  return cached(`invoice-fee:${invoice.id}`, WINDOW_TTL_MS, fresh, async () => {
+    let charge: Stripe.Charge | null = null;
+    if (invoice.intent) {
+      const payment = await stripeClient().paymentIntents.retrieve(invoice.intent, { expand: ["latest_charge.balance_transaction"] }, REQUEST);
+      if (payment.latest_charge && typeof payment.latest_charge !== "string") charge = payment.latest_charge;
+    } else {
+      const at = Math.floor(invoice.paidAt.getTime() / 1000);
+      const page = await stripeClient().charges.list({ created: { gte: at - 86400, lte: at + 86400 }, limit: 100, expand: ["data.balance_transaction"] }, REQUEST);
+      const matches = page.data.filter(c => c.paid && c.currency === "usd" && c.amount === invoice.amount &&
+        (c.metadata.invoice_id === invoice.id || c.description?.startsWith(`SKOX invoice ${invoice.number}:`)));
+      if (page.has_more || matches.length !== 1) throw new Error("Invoice charge needs reconciliation");
+      charge = matches[0];
+    }
+    if (!charge?.paid || charge.currency !== "usd") throw new Error("Charge unavailable");
+    const txn = charge.balance_transaction;
+    if (!txn || typeof txn === "string" || txn.currency !== "usd") throw new Error("Fee unavailable");
+    return { fee: txn.fee, amount: charge.amount };
+  });
+}

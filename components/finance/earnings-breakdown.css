@@ -1,0 +1,5 @@
+.earnings-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.earnings-table th, .earnings-table td { padding: 14px 16px; text-align: right; border-bottom: 1px solid var(--line, #5555); white-space: nowrap; }
+.earnings-table th:first-child, .earnings-table td:first-child { text-align: left; padding-left: 0; }
+.earnings-table th { font-size: 12px; font-weight: 600; }
+.earnings-table small { font-size: 11px; opacity: .75; }

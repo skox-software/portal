@@ -5,7 +5,7 @@ import { logCall } from "@/app/admin/pipeline/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateLeadEmail } from "@/app/admin/pipeline/email-actions";
 import type { SavedEmailDraft } from "@/lib/call-brief";
-import { LEAD_SENDER_EMAIL } from "@/lib/lead-email";
+import { LEAD_SENDER_EMAIL, SKOX_WEBSITE } from "@/lib/lead-email";
 
 /**
  * The first email, drafted from the brief. Edit it here, then open it in the
@@ -74,7 +74,7 @@ export function EmailDraft({
           <div className="email-draft-to small">
             To: {to ? <strong>{to}</strong> : <span className="muted">no email on file; add it in the mail app or Details</span>}
           </div>
-          <p className="small">From: <strong>{LEAD_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "sending" ? "Processing" : "Draft — not sent"}</p>
+          <p className="small">From: <strong>{LEAD_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "scheduled" ? `Scheduled for ${saved?.scheduledAt ? new Date(saved.scheduledAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : "later"}` : status === "sending" || status === "scheduling" ? "Processing" : "Draft — not sent"}</p>
           <label className="sr-only" htmlFor={`email-subject-${dealId}`}>
             Subject
           </label>
@@ -83,6 +83,7 @@ export function EmailDraft({
             Body
           </label>
           <textarea id={`email-body-${dealId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={12} disabled={pending || status !== "draft"} />
+          <p className="small muted">Signature: <a href={SKOX_WEBSITE} target="_blank" rel="noreferrer">SKOX Software</a> links to our website in the email.</p>
           <div className="email-draft-actions">
             <button type="button" className="btn btn-primary btn-small" onClick={() => persist("send")} disabled={!canSend || !to || pending || status !== "draft"}>
               {pending ? "Working…" : "Send email"}
@@ -94,7 +95,7 @@ export function EmailDraft({
             <button type="button" className="btn btn-ghost btn-small" onClick={() => copy("body")}>
               {copied === "body" ? "Copied" : "Copy body"}
             </button>
-            <form action={logCall}>
+            {status === "draft" && <form action={logCall}>
               <input type="hidden" name="dealId" value={dealId} />
               <input type="hidden" name="base" value={base} />
               <input type="hidden" name="back" value={back} />
@@ -102,7 +103,7 @@ export function EmailDraft({
               <SubmitButton className="btn btn-ghost btn-small" name="outcome" value="emailed" pendingLabel="Saving…">
                 Log as emailed
               </SubmitButton>
-            </form>
+            </form>}
           </div>
           {message && <p role="status" className="small">{message}</p>}
           {!canSend && <p className="small muted">Sign in as {LEAD_SENDER_EMAIL} to send.</p>}

@@ -654,7 +654,12 @@ export const deals = pgTable(
     projectId: uuid("project_id")
       .unique()
       .references(() => projects.id, { onDelete: "set null" }),
+    /** The seller's own notes. The researched call brief lives in `brief`. */
     notes: text("notes"),
+    /** Cold leads: the call brief (lib/call-brief.ts): who to ask for, the opener, why we're calling, warnings. */
+    brief: jsonb("brief"),
+    /** Set when a call found the number dead or wrong; cleared when the phone is changed. */
+    badNumber: boolean("bad_number").notNull().default(false),
     /** e.g. "Dental clinics", shown under the company on the Clients list. */
     industry: text("industry"),
     /** e.g. "Tampa, FL". */

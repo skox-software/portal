@@ -1,14 +1,19 @@
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { createDeal, saveDeal } from "@/app/admin/pipeline/actions";
+import { CallBriefCard } from "@/components/CallBriefCard";
+import { EmailDraft } from "@/components/EmailDraft";
 import { LogCallForm } from "@/components/LogCallForm";
 import { Notice } from "@/components/Notice";
 import { PanelKeys } from "@/components/PanelKeys";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getDb } from "@/lib/db";
 import { events, type Deal } from "@/lib/db/schema";
+import { briefIsEmpty, parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
+import { buildEmailDraft } from "@/lib/email-draft";
 import { formatDate, timeAgo } from "@/lib/format";
 import { describeFollowUp, followUpState, outcomeLabel } from "@/lib/follow-up";
+import { leadClock } from "@/lib/local-time";
 import { COLUMNS, DEAL_KINDS } from "@/lib/pipeline";
 
 const STAGES = [...COLUMNS.filter((c) => c.key !== "in_build" && c.key !== "shipped"), { key: "lost", label: "Lost" }] as const;
@@ -28,8 +33,8 @@ export type PanelNav = {
 };
 
 /**
- * One lead, ready to work: reach them, log what happened, set the follow-up,
- * see the history, then edit details if needed. Shared by Pipeline and Clients.
+ * One lead, ready to work: the call brief on top, then one tap to log what
+ * happened, the history, and the details to edit. Shared by Pipeline and Clients.
  */
 export async function DealPanel({
   deal,
@@ -42,7 +47,10 @@ export async function DealPanel({
   now,
   notice,
   error,
+  emailOpen = false,
 }: {
+  /** Open with the email draft showing (the board card's Email chip). */
+  emailOpen?: boolean;
   deal: Deal | null;
   owners: string[];
   reps?: { id: string; name: string; active: boolean }[];
@@ -64,6 +72,11 @@ export async function DealPanel({
     : [];
   const due = deal ? describeFollowUp(deal.nextStepOn, today) : null;
   const tel = deal?.phone ? `tel:${deal.phone.replace(/[^\d+]/g, "")}` : null;
+  // Older leads may still carry the brief inside notes; show it either way, and keep notes for the seller's own words.
+  const fromNotes = parseBrief(deal?.notes);
+  const brief: CallBrief | null = readBrief(deal?.brief) ?? fromNotes.brief;
+  const clock = deal ? leadClock(deal, now) : null;
+  const draft = deal ? buildEmailDraft({ company: deal.company, contactName: deal.contactName, website: deal.website, brief }) : null;
 
   return (
     <div className="lead-panel" data-lead-panel>
@@ -105,22 +118,29 @@ export async function DealPanel({
               {deal.nextStep ? ` · ${deal.nextStep}` : ""}
             </span>
           )}
+          {clock && (
+            <span className="brief-clock" data-callable={clock.callable ? "" : undefined}>
+              {clock.label} their time
+            </span>
+          )}
           <span className="muted small">{deal.lastContactedAt ? `Last contact ${timeAgo(deal.lastContactedAt, now)}` : "Not contacted yet"}</span>
         </div>
       )}
 
-      {deal && (tel || deal.contactEmail || deal.website) && (
+      {deal?.badNumber && (
+        <p className="brief-warning" role="note">
+          <strong>Bad number</strong> The last call found {deal.phone ?? "this number"} dead or wrong. Fix the phone in Details to clear this.
+        </p>
+      )}
+
+      {deal && (
         <div className="pipeline-quick">
           {tel && (
             <a className="btn btn-primary btn-small" href={tel} data-reach="call" title="Call (C)">
               Call {deal.phone}
             </a>
           )}
-          {deal.contactEmail && (
-            <a className="btn btn-ghost btn-small" href={`mailto:${deal.contactEmail}`} data-reach="email" title="Email (E)">
-              Email
-            </a>
-          )}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} />}
           {deal.website && (
             <a className="btn btn-ghost btn-small" href={deal.website} target="_blank" rel="noreferrer" data-reach="site" title="Website (W)">
               Website ↗
@@ -136,11 +156,13 @@ export async function DealPanel({
         </p>
       )}
 
+      {deal && brief && !briefIsEmpty(brief) && <CallBriefCard brief={brief} />}
+
       {deal && deal.stage !== "lost" && (
         <LogCallForm key={deal.id} dealId={deal.id} today={today} base={nav.base} back={nav.back} nextId={nav.nextId} nextStep={deal.nextStep} />
       )}
 
-      <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} />
+      <DealForm deal={deal} notes={fromNotes.rest} preview={brief?.preview ?? ""} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} />
 
       {history.length > 0 && (
         <section className="lead-history" aria-label="History">
@@ -175,7 +197,21 @@ export async function DealPanel({
   );
 }
 
-function DealForm({ deal, owners, reps, me, linked, nav }: { deal: Deal | null; owners: string[]; reps: { id: string; name: string; active: boolean }[]; me: string; linked: boolean; nav: PanelNav }) {
+function DealForm({
+  deal,
+  notes,
+  preview,
+  owners,
+  reps,
+  me,
+  linked,
+  nav,
+}: {
+  deal: Deal | null;
+  /** The seller's own notes, without the brief lines. */
+  notes: string;
+  preview: string;
+  owners: string[]; reps: { id: string; name: string; active: boolean }[]; me: string; linked: boolean; nav: PanelNav }) {
   const f = (id: string) => `deal-${id}`;
   return (
     <form key={deal?.id ?? "new"} action={deal ? saveDeal : createDeal} className="stack lead-form">
@@ -190,10 +226,9 @@ function DealForm({ deal, owners, reps, me, linked, nav }: { deal: Deal | null; 
           <input id={f("company")} name="company" required maxLength={120} autoFocus placeholder="Company name" />
         </div>
       )}
-      {/* Notes first: imported leads carry their call sheet here. */}
       <div className="field">
-        <label htmlFor={f("notes")}>Notes</label>
-        <textarea id={f("notes")} name="notes" rows={deal?.notes ? 8 : 4} maxLength={4000} defaultValue={deal?.notes ?? ""} />
+        <label htmlFor={f("notes")}>Your notes</label>
+        <textarea id={f("notes")} name="notes" rows={notes ? 5 : 3} maxLength={4000} defaultValue={notes} placeholder="Anything you learn on calls. The call brief above stays separate." />
       </div>
       <div className="form-grid">
         <div className="field">
@@ -274,6 +309,11 @@ function DealForm({ deal, owners, reps, me, linked, nav }: { deal: Deal | null; 
               <input id={f("company")} name="company" required maxLength={120} defaultValue={deal.company} />
             </div>
           )}
+          <div className="field">
+            <label htmlFor={f("preview")}>Website preview link</label>
+            <input id={f("preview")} name="preview" type="url" defaultValue={preview} placeholder="https://" />
+            <span className="hint">Shown on the brief and added to the email draft.</span>
+          </div>
           <div className="field">
             <label htmlFor={f("value")}>Value (USD)</label>
             <input id={f("value")} name="value" inputMode="decimal" defaultValue={deal?.valueCents != null ? String(deal.valueCents / 100) : ""} placeholder="Not set" />

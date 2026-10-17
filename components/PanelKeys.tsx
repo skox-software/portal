@@ -8,7 +8,7 @@ const typing = (el: EventTarget | null) =>
 
 /**
  * Keyboard for the lead panel: J / K next and previous, Esc closes,
- * C calls, E emails, W opens the website, 1–5 pick the call outcome.
+ * C calls, E opens the email draft, W opens the website, 1–6 press the call outcome buttons.
  * Keys are ignored while typing in a field.
  */
 export function PanelKeys({
@@ -55,17 +55,17 @@ export function PanelKeys({
           click('a[data-reach="call"]');
           break;
         case "e":
-          click('a[data-reach="email"]');
+          click('[data-reach="email"]');
           break;
         case "w":
           click('a[data-reach="site"]');
           break;
         default:
-          if (/^[1-5]$/.test(e.key)) {
-            const radio = panel?.querySelector<HTMLInputElement>(`input[data-shortcut="${e.key}"]`);
-            if (radio) {
-              radio.click();
-              radio.focus();
+          if (/^[1-6]$/.test(e.key)) {
+            const button = panel?.querySelector<HTMLButtonElement>(`button[data-shortcut="${e.key}"]`);
+            if (button && !button.disabled) {
+              e.preventDefault();
+              button.click();
             }
           }
       }

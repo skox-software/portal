@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   boardTotals,
+  callQueue,
   buildBoard,
   cardMatches,
   columnForProject,
@@ -9,6 +10,7 @@ import {
   initials,
   isStalled,
   projectStatusForColumn,
+  queueable,
   searchText,
   type BoardInput,
 } from "./pipeline.ts";
@@ -137,4 +139,26 @@ test("search matches every word anywhere on the card; owner narrows to one perso
   assert.equal(cardMatches(card, { q: "", owner: "founders@skoxsoftware.com" }), false);
   assert.equal(cardMatches(card, { q: "", owner: "none" }), false);
   assert.equal(cardMatches({ ...card, ownerEmail: null }, { q: "", owner: "none" }), true);
+});
+
+test("the call queue: open leads with a working number, business hours there, best first", () => {
+  const today = "2026-10-16";
+  const open = { stage: "lead" as const, phone: "(303) 555-0100", badNumber: false, nextStepOn: null };
+  assert.equal(queueable(open, today), true);
+  assert.equal(queueable({ ...open, badNumber: true }, today), false);
+  assert.equal(queueable({ ...open, phone: null }, today), false);
+  assert.equal(queueable({ ...open, stage: "won" }, today), false);
+  assert.equal(queueable({ ...open, nextStepOn: "2026-10-20" }, today), false);
+  assert.equal(queueable({ ...open, nextStepOn: "2026-10-15" }, today), true);
+
+  // Friday 11 am Eastern: 8 am on the West Coast is too early.
+  const now = new Date("2026-10-16T15:00:00Z");
+  const cards = [
+    { id: "pt", queueable: true, zone: "America/Los_Angeles", priority: 0 },
+    { id: "ct-late", queueable: true, zone: "America/Chicago", priority: 40 },
+    { id: "et-first", queueable: true, zone: "America/New_York", priority: 0 },
+    { id: "parked", queueable: false, zone: "America/New_York", priority: -200 },
+    { id: "nowhere", queueable: true, zone: null, priority: 0 },
+  ];
+  assert.deepEqual(callQueue(cards, now).map((c) => c.id), ["et-first", "ct-late"]);
 });

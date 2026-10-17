@@ -7,7 +7,7 @@ import { requireRep } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, deals, memberships, referrals, repProfiles } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
-import { OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
+import { followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
 import { formatDate } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
@@ -141,19 +141,23 @@ export async function logRepCall(formData: FormData) {
       nextStep: String(formData.get("nextStep") ?? ""),
     });
   if (!parsed.success) backWith(back, "error", "Pick what happened on the call.");
-  const { outcome, note, followUp, nextStep } = parsed.data;
+  const { outcome, note } = parsed.data;
+  const gatekeeper = String(formData.get("gatekeeper") ?? "").trim().slice(0, 80);
   const db = getDb();
   const [deal] = await db.select({ stage: deals.stage, projectId: deals.projectId }).from(deals).where(eq(deals.id, lead.id)).limit(1);
   const stage = deal.projectId ? deal.stage : stageAfterCall(deal.stage, outcome);
   const closed = stage === "lost";
+  const followUp = closed ? null : followUpAfterCall(outcome, parsed.data.followUp, salesToday());
+  const nextStep = followUp ? parsed.data.nextStep || nextStepAfterCall(outcome, gatekeeper) : null;
   await db.batch([
     db
       .update(deals)
       .set({
         lastContactedAt: new Date(),
         stage,
-        nextStepOn: closed ? null : followUp || null,
-        nextStep: closed ? null : nextStep || null,
+        nextStepOn: followUp,
+        nextStep,
+        ...(outcome === "bad_number" ? { badNumber: true } : {}),
         ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
         ...(closed ? { lostReason: note || "Not interested (rep)" } : {}),
       })
@@ -164,7 +168,7 @@ export async function logRepCall(formData: FormData) {
       verb: "deal.call_logged",
       subjectType: "deal",
       subjectId: lead.id,
-      payload: { company: lead.company, outcome, by: "rep", ...(note ? { note } : {}), ...(followUp && !closed ? { followUp } : {}), ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}) },
+      payload: { company: lead.company, outcome, by: "rep", ...(note ? { note } : {}), ...(gatekeeper ? { gatekeeper } : {}), ...(followUp ? { followUp } : {}), ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}) },
     }),
   ]);
   refreshRep(lead.id);

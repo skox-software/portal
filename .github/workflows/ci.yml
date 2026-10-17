@@ -1,7 +1,7 @@
 name: CI
 
-# Deploys go out through the Vercel CLI, not Git integration. This job only
-# catches a broken build, failing tests or lint before anything ships.
+# Vercel is connected to this repository: main is production, branches are previews.
+# Run these checks before merging feature branches to main.
 
 on:
   push:

@@ -1,8 +1,8 @@
-/** Google owns durations and availability; these are the initial schedule labels. */
+/** Google owns durations and availability; all meeting types use the shared 30-minute schedule. */
 export const MEETING_TYPES = [
-  { id: "kickoff", title: "Kickoff", duration: "45 minutes", description: "Confirm the plan, walk through your goals, and set the launch date together.", setting: "schedulingUrl" },
+  { id: "kickoff", title: "Kickoff", duration: "30 minutes", description: "Confirm the plan, walk through your goals, and set the launch date together.", setting: "schedulingUrl" },
   { id: "review", title: "Project review", duration: "30 minutes", description: "Review progress, share feedback, and agree on the next steps.", setting: "projectReviewSchedulingUrl" },
-  { id: "check-in", title: "Check-in", duration: "15 minutes", description: "Talk through a question or get a quick project update.", setting: "checkInSchedulingUrl" },
+  { id: "check-in", title: "Check-in", duration: "30 minutes", description: "Talk through a question or get a quick project update.", setting: "checkInSchedulingUrl" },
 ] as const;
 
 export type MeetingType = (typeof MEETING_TYPES)[number]["id"];

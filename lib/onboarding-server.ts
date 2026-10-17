@@ -35,23 +35,23 @@ export function welcomeEmail(input: {
   teamIntro?: string | null;
   hasAgreement?: boolean;
 }): EmailContent {
-  const hello = input.firstName ? `Hi ${input.firstName},` : "Hi there,";
+  const hello = input.firstName ? `Hi ${input.firstName},` : "Hello,";
   return {
     subject: `Welcome to SKOX: ${input.projectName} starts here`,
     preheader: input.hasAgreement
       ? "Your agreement is ready. Everything for your project lives in one place."
       : "Everything for your project lives in one place. Here's your first step.",
-    heading: "Welcome aboard. Here's what happens next.",
+    heading: "Welcome to SKOX Software",
     paragraphs: [
       hello,
       `Thank you for choosing SKOX. From today, everything for ${input.projectName} lives in your own client portal: ${input.hasAgreement ? "your agreement, " : ""}updates, designs to review, files and invoices, all in one place.`,
       input.hasAgreement
-        ? "Step one is your agreement: review and sign it in the portal, then settle the deposit. After that, a few quick questions about your goals, brand and access so we're ready for kickoff. It saves as you go."
-        : "Step one is a short welcome, about 15 minutes: a few questions about your goals, brand and access, and booking your kickoff call. It saves as you go.",
+        ? "Please review and sign your agreement in the portal, then pay the deposit. Next, complete the project setup questions about your goals, brand and access requirements. Your progress is saved automatically."
+        : "Start by completing your project setup and scheduling your kickoff meeting. Allow approximately 15 minutes to share your goals, brand materials and access requirements. Your progress is saved automatically.",
       `Sign in with this email address (${input.email}). We'll send you a 6-digit code, no password needed.`,
     ],
-    cta: { label: input.hasAgreement ? "Review your agreement" : "Start your welcome", href: welcomeLink(input.email) },
-    footnote: input.teamIntro ? `${input.teamIntro}, SKOX · Just reply to this email with any question.` : "Just reply to this email with any question.",
+    cta: { label: input.hasAgreement ? "Review your agreement" : "Complete project setup", href: welcomeLink(input.email) },
+    footnote: input.teamIntro ? `${input.teamIntro}, SKOX · Please reply to this email if you have any questions.` : "Please reply to this email if you have any questions.",
   };
 }
 
@@ -231,18 +231,18 @@ export async function completeOnboarding(onboarding: Onboarding, actorUserId: st
   });
   notifyLater(() => [onboarding.invitedEmail], {
     subject: agreement.hasAgreement && !agreement.settled ? `Your setup for ${project.name} is saved` : `You're all set for ${project.name}`,
-    preheader: agreement.hasAgreement && !agreement.settled ? "One step left: the agreement and deposit." : "Here's exactly what happens next.",
-    heading: agreement.hasAgreement && !agreement.settled ? "Thank you. One step left." : "You're all set. Thank you!",
+    preheader: agreement.hasAgreement && !agreement.settled ? "One step left: the agreement and deposit." : "Your project next steps and schedule.",
+    heading: agreement.hasAgreement && !agreement.settled ? "Your project setup has been saved" : "Thank you for completing your project setup",
     paragraphs: [
       agreement.hasAgreement && !agreement.settled
         ? `Your answers are saved. Signing the agreement and paying the deposit is all that's left before we start building ${project.name}.`
         : `We have everything we need to get ${project.name} moving.`,
       [
-        onboarding.kickoff.status === "booked" ? "• Kickoff: booked, see you there" : "• Kickoff: we'll reach out within one business day to schedule it",
+        onboarding.kickoff.status === "booked" ? "• Kickoff meeting: scheduled" : "• Kickoff: we'll reach out within one business day to schedule it",
         "• First progress update: within a week, then every week",
         project.dateTentative ? "• Launch date: we set it together at kickoff" : `• Launch: ${formatDate(project.deliveryDate)}`,
       ].join("\n"),
-      "Everything lives in your portal. We'll email you whenever something needs you.",
+      "Your project information is available in the portal. We will notify you when your input or approval is required.",
     ],
     cta: { label: "Go to your project", href: portalLink(`/projects/${project.id}`) },
     footnote: workspace.teamIntro ? `${workspace.teamIntro}, SKOX` : undefined,

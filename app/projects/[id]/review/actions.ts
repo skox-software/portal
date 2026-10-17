@@ -76,11 +76,11 @@ export async function createReviewRound(formData: FormData): Promise<{ ok: boole
   notifyLater(() => clientRecipients(client.id, { actionRequired: input.approval !== "none" }), {
     subject: `New designs to review: ${input.label}`,
     preheader: "Click anywhere on the design to leave a comment.",
-    heading: `${input.label} is ready for your eyes`,
+    heading: `${input.label} is ready for review`,
     paragraphs: [
       input.notes || `We've posted new designs for ${project.name}.`,
-      "Click anywhere on the design to drop a pin and tell us what you love or what should change.",
-      ...(input.approval !== "none" ? ["When you're happy, approve the round right there."] : []),
+      "Select an area of the design to leave feedback or request a change.",
+      ...(input.approval !== "none" ? ["Once you have reviewed the designs, submit your approval or request changes in the portal."] : []),
     ],
     cta: { label: "Review the designs", href: portalLink(`/projects/${project.id}/review?round=${previewId}`) },
   });

@@ -1,159 +1,355 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { moveDealStage } from "@/app/admin/crm-actions";
-import { ALL_STAGES, BOARD_STAGES, formatDealValue, STAGE_LABEL, type DealStage } from "@/lib/crm";
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
+import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
+import { allowedColumns, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
+
+export type { BoardView };
 
 export type BoardCard = {
+  key: string;
+  type: CardType;
   id: string;
-  stage: DealStage;
-  clientId: string;
-  clientName: string;
-  contactName: string | null;
+  column: ColumnKey;
+  company: string;
+  contact: string | null;
+  /** Empty when there's no value yet, so the card stays quiet. */
+  value: string | null;
   valueCents: number;
-  kind: string | null;
-  days: number;
+  kind: string;
+  owner: { initials: string; email: string } | null;
+  /** "3d", "Due Oct 14", "Shipped Sep 1"… */
+  meta: string;
   stalled: boolean;
-  ownerInitials: string;
-  ownerEmail: string | null;
-  progress: { done: number; total: number } | null;
-  /** Pre-formatted on the server: "Due Oct 14", "Shipped Sep 1 · Paid". */
-  footLabel: string | null;
+  /** Where the card opens; deals open in the side panel. */
+  href: string | null;
+  source: string | null;
+  progress: number | null;
+  paid: boolean;
+  paused: boolean;
+  onboardHref: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  /** "Due today", "Overdue 2d"… for deals with a follow-up set. */
+  followUp: string | null;
+  followUpState: "overdue" | "today" | "upcoming" | "none";
+  location: string | null;
+  industry: string | null;
+  /** Lower-cased text the search box matches against. */
+  search: string;
 };
 
-/**
- * The deal board. Drag a card to another column, or use its stage menu (the
- * keyboard and touch path). Moves show at once and roll back if the server
- * says no.
- */
-export function PipelineBoard({ initial }: { initial: BoardCard[] }) {
-  const [cards, setCards] = useState(initial);
-  const [pending, setPending] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [over, setOver] = useState<DealStage | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+type Column = { key: ColumnKey; label: string };
+const STAGE_LABEL: Record<ColumnKey | "lost", string> = {
+  ...(Object.fromEntries(COLUMNS.map((c) => [c.key, c.label])) as Record<ColumnKey, string>),
+  lost: "Lost",
+};
 
-  function move(id: string, stage: DealStage) {
-    const before = cards.find((c) => c.id === id);
-    if (!before || before.stage === stage) return;
+function money(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
+}
+
+export function PipelineBoard({
+  cards,
+  columns,
+  owners,
+  me,
+  initial,
+}: {
+  cards: BoardCard[];
+  columns: Column[];
+  owners: string[];
+  me: string;
+  initial: BoardView;
+}) {
+  const [optimistic, applyMove] = useOptimistic(cards, (state, move: { key: string; to: ColumnKey | "lost" }) =>
+    move.to === "lost"
+      ? state.filter((c) => c.key !== move.key)
+      : state.map((c) => (c.key === move.key ? { ...c, column: move.to as ColumnKey, stalled: false, meta: "0d" } : c)),
+  );
+  const [, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<BoardCard | null>(null);
+  const [over, setOver] = useState<ColumnKey | null>(null);
+  const [v, setV] = useState<BoardView>(initial);
+  // Phones show one column at a time; the chips jump between them.
+  const board = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState<ColumnKey>(columns[0].key);
+
+  // Keep the filters in the address, so opening a lead and coming back keeps them.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    for (const k of ["view", "q", "owner", "stage"]) url.searchParams.delete(k);
+    for (const [k, val] of new URLSearchParams(viewQuery(v))) url.searchParams.set(k, val);
+    window.history.replaceState(window.history.state, "", url);
+  }, [v]);
+
+  const shown = useMemo(() => optimistic.filter((c) => cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, v)), [optimistic, v]);
+  const filtering = Boolean(v.q || v.owner);
+
+  useEffect(() => {
+    const el = board.current;
+    if (!el) return;
+    const onScroll = () => {
+      const pad = parseFloat(getComputedStyle(el).paddingLeft);
+      const cols = [...el.querySelectorAll<HTMLElement>(".pipeline-col")];
+      const nearest = cols.reduce((best, col) =>
+        Math.abs(col.offsetLeft - pad - el.scrollLeft) < Math.abs(best.offsetLeft - pad - el.scrollLeft) ? col : best,
+      );
+      setVisible(nearest.dataset.stage as ColumnKey);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [v.view]);
+
+  function jumpTo(key: ColumnKey) {
+    const el = board.current;
+    const col = el?.querySelector<HTMLElement>(`.pipeline-col[data-stage="${key}"]`);
+    if (el && col) el.scrollTo({ left: col.offsetLeft - parseFloat(getComputedStyle(el).paddingLeft), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    setVisible(key);
+  }
+
+  function move(card: BoardCard, to: ColumnKey | "lost") {
+    if (card.column === to) return;
+    if (!allowedColumns(card.type).includes(to)) {
+      setError(
+        card.type === "project"
+          ? "Projects are already won: move them between Won, In build and Shipped."
+          : "Start onboarding from the Won column to turn a deal into a build.",
+      );
+      return;
+    }
     setError(null);
-    setPending(id);
-    setCards((all) => all.map((c) => (c.id === id ? { ...c, stage, days: 0, stalled: false, footLabel: null } : c)));
     startTransition(async () => {
-      try {
-        const result = await moveDealStage(id, stage);
-        if (!result.ok) throw new Error(result.error);
-      } catch (err) {
-        setCards((all) => all.map((c) => (c.id === id ? before : c)));
-        setError(`Couldn't move ${before.clientName}: ${(err as Error).message || "try again."}`);
-      } finally {
-        setPending(null);
-      }
+      applyMove({ key: card.key, to });
+      const result = await moveCard(card.type, card.id, to);
+      if (!result.ok) setError(result.error);
     });
   }
 
+  const open = (card: BoardCard) => (card.type === "deal" ? `/admin/pipeline${viewQuery(v, { deal: card.id })}` : card.href);
+
+  const stageSelect = (card: BoardCard) => (
+    <>
+      <label className="sr-only" htmlFor={`stage-${card.key}`}>
+        Stage for {card.company}
+      </label>
+      <select id={`stage-${card.key}`} className="pipeline-stage" value={card.column} onChange={(e) => move(card, e.target.value as ColumnKey | "lost")}>
+        {allowedColumns(card.type).map((key) => (
+          <option key={key} value={key}>
+            {STAGE_LABEL[key]}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+
+  const reach = (card: BoardCard) =>
+    (card.website || card.phone || card.email) && (
+      <span className="pipeline-reach">
+        {card.website && (
+          <a href={card.website} target="_blank" rel="noreferrer" title={`Website: ${card.website}`} aria-label={`${card.company} website`}>
+            Site ↗
+          </a>
+        )}
+        {card.phone && (
+          <a href={`tel:${card.phone.replace(/[^\d+]/g, "")}`} title={`Call ${card.phone}`} aria-label={`Call ${card.company}, ${card.phone}`}>
+            Call
+          </a>
+        )}
+        {card.email && (
+          <a href={`mailto:${card.email}`} title={`Email ${card.email}`} aria-label={`Email ${card.company}`}>
+            Email
+          </a>
+        )}
+      </span>
+    );
+
   return (
     <>
+      <div className="pipeline-toolbar">
+        <nav className="crm-views pipeline-views" aria-label="Layout">
+          <a href="/portal/admin/pipeline" aria-current="page">
+            Board
+          </a>
+          <Link href="/admin/clients">List</Link>
+        </nav>
+        <label className="sr-only" htmlFor="pipeline-search">
+          Search the pipeline
+        </label>
+        <input
+          id="pipeline-search"
+          type="search"
+          value={v.q}
+          onChange={(e) => setV({ ...v, q: e.target.value })}
+          placeholder="Search company, contact, phone, city, notes…"
+          autoComplete="off"
+        />
+        <label className="sr-only" htmlFor="pipeline-owner">
+          Owner
+        </label>
+        <select id="pipeline-owner" value={v.owner} onChange={(e) => setV({ ...v, owner: e.target.value })}>
+          <option value="">Everyone&apos;s</option>
+          <option value={me}>Mine</option>
+          {owners.filter((o) => o !== me).map((o) => (
+            <option key={o} value={o}>
+              {o.split("@")[0]}&apos;s
+            </option>
+          ))}
+          <option value="none">Unassigned</option>
+        </select>
+        {filtering && (
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setV({ ...v, q: "", owner: "" })}>
+            Clear
+          </button>
+        )}
+        <span className="pipeline-count" aria-live="polite">
+          {filtering ? `${shown.length} of ${optimistic.length}` : `${optimistic.length} cards`}
+        </span>
+      </div>
+
       {error && (
-        <p className="notice notice-error board-error" role="alert">
+        <p className="notice notice-error" role="alert">
           {error}
         </p>
       )}
-      <div className="board">
-        {BOARD_STAGES.map((stage) => {
-          const list = cards.filter((c) => c.stage === stage);
-          const total = list.reduce((s, c) => s + c.valueCents, 0);
-          return (
-            <section
-              key={stage}
-              className="board-col"
-              data-stage={stage}
-              data-drop={over === stage}
-              aria-labelledby={`col-${stage}`}
-              onDragOver={(e) => {
-                if (!dragging) return;
-                e.preventDefault();
-                if (over !== stage) setOver(stage);
-              }}
-              onDragLeave={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setOver(null);
-                const id = e.dataTransfer.getData("text/plain");
-                if (id) move(id, stage);
-              }}
-            >
-              <div className="board-col-head">
-                <span className="stage-dot" aria-hidden="true" />
-                <h2 className="board-col-name" id={`col-${stage}`}>
-                  {STAGE_LABEL[stage]}
-                </h2>
-                <span className="board-col-count">{list.length}</span>
-                <span className="board-col-total">{formatDealValue(total)}</span>
-              </div>
-              {list.map((c) => (
-                <article
-                  key={c.id}
-                  className="deal-card"
-                  data-stage={c.stage}
-                  data-dragging={dragging === c.id}
-                  data-pending={pending === c.id}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", c.id);
-                    e.dataTransfer.effectAllowed = "move";
-                    setDragging(c.id);
+
+      <>
+          <div className="pipeline-jump" role="tablist" aria-label="Stages">
+            {columns.map((column) => (
+              <button
+                key={column.key}
+                type="button"
+                role="tab"
+                aria-selected={visible === column.key}
+                data-stage={column.key}
+                onClick={() => jumpTo(column.key)}
+              >
+                <i aria-hidden="true" />
+                {column.label}
+                <span>{shown.filter((c) => c.column === column.key).length}</span>
+              </button>
+            ))}
+          </div>
+          <div className="pipeline-board" ref={board}>
+            {columns.map((column) => {
+              const inColumn = shown.filter((c) => c.column === column.key);
+              const total = inColumn.reduce((n, c) => n + c.valueCents, 0);
+              const canDrop = dragging ? allowedColumns(dragging.type).includes(column.key) : false;
+              return (
+                <section
+                  key={column.key}
+                  className="pipeline-col"
+                  data-empty={!inColumn.length && !dragging ? "" : undefined}
+                  data-stage={column.key}
+                  data-over={over === column.key && canDrop ? "" : undefined}
+                  data-blocked={dragging && !canDrop ? "" : undefined}
+                  aria-label={`${column.label}: ${inColumn.length} cards, ${money(total)}`}
+                  onDragOver={(e) => {
+                    if (!canDrop) return;
+                    e.preventDefault();
+                    setOver(column.key);
                   }}
-                  onDragEnd={() => {
-                    setDragging(null);
+                  onDragLeave={() => setOver((o) => (o === column.key ? null : o))}
+                  onDrop={(e) => {
+                    e.preventDefault();
                     setOver(null);
+                    if (dragging) move(dragging, column.key);
+                    setDragging(null);
                   }}
                 >
-                  <Link className="deal-card-name" href={`/admin/clients/${c.clientId}?deal=${c.id}`} draggable={false}>
-                    {c.clientName}
-                  </Link>
-                  {c.contactName && <div className="deal-card-contact">{c.contactName}</div>}
-                  <div className="deal-card-row">
-                    <span className="money">{formatDealValue(c.valueCents)}</span>
-                    {c.kind && <span className="deal-kind">{c.kind}</span>}
-                  </div>
-                  {c.stage === "in_build" && c.progress && c.progress.total > 0 && (
-                    <div className="deal-progress" title={`${c.progress.done} of ${c.progress.total} milestones done`}>
-                      <span style={{ width: `${(c.progress.done / c.progress.total) * 100}%` }} />
-                    </div>
-                  )}
-                  <div className="deal-card-foot">
-                    {c.footLabel ? (
-                      <span>{c.footLabel}</span>
-                    ) : c.stalled ? (
-                      <span className="stalled">{c.days}d · stalled</span>
-                    ) : (
-                      <span>{c.days}d in stage</span>
-                    )}
-                    <span className="owner" title={c.ownerEmail ?? "No owner"}>
-                      {c.ownerInitials}
-                    </span>
-                  </div>
-                  <label className="sr-only" htmlFor={`stage-${c.id}`}>
-                    Stage for {c.clientName}
-                  </label>
-                  <select id={`stage-${c.id}`} value={c.stage} disabled={pending === c.id} onChange={(e) => move(c.id, e.target.value as DealStage)}>
-                    {ALL_STAGES.map((s) => (
-                      <option key={s} value={s}>
-                        {STAGE_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                </article>
-              ))}
-            </section>
-          );
-        })}
-      </div>
+                  <header className="pipeline-col-head">
+                    <h2>
+                      <i aria-hidden="true" />
+                      {column.label} <span>{inColumn.length}</span>
+                    </h2>
+                    {total > 0 && <strong>{money(total)}</strong>}
+                  </header>
+                  <ul className="pipeline-cards">
+                    {inColumn.map((card) => {
+                      const href = open(card);
+                      return (
+                        <li
+                          key={card.key}
+                          className="pipeline-card"
+                          draggable
+                          data-dragging={dragging?.key === card.key ? "" : undefined}
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", card.key);
+                            setDragging(card);
+                          }}
+                          onDragEnd={() => {
+                            setDragging(null);
+                            setOver(null);
+                          }}
+                        >
+                          <div className="pipeline-card-top">
+                            <div className="pipeline-card-title">
+                              {href ? (
+                                <Link href={href} scroll={false}>
+                                  {card.company}
+                                </Link>
+                              ) : (
+                                <strong>{card.company}</strong>
+                              )}
+                              {(card.contact || card.location) && (
+                                <span title={[card.contact, card.location].filter(Boolean).join(" · ")}>
+                                  {[card.contact, card.location].filter(Boolean).join(" · ")}
+                                </span>
+                              )}
+                              {card.source && <small>{card.source}</small>}
+                            </div>
+                            {card.owner ? (
+                              <span className="pipeline-owner" title={card.owner.email}>
+                                {card.owner.initials}
+                              </span>
+                            ) : card.type === "project" ? (
+                              <form action={claimProject}>
+                                <input type="hidden" name="projectId" value={card.id} />
+                                <button className="pipeline-claim" title="Set an owner and agreed value" aria-label={`Set an owner for ${card.company}`}>
+                                  +
+                                </button>
+                              </form>
+                            ) : null}
+                          </div>
+                          {card.progress !== null && (
+                            <div className="pipeline-progress" role="progressbar" aria-valuenow={card.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Milestones done">
+                              <span style={{ width: `${card.progress}%` }} />
+                            </div>
+                          )}
+                          {reach(card)}
+                          <div className="pipeline-card-meta">
+                            {card.value && <strong className="pipeline-card-money">{card.value}</strong>}
+                            {card.followUp && (
+                              <span className="lead-due" data-state={card.followUpState}>
+                                {card.followUp}
+                              </span>
+                            )}
+                            <span className={card.stalled ? "pipeline-stalled" : undefined}>
+                              {card.meta}
+                              {card.paused && " · Paused"}
+                              {card.paid && <b className="pipeline-paid"> · Paid</b>}
+                            </span>
+                            {stageSelect(card)}
+                          </div>
+                          {card.onboardHref && (
+                            <Link className="pipeline-onboard" href={card.onboardHref}>
+                              Start onboarding →
+                            </Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {!inColumn.length && <p className="pipeline-empty">{dragging && canDrop ? "Drop here" : filtering ? "No matches" : "Nothing here"}</p>}
+                </section>
+              );
+            })}
+          </div>
+        </>
     </>
   );
 }

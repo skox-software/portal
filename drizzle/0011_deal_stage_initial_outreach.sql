@@ -1,0 +1,1 @@
+ALTER TYPE "public"."deal_stage" ADD VALUE 'initial_outreach' BEFORE 'proposal_sent';

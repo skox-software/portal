@@ -1,140 +1,341 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createClient } from "@/app/admin/actions";
+import { ClientsList, type ClientRow, type ClientGroup } from "@/components/ClientsList";
+import { DealPanel } from "@/components/DealPanel";
 import { Notice, readMessage } from "@/components/Notice";
-import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
-import { formatDealValue, initialsFor, STAGE_LABEL } from "@/lib/crm";
-import { loadDeals } from "@/lib/crm-data";
 import { getDb } from "@/lib/db";
-import { clients } from "@/lib/db/schema";
-import { formatDateTime } from "@/lib/format";
+import { emailThreads, events } from "@/lib/db/schema";
+import { nowMs } from "@/lib/format";
+import { describeFollowUp, followUpState, salesToday, untouchedFor } from "@/lib/follow-up";
+import { daysSince, PRESALE, searchText, STALL_DAYS, type Card, type ColumnKey } from "@/lib/pipeline";
+import { loadPipeline } from "@/lib/pipeline-data";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Clients" };
+export const metadata: Metadata = { title: "Clients · SKOX" };
 
-const FILTERS = [
-  { key: "active", label: "Active" },
+type Stage = ColumnKey | "lost" | "none";
+
+/** Saved views: the ways the team works the list. */
+const VIEWS = [
   { key: "all", label: "All" },
-  { key: "shipped", label: "Shipped" },
-  { key: "lost", label: "Lost" },
+  { key: "open", label: "Open deals" },
+  { key: "mine", label: "My leads" },
+  { key: "due", label: "Due today" },
+  { key: "untouched", label: "Untouched 7+ days" },
 ] as const;
+type View = (typeof VIEWS)[number]["key"];
 
-export default async function ClientsTable({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+/** The order status groups appear in. */
+const GROUPS: { key: Stage; label: string }[] = [
+  { key: "lead", label: "Lead" },
+  { key: "initial_outreach", label: "Initial outreach" },
+  { key: "proposal_sent", label: "Proposal sent" },
+  { key: "negotiation", label: "Negotiation" },
+  { key: "won", label: "Won" },
+  { key: "in_build", label: "In build" },
+  { key: "shipped", label: "Shipped" },
+  { key: "none", label: "No project yet" },
+  { key: "lost", label: "Lost" },
+];
+const OLD_STAGE_VIEWS = new Set(["lead", "initial_outreach", "shipped", "lost"]);
+
+function sourceLabel(card: Card) {
+  if (card.leadSource) return card.leadSource;
+  if (card.type === "referral" || card.source === "referral") return "Referral";
+  if (card.source === "import") return "Imported";
+  return null;
+}
+
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
-  const show = FILTERS.find((f) => f.key === sp.show)?.key ?? "active";
   const { viewer, staff } = await requireStaff();
-  const [dealRows, clientRows] = await Promise.all([
-    loadDeals(staff.workspaceId),
-    getDb().select().from(clients).where(eq(clients.workspaceId, staff.workspaceId)).orderBy(clients.name),
+  const ws = staff.workspaceId;
+  const db = getDb();
+  const [{ columns, lost, clientRows, dealRows, projectRows, owners }, projectTouches, dealTouches, clientMail, dealMail] = await Promise.all([
+    loadPipeline(ws),
+    db
+      .select({ id: events.projectId, at: sql<Date>`max(${events.createdAt})` })
+      .from(events)
+      .where(and(eq(events.workspaceId, ws), isNotNull(events.projectId)))
+      .groupBy(events.projectId),
+    db
+      .select({ id: events.subjectId, at: sql<Date>`max(${events.createdAt})` })
+      .from(events)
+      .where(and(eq(events.workspaceId, ws), eq(events.subjectType, "deal")))
+      .groupBy(events.subjectId),
+    db
+      .select({ id: emailThreads.clientId, at: sql<Date>`max(${emailThreads.lastMessageAt})` })
+      .from(emailThreads)
+      .where(and(eq(emailThreads.workspaceId, ws), isNotNull(emailThreads.clientId)))
+      .groupBy(emailThreads.clientId),
+    db
+      .select({ id: emailThreads.dealId, at: sql<Date>`max(${emailThreads.lastMessageAt})` })
+      .from(emailThreads)
+      .where(and(eq(emailThreads.workspaceId, ws), isNotNull(emailThreads.dealId)))
+      .groupBy(emailThreads.dealId),
   ]);
 
-  // One row per deal, plus clients with no deal yet (e.g. made before the CRM).
-  const withDeals = new Set(dealRows.map((d) => d.client.id));
-  const rows = [
-    ...dealRows,
-    ...clientRows.filter((c) => !withDeals.has(c.id)).map((c) => ({ client: c, dealless: true as const })),
-  ].filter((r) => {
-    if ("dealless" in r) return show === "all";
-    if (show === "active") return r.stage !== "shipped" && r.stage !== "lost";
-    if (show === "all") return true;
-    return r.stage === show;
-  });
-  rows.sort((a, b) => a.client.name.localeCompare(b.client.name));
+  const toMap = (rows: { id: string | null; at: Date | string }[]) => new Map(rows.filter((r) => r.id).map((r) => [r.id!, new Date(r.at)]));
+  const projectAt = toMap(projectTouches);
+  const dealAt = toMap(dealTouches);
+  const clientMailAt = toMap(clientMail);
+  const dealMailAt = toMap(dealMail);
+  const latest = (...dates: (Date | undefined | null)[]) =>
+    dates.filter((d): d is Date => !!d && !Number.isNaN(d.getTime())).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const now = new Date(nowMs());
+  const today = salesToday(now);
+  const dealById = new Map(dealRows.map((d) => [d.id, d]));
+
+  // ---- Filters, all in the URL so a lead's panel and every save keep them ----
+  const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).trim().slice(0, 200) : "");
+  const rawView = str("view");
+  const view: View = VIEWS.some((v) => v.key === rawView) ? (rawView as View) : rawView === "active" ? "open" : "all";
+  // Old links (?view=lead) become a status filter.
+  const stage = (GROUPS.some((g) => g.key === str("stage")) ? str("stage") : OLD_STAGE_VIEWS.has(rawView) ? rawView : "") as Stage | "";
+  const q = str("q").toLowerCase();
+  const owner = str("owner");
+  const listQuery = (extra: Record<string, string> = {}) => {
+    const p = new URLSearchParams();
+    if (view !== "all") p.set("view", view);
+    if (stage) p.set("stage", stage);
+    if (q) p.set("q", q);
+    if (owner) p.set("owner", owner);
+    for (const [k, v] of Object.entries(extra)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    const s = p.toString();
+    return s ? `?${s}` : "";
+  };
+
+  const toRow = (card: Card, stage: Stage): ClientRow => {
+    const deal = card.type === "deal" ? dealById.get(card.id) : card.dealId ? dealById.get(card.dealId) : undefined;
+    const isDeal = card.type === "deal";
+    const days = daysSince(card.since, now);
+    const lastTouch = latest(
+      card.type === "project" ? projectAt.get(card.id) : undefined,
+      card.dealId ? dealAt.get(card.dealId) : undefined,
+      card.dealId ? dealMailAt.get(card.dealId) : undefined,
+      card.clientId ? clientMailAt.get(card.clientId) : undefined,
+      deal?.lastContactedAt,
+      card.since,
+    );
+    const working = isDeal && stage !== "won" && stage !== "lost";
+    return {
+      key: card.key,
+      dealId: isDeal ? card.id : null,
+      name: card.company,
+      href: card.type === "project" && card.clientId ? `/admin/clients/${card.clientId}` : isDeal ? `/admin/clients${listQuery({ deal: card.id })}` : "/admin/pipeline",
+      subtitle: [card.industry, card.location].filter(Boolean).join(" · ") || null,
+      contactName: card.contactName,
+      contactEmail: card.contactEmail,
+      phone: deal?.phone ?? null,
+      website: deal?.website ?? null,
+      stage,
+      valueCents: card.valueCents,
+      days,
+      slow: PRESALE.includes(stage as ColumnKey) && days > STALL_DAYS,
+      source: sourceLabel(card),
+      owner: card.ownerEmail,
+      followUp: working ? describeFollowUp(deal?.nextStepOn ?? null, today) : null,
+      followUpState: working ? followUpState(deal?.nextStepOn ?? null, today) : "none",
+      followUpOn: working ? deal?.nextStepOn ?? null : null,
+      nextStep: working ? deal?.nextStep ?? null : null,
+      lastTouch: lastTouch?.toISOString() ?? null,
+      contacted: !!deal?.lastContactedAt,
+      untouched: working && PRESALE.includes(stage as ColumnKey) && untouchedFor(deal?.lastContactedAt ?? null, card.since, now, 7),
+      search: searchText([card.company, card.contactName, card.contactEmail, deal?.phone, deal?.website, card.location, card.industry, card.leadSource, deal?.notes]),
+    };
+  };
+
+  const cardRows = [...columns.flatMap((c) => c.cards.map((card) => toRow(card, c.key))), ...lost.map((card) => toRow(card, "lost"))];
+  // Companies added by name only, with no project or deal yet.
+  const shown = new Set(columns.flatMap((c) => c.cards).concat(lost).map((c) => c.clientId).filter(Boolean));
+  const bare: ClientRow[] = clientRows
+    .filter((c) => !shown.has(c.id))
+    .map((c) => ({
+      key: `client:${c.id}`,
+      dealId: null,
+      name: c.name,
+      href: `/admin/clients/${c.id}`,
+      subtitle: null,
+      contactName: null,
+      contactEmail: null,
+      phone: null,
+      website: null,
+      stage: "none",
+      valueCents: 0,
+      days: null,
+      slow: false,
+      source: null,
+      owner: null,
+      followUp: null,
+      followUpState: "none",
+      followUpOn: null,
+      nextStep: null,
+      lastTouch: latest(clientMailAt.get(c.id), c.createdAt)?.toISOString() ?? null,
+      contacted: false,
+      untouched: false,
+      search: c.name.toLowerCase(),
+    }));
+  const all = [...cardRows, ...bare];
+
+  const inView = (r: ClientRow, v: View) =>
+    v === "all" ||
+    (v === "open" && !["shipped", "lost", "none"].includes(r.stage)) ||
+    (v === "mine" && r.owner === viewer.email && r.stage !== "lost") ||
+    (v === "due" && (r.followUpState === "overdue" || r.followUpState === "today")) ||
+    (v === "untouched" && r.untouched);
+  const matches = (r: ClientRow) =>
+    (!q || q.split(/\s+/).every((w) => r.search.includes(w))) && (!owner || (owner === "none" ? !r.owner : r.owner === owner));
+  const base = all.filter((r) => inView(r, view) && matches(r));
+  const rows = base.filter((r) => !stage || r.stage === stage);
+
+  // Within a status: follow-ups due first, then the soonest follow-up, then most recently touched.
+  const rank = { overdue: 0, today: 1, upcoming: 2, none: 3 } as const;
+  const order = (a: ClientRow, b: ClientRow) =>
+    rank[a.followUpState] - rank[b.followUpState] ||
+    (a.followUpOn ?? "9999").localeCompare(b.followUpOn ?? "9999") ||
+    (b.lastTouch ?? "").localeCompare(a.lastTouch ?? "");
+  const groups: ClientGroup[] = GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.stage === g.key).sort(order) })).filter((g) => g.rows.length);
+
+  // ---- The open lead, with next and previous inside its status ----
+  const editing = str("deal") ? dealRows.find((d) => d.id === str("deal")) ?? null : null;
+  const creating = sp.new === "1";
+  const linked = editing?.projectId ? projectRows.find((p) => p.project.id === editing.projectId) : null;
+  const group = editing ? groups.find((g) => g.rows.some((r) => r.dealId === editing.id)) : undefined;
+  const workable = group ? group.rows.filter((r) => r.dealId) : [];
+  const at = editing ? workable.findIndex((r) => r.dealId === editing.id) : -1;
+  const next = at >= 0 ? workable[at + 1] : undefined;
+  const prev = at > 0 ? workable[at - 1] : undefined;
+  const closeHref = `/admin/clients${listQuery()}`;
+  const panelOpen = Boolean(editing || creating);
+
+  const viewHref = (v: View) => `/admin/clients${listQuery({ view: v === "all" ? "" : v, stage: "" }).replace(/^\?$/, "")}`;
+  const stageHref = (s: Stage | "") => `/admin/clients${listQuery({ stage: s })}`;
 
   return (
-    <>
-      <TopBar viewer={viewer} current="clients" />
-      <main className="shell page" style={{ width: "min(1320px, calc(100% - 48px))" }}>
-        <div className="page-head">
-          <div>
-            <p className="eyebrow">Sales</p>
-            <h1>Clients</h1>
-          </div>
-          <nav className="crm-filters" aria-label="Filter clients">
-            {FILTERS.map((f) => (
-              <Link key={f.key} href={`/admin/clients?show=${f.key}`} aria-current={show === f.key ? "page" : undefined}>
-                {f.label}
-              </Link>
-            ))}
-          </nav>
+    <main className="shell page crm-page">
+      <div className="crm-head">
+        <div>
+          <p className="eyebrow">Sales</p>
+          <h1>Clients</h1>
         </div>
-        <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
+        <nav className="crm-views" aria-label="Views">
+          {VIEWS.map((v) => {
+            const n = all.filter((r) => inView(r, v.key)).length;
+            return (
+              <Link key={v.key} href={viewHref(v.key)} aria-current={view === v.key ? "page" : undefined} data-alert={v.key === "due" && n ? "" : undefined}>
+                {v.label}
+                <span>{n}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+      {!panelOpen && <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />}
 
-        {rows.length === 0 ? (
-          <p className="empty">
-            Nothing here. <Link href="/admin/pipeline#new-deal">Add a deal</Link> to start.
-          </p>
-        ) : (
-          <div className="card table-wrap" style={{ padding: "6px 8px" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Contact</th>
-                  <th>Deal</th>
-                  <th>Stage</th>
-                  <th>Value</th>
-                  <th>In stage</th>
-                  <th>Source</th>
-                  <th>Owner</th>
-                  <th>Last touch</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) =>
-                  "dealless" in r ? (
-                    <tr key={r.client.id}>
-                      <td>
-                        <Link href={`/admin/clients/${r.client.id}`}>{r.client.name}</Link>
-                      </td>
-                      <td colSpan={8} className="muted small">
-                        No deal yet
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={r.id}>
-                      <td>
-                        <Link href={`/admin/clients/${r.client.id}?deal=${r.id}`}>{r.client.name}</Link>
-                        {(r.client.industry || r.client.location) && (
-                          <div className="muted small">{[r.client.industry, r.client.location].filter(Boolean).join(" · ")}</div>
-                        )}
-                      </td>
-                      <td>
-                        {r.contact?.name ?? <span className="muted">—</span>}
-                        {r.contact?.email && <div className="muted small">{r.contact.email}</div>}
-                      </td>
-                      <td className="small">{r.title}</td>
-                      <td>
-                        <span className="stage-pill" data-stage={r.stage}>
-                          <span className="stage-dot" aria-hidden="true" />
-                          {STAGE_LABEL[r.stage]}
-                        </span>
-                        {r.lostReason && <div className="muted small">{r.lostReason}</div>}
-                      </td>
-                      <td className="num money">{formatDealValue(r.valueCents)}</td>
-                      <td className="num money">
-                        {r.stalled ? <span className="stalled">{r.days}d</span> : `${r.days}d`}
-                      </td>
-                      <td className="small">{r.client.source ?? "—"}</td>
-                      <td>
-                        <span className="owner" title={r.ownerEmail ?? "No owner"}>
-                          {initialsFor(r.ownerEmail)}
-                        </span>
-                      </td>
-                      <td className="small">{r.lastTouch ? formatDateTime(r.lastTouch) : "—"}</td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
+      <div className="crm-split" data-panel={panelOpen ? "" : undefined}>
+        <div className="crm-split-list">
+          <form className="admin-filter crm-filter" action="/portal/admin/clients">
+            {view !== "all" && <input type="hidden" name="view" value={view} />}
+            {stage && <input type="hidden" name="stage" value={stage} />}
+            <label className="sr-only" htmlFor="crm-search">
+              Search clients
+            </label>
+            <input id="crm-search" name="q" type="search" defaultValue={q} placeholder="Search company, contact, phone, city, notes…  ( / )" />
+            <label className="sr-only" htmlFor="crm-owner">
+              Owner
+            </label>
+            <select id="crm-owner" name="owner" defaultValue={owner} data-autosubmit="">
+              <option value="">Everyone&apos;s</option>
+              <option value={viewer.email}>Mine</option>
+              {owners
+                .filter((o) => o !== viewer.email)
+                .map((o) => (
+                  <option key={o} value={o}>
+                    {o.split("@")[0]}&apos;s
+                  </option>
+                ))}
+              <option value="none">Unassigned</option>
+            </select>
+            <button className="btn btn-ghost">Search</button>
+            {(q || owner) && (
+              <Link className="btn btn-ghost" href={`/admin/clients${listQuery({ q: "", owner: "" })}`}>
+                Clear
+              </Link>
+            )}
+            <Link className="btn btn-primary" href={`/admin/clients${listQuery({ new: "1" })}`} scroll={false}>
+              + New deal
+            </Link>
+          </form>
+
+          <nav className="crm-stages" aria-label="Status">
+            <Link href={stageHref("")} aria-current={!stage ? "page" : undefined}>
+              All statuses <span>{base.length}</span>
+            </Link>
+            {GROUPS.map((g) => {
+              const n = base.filter((r) => r.stage === g.key).length;
+              if (!n && stage !== g.key) return null;
+              return (
+                <Link key={g.key} href={stageHref(g.key)} aria-current={stage === g.key ? "page" : undefined} data-stage={g.key}>
+                  <i aria-hidden="true" />
+                  {g.label} <span>{n}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <ClientsList
+            groups={groups}
+            openDealId={editing?.id ?? null}
+            panelOpen={panelOpen}
+            owners={owners}
+            me={viewer.email}
+            empty={q || owner || view !== "all" || stage ? "No matches. Try another search or view." : "No clients or leads yet. Add a deal or onboard a client."}
+          />
+
+          <details className="card admin-section-space" id="add-client">
+            <summary>Add a company by name only</summary>
+            <form action={createClient} className="stack admin-section-space">
+              <div className="field">
+                <label htmlFor="new-company">Company name</label>
+                <input id="new-company" name="name" maxLength={120} required placeholder="Company name" />
+              </div>
+              <div>
+                <button className="btn btn-primary">Add company</button>
+              </div>
+            </form>
+          </details>
+        </div>
+
+        {panelOpen && (
+          <aside className="crm-split-panel" id="deal-form" aria-labelledby="deal-form-title">
+            <DealPanel
+              deal={editing}
+              owners={owners}
+              me={viewer.email}
+              linkedProject={linked ? { id: linked.project.id, name: linked.project.name } : null}
+              nav={{
+                base: "/admin/clients",
+                back: listQuery(),
+                closeHref,
+                nextId: next?.dealId ?? null,
+                nextHref: next?.dealId ? `/admin/clients${listQuery({ deal: next.dealId })}` : null,
+                prevHref: prev?.dealId ? `/admin/clients${listQuery({ deal: prev.dealId })}` : null,
+                position: group && at >= 0 ? `${at + 1} of ${workable.length} in ${group.label}` : null,
+              }}
+              today={today}
+              now={now}
+              notice={readMessage(sp.notice)}
+              error={readMessage(sp.error)}
+            />
+          </aside>
         )}
-      </main>
-    </>
+      </div>
+    </main>
   );
 }

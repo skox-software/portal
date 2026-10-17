@@ -1,12 +1,12 @@
 "use server";
 
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
 import { ensureAuthAccount } from "@/lib/auth/accounts";
 import { getDb } from "@/lib/db";
-import { clients, documents, invoices, memberships, milestones, onboardings, projects, workspaces } from "@/lib/db/schema";
+import { clients, deals, documents, invoices, memberships, milestones, onboardings, projects, workspaces } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { midpoint, PROJECT_KINDS, todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
@@ -50,6 +50,7 @@ export async function startOnboarding(formData: FormData) {
   if (!parsed.success) backWith(back, "error", "Enter the client's email address.");
   const input = parsed.data;
   const db = getDb();
+  const dealId = z.uuid().safeParse(formData.get("dealId")).data ?? null;
 
   const [already] = await db
     .select({ clientId: memberships.clientId })
@@ -111,6 +112,15 @@ export async function startOnboarding(formData: FormData) {
       internalNotes: input.internalNotes || null,
       contact: input.contactName ? { name: input.contactName } : {},
     }),
+    // A Won deal from the pipeline now follows this project.
+    ...(dealId
+      ? [
+          db
+            .update(deals)
+            .set({ clientId, projectId, stage: "won", wonAt: sql`coalesce(${deals.wonAt}, now())` })
+            .where(and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId), isNull(deals.projectId))),
+        ]
+      : []),
     eventInsert({
       workspaceId: staff.workspaceId,
       projectId,

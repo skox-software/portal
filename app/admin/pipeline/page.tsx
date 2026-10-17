@@ -1,169 +1,226 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BulkLeadForm } from "@/components/BulkLeadForm";
+import { DealPanel } from "@/components/DealPanel";
 import { Notice, readMessage } from "@/components/Notice";
 import { PipelineBoard, type BoardCard } from "@/components/PipelineBoard";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
-import { ALL_STAGES, formatDealValue, initialsFor, STAGE_LABEL } from "@/lib/crm";
-import { clientOptions, loadDeals, unassignedThreadCount } from "@/lib/crm-data";
-import { formatDate } from "@/lib/format";
-import { createDeal } from "../crm-actions";
+import { formatMoney, nowMs, timeAgo } from "@/lib/format";
+import { describeFollowUp, followUpState, salesToday } from "@/lib/follow-up";
+import { withBase } from "@/lib/paths";
+import { loadPipeline } from "@/lib/pipeline-data";
+import {
+  boardTotals,
+  cardMatches,
+  COLUMNS,
+  daysSince,
+  dealKindLabel,
+  initials,
+  isStalled,
+  SALES_COLUMNS,
+  searchText,
+  viewQuery,
+  type BoardView,
+  type Card,
+} from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Pipeline" };
+export const metadata: Metadata = { title: "Pipeline · Mission control" };
 
-export default async function Pipeline({
+export default async function PipelinePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
   const { viewer, staff } = await requireStaff();
-  const [all, unassigned, clientList] = await Promise.all([
-    loadDeals(staff.workspaceId),
-    unassignedThreadCount(staff.workspaceId),
-    clientOptions(staff.workspaceId),
-  ]);
-  const open = all.filter((d) => d.stage !== "lost");
+  const ws = staff.workspaceId;
 
-  const sum = (stages: string[]) => open.filter((d) => stages.includes(d.stage)).reduce((s, d) => s + d.valueCents, 0);
-  const stalled = open.filter((d) => d.stalled).length;
+  const { dealRows, projectRows, billing, columns, lost, owners } = await loadPipeline(ws);
+  const dealById = new Map(dealRows.map((d) => [d.id, d]));
+  const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).slice(0, 200) : "");
+  const filters: BoardView = { view: "board", q: str("q"), owner: str("owner"), stage: "" };
 
-  const cards: BoardCard[] = open.map((d) => ({
-    id: d.id,
-    stage: d.stage,
-    clientId: d.client.id,
-    clientName: d.client.name,
-    contactName: d.contact?.name ?? null,
-    valueCents: d.valueCents,
-    kind: d.kind,
-    days: d.days,
-    stalled: d.stalled,
-    ownerInitials: initialsFor(d.ownerEmail),
-    ownerEmail: d.ownerEmail,
-    progress: d.project ? d.milestones : null,
-    footLabel:
-      d.stage === "in_build" && d.project
-        ? `Due ${formatDate(d.project.deliveryDate)}`
-        : d.stage === "shipped" && d.shippedAt
-          ? `Shipped ${formatDate(d.shippedAt.toISOString().slice(0, 10))}${d.invoice ? ` · ${d.invoice === "paid" ? "Paid" : "Invoice open"}` : ""}`
-          : null,
-  }));
+  const now = new Date(nowMs());
+  const today = salesToday(now);
+  const totals = boardTotals(columns, now);
+  const outstanding = billing.reduce((n, b) => n + b.openCents, 0);
+  const due = dealRows.filter((d) => d.stage !== "lost" && d.stage !== "won" && ["overdue", "today"].includes(followUpState(d.nextStepOn, today))).length;
+
+  const view = (card: Card): BoardCard => {
+    const days = daysSince(card.since, now);
+    const deal = card.type === "deal" ? dealById.get(card.id) : undefined;
+    const stalled = isStalled(card.column, card.since, now);
+    const total = card.progress?.total ?? 0;
+    return {
+      key: card.key,
+      type: card.type,
+      id: card.id,
+      column: card.column,
+      company: card.company,
+      contact: card.contact,
+      value: card.valueCents ? formatMoney(card.valueCents) : null,
+      valueCents: card.valueCents,
+      kind: dealKindLabel(card.kind),
+      owner: card.ownerEmail ? { initials: initials(card.ownerEmail), email: card.ownerEmail } : null,
+      meta: stalled ? `${days}d · stalled` : `${days}d`,
+      stalled,
+      href: card.href,
+      source: card.source === "website" ? card.leadSource ?? "Website" : card.source === "referral" ? "Referral" : card.source?.startsWith("Referral") ? card.source : null,
+      progress: card.type === "project" && card.column === "in_build" && total ? Math.round(((card.progress?.done ?? 0) / total) * 100) : null,
+      paid: false,
+      paused: !!card.paused,
+      onboardHref: card.needsOnboarding ? `/admin/onboard?deal=${card.id}` : null,
+      phone: deal?.phone ?? null,
+      email: card.contactEmail,
+      website: deal?.website ?? null,
+      location: card.location,
+      industry: card.industry,
+      followUp: deal && deal.stage !== "won" ? describeFollowUp(deal.nextStepOn, today) : null,
+      followUpState: deal && deal.stage !== "won" ? followUpState(deal.nextStepOn, today) : "none",
+      search: searchText([card.company, card.contactName, card.contactEmail, deal?.phone, deal?.website, card.location, card.industry, card.leadSource, deal?.notes]),
+    };
+  };
+
+  // The board is for selling: builds and launches live on Projects.
+  const cards = columns.filter((c) => SALES_COLUMNS.includes(c.key)).flatMap((c) => c.cards).map(view);
+  const editing = typeof sp.deal === "string" ? dealRows.find((d) => d.id === sp.deal) ?? null : null;
+  const creating = sp.new === "1";
+  const linkedProject = editing?.projectId ? projectRows.find((p) => p.project.id === editing.projectId) : null;
+
+  // Next and previous within the same stage, under the same filters.
+  const editingCard = editing ? cards.find((c) => c.key === `deal:${editing.id}`) : undefined;
+  const sameStage = editingCard
+    ? cards.filter((c) => c.type === "deal" && c.column === editingCard.column && (c.key === editingCard.key || cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, filters)))
+    : [];
+  const at = editingCard ? sameStage.indexOf(editingCard) : -1;
+  const next = at >= 0 ? sameStage[at + 1] : undefined;
+  const prev = at > 0 ? sameStage[at - 1] : undefined;
+  const closeHref = `/admin/pipeline${viewQuery(filters)}`;
+  const leadHref = (id: string) => `/admin/pipeline${viewQuery(filters, { deal: id })}`;
 
   return (
     <>
-      <TopBar viewer={viewer} current="pipeline" />
-      <main className="shell page" style={{ width: "min(1320px, calc(100% - 48px))" }}>
-        <div className="page-head">
+      <TopBar viewer={viewer} />
+      <main className="shell page pipeline-page">
+        <div className="pipeline-head">
           <div>
             <p className="eyebrow">Sales</p>
             <h1>Pipeline</h1>
           </div>
-          <a className="btn btn-primary" href="#new-deal">
-            New deal
-          </a>
+          <ul className="pipeline-strip" aria-label="Pipeline summary">
+            <li>
+              <span>Open</span>
+              <strong>{formatMoney(totals.openCents)}</strong>
+            </li>
+            <li>
+              <span>Won</span>
+              <strong>{formatMoney(totals.wonCents)}</strong>
+            </li>
+            <li>
+              <Link href="/admin/clients?view=due">
+                <span>Follow-ups due</span>
+                <strong className={due ? "pipeline-metric-warn" : undefined}>{due}</strong>
+              </Link>
+            </li>
+            <li>
+              <span>Stalled</span>
+              <strong className={totals.stalled ? "pipeline-metric-warn" : undefined}>{totals.stalled}</strong>
+            </li>
+            <li>
+              <Link href="/admin/billing?status=open">
+                <span>Unpaid invoices</span>
+                <strong>{formatMoney(outstanding)}</strong>
+              </Link>
+            </li>
+          </ul>
+          <details className="new-menu">
+            <summary className="btn btn-primary">+ New</summary>
+            <div role="menu">
+              <Link role="menuitem" href={`/admin/pipeline${viewQuery(filters, { new: "1" })}`} scroll={false}>
+                New deal
+              </Link>
+              <Link role="menuitem" href="/admin/pipeline?import=1#bulk-form">
+                Bulk add leads
+              </Link>
+              <Link role="menuitem" href="/admin/onboard">
+                Add client
+              </Link>
+              {/* Won deals from ad clicks, for Google Ads → Goals → Conversions → Uploads. */}
+              <a role="menuitem" href={withBase("/api/pipeline/google-ads")} download title="Won deals that came from a Google Ads click, as Google's upload file">
+                Google Ads upload file
+              </a>
+            </div>
+          </details>
         </div>
-        <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
+        {!(creating || editing) && <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />}
 
-        <section className="kpi-row" aria-label="At a glance">
-          <div className="kpi">
-            <p className="label">Open pipeline</p>
-            <p className="kpi-value">{formatDealValue(sum(["lead", "proposal_sent", "negotiation"]))}</p>
-          </div>
-          <div className="kpi">
-            <p className="label">Won / in build</p>
-            <p className="kpi-value">{formatDealValue(sum(["won", "in_build"]))}</p>
-          </div>
-          <div className="kpi">
-            <p className="label">Stalled 10+ days</p>
-            <p className="kpi-value">{stalled}</p>
-          </div>
-          <div className="kpi">
-            <p className="label">Email needing a client</p>
-            <p className="kpi-value">
-              <Link href="/admin/inbox">{unassigned}</Link>
-            </p>
-          </div>
-        </section>
-
-        {open.length === 0 ? (
-          <p className="empty">No deals yet. Add the first one below, or file an email from the inbox as a new lead.</p>
-        ) : (
-          <>
-            <p className="small muted" style={{ marginBottom: 12 }}>
-              Drag a card to another column, or use its stage menu. Lost deals are on the <Link href="/admin/clients?show=lost">clients list</Link>.
-            </p>
-            <PipelineBoard initial={cards} />
-          </>
+        {sp.import === "1" && (
+          <section className="card pipeline-form" id="bulk-form" aria-labelledby="bulk-form-title">
+            <div className="card-head">
+              <h2 id="bulk-form-title">Bulk add leads</h2>
+              <Link className="btn btn-ghost btn-small" href="/admin/pipeline">
+                Close
+              </Link>
+            </div>
+            <BulkLeadForm owners={owners} me={viewer.email} />
+          </section>
         )}
 
-        <section className="card" id="new-deal" aria-labelledby="new-deal-title" style={{ marginTop: 24, maxWidth: 760 }}>
-          <div className="card-head">
-            <h2 id="new-deal-title">New deal</h2>
-          </div>
-          <form action={createDeal} className="stack">
-            <input type="hidden" name="back" value="/admin/pipeline" />
-            <div className="form-grid">
-              <div className="field">
-                <label htmlFor="nd-client">Client</label>
-                <select id="nd-client" name="clientId" defaultValue="">
-                  <option value="">New client…</option>
-                  {clientList.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="nd-company">New client name</label>
-                <input id="nd-company" name="companyName" maxLength={120} placeholder="Only for a new client" />
-              </div>
-              <div className="field">
-                <label htmlFor="nd-contact">Contact name</label>
-                <input id="nd-contact" name="contactName" maxLength={120} placeholder="Only for a new client" />
-              </div>
-              <div className="field">
-                <label htmlFor="nd-email">Contact email</label>
-                <input id="nd-email" name="contactEmail" type="email" maxLength={254} />
-              </div>
-            </div>
-            <div className="form-grid">
-              <div className="field">
-                <label htmlFor="nd-title">Deal</label>
-                <input id="nd-title" name="title" required maxLength={140} placeholder="e.g. Patient booking portal" />
-              </div>
-              <div className="field">
-                <label htmlFor="nd-kind">Type</label>
-                <input id="nd-kind" name="kind" maxLength={60} placeholder="Portal, dashboard…" />
-              </div>
-              <div className="field">
-                <label htmlFor="nd-value">Value ($)</label>
-                <input id="nd-value" name="value" inputMode="decimal" maxLength={20} placeholder="12,500" />
-              </div>
-              <div className="field">
-                <label htmlFor="nd-stage">Stage</label>
-                <select id="nd-stage" name="stage" defaultValue="lead">
-                  {ALL_STAGES.filter((s) => s !== "lost").map((s) => (
-                    <option key={s} value={s}>
-                      {STAGE_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="nd-source">Source</label>
-                <input id="nd-source" name="source" maxLength={120} placeholder="Referral, scoping form…" />
-              </div>
-            </div>
-            <div>
-              <button className="btn btn-primary" type="submit">
-                Add deal
-              </button>
-            </div>
-          </form>
-        </section>
+        <PipelineBoard columns={COLUMNS.filter((c) => SALES_COLUMNS.includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={cards} owners={owners} me={viewer.email} initial={filters} />
+
+        {lost.length > 0 && (
+          <details className="card pipeline-lost">
+            <summary>
+              Lost deals <span className="chip">{lost.length}</span>
+            </summary>
+            <ul>
+              {lost.map((card) => {
+                const deal = dealById.get(card.id);
+                return (
+                  <li key={card.key}>
+                    <Link href={leadHref(card.id)} scroll={false}>
+                      {card.company}
+                    </Link>
+                    <span className="muted small">
+                      {card.valueCents ? formatMoney(card.valueCents) : ""} · lost {timeAgo(card.since, now)}
+                      {deal?.lostReason ? ` · ${deal.lostReason}` : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        )}
       </main>
+
+      {(creating || editing) && (
+        <>
+          <Link className="pipeline-drawer-backdrop" href={closeHref} scroll={false} aria-label="Close" tabIndex={-1} />
+          <aside className="pipeline-drawer" id="deal-form" aria-labelledby="deal-form-title">
+            <DealPanel
+              deal={editing}
+              owners={owners}
+              me={viewer.email}
+              linkedProject={linkedProject ? { id: linkedProject.project.id, name: linkedProject.project.name } : null}
+              nav={{
+                base: "/admin/pipeline",
+                back: viewQuery(filters),
+                closeHref,
+                nextId: next?.id ?? null,
+                nextHref: next ? leadHref(next.id) : null,
+                prevHref: prev ? leadHref(prev.id) : null,
+                position: editingCard ? `${at + 1} of ${sameStage.length} in ${COLUMNS.find((c) => c.key === editingCard.column)?.label}` : null,
+              }}
+              today={today}
+              now={now}
+              notice={readMessage(sp.notice)}
+              error={readMessage(sp.error)}
+            />
+          </aside>
+        </>
+      )}
     </>
   );
 }

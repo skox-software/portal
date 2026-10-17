@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileTabBar, type TabItem } from "@/components/MobileTabBar";
 import { Notice } from "@/components/Notice";
 import { ProjectNav, type ProjectTab } from "@/components/ProjectNav";
 import { TopBar } from "@/components/TopBar";
@@ -22,6 +23,14 @@ export function ProjectHeader({
   notice?: string;
 }) {
   const { viewer, project, client, access, counts } = shell;
+  const base = `/projects/${project.id}`;
+  const item = (key: ProjectTab, label: string, path: string, icon: TabItem["icon"]): TabItem => ({
+    href: `${base}${path}`,
+    label,
+    icon,
+    count: counts[key] ?? 0,
+    active: tab === key,
+  });
   return (
     <>
       <TopBar viewer={viewer} />
@@ -60,6 +69,23 @@ export function ProjectHeader({
       <div className="shell">
         <Notice error={error} notice={notice} />
       </div>
+      <MobileTabBar
+        email={viewer.email}
+        tabs={[
+          item("home", "Overview", "", "home"),
+          item("review", "Review", "/review", "review"),
+          item("billing", "Billing", "/billing", "billing"),
+          item("support", "Requests", "/support", "requests"),
+        ]}
+        more={[
+          item("meetings", "Meetings", "/meetings", "meetings"),
+          item("documents", "Documents", "/documents", "documents"),
+          item("files", "Files", "/files", "files"),
+          item("results", "Results", "/results", "results"),
+          { href: "/", label: access.isStaff ? "Admin" : "All projects", icon: "projects", active: false },
+          { href: "/settings", label: "Email preferences", icon: "mail", active: false },
+        ]}
+      />
     </>
   );
 }

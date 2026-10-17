@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { milestones, projects } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
+import { clients, milestones, projects } from "@/lib/db/schema";
+import { sendEmail, type EmailContent } from "@/lib/email";
 import { eventInsert } from "@/lib/events";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
 
@@ -15,7 +15,7 @@ export async function afterInvoicePaid(invoice: {
   projectId: string;
   documentId: string | null;
   number: string;
-}) {
+}, paymentDetails?: EmailContent["details"]) {
   if (!invoice.documentId) return false;
   const db = getDb();
   const [project] = await db.select().from(projects).where(eq(projects.id, invoice.projectId)).limit(1);
@@ -44,6 +44,8 @@ export async function afterInvoicePaid(invoice: {
     }),
   ]);
 
+  const [company] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, project.clientId)).limit(1);
+  const companyName = company?.name ?? "Company unavailable";
   const link = portalLink(`/projects/${project.id}`);
   const [clientsTo, staffTo] = await Promise.all([
     clientRecipients(project.clientId, { actionRequired: true }),
@@ -53,18 +55,19 @@ export async function afterInvoicePaid(invoice: {
     sendEmail(clientsTo, {
       subject: `We're building ${project.name}`,
       preheader: "Agreement signed, deposit received. Here's what happens next.",
-      heading: "It's official. We're building.",
+      heading: "Your project is underway",
       paragraphs: [
-        `Thank you. Your agreement is signed and your deposit is in, so ${project.name} is now in build.`,
-        "Every week you'll get an update with what shipped, what's next and anything we need from you. Your first one lands within a week.",
+        `Thank you. We have received your signed agreement and deposit, and work on ${project.name} is now underway.`,
+        "You will receive a weekly progress update covering completed work, next steps and any information we need from you. Your first update will arrive within one week.",
       ],
       cta: { label: "Open your project", href: link },
     }),
     sendEmail(staffTo, {
-      subject: `Deposit paid: ${project.name} is in build`,
+      subject: `Project underway: ${companyName} · ${project.name}`,
+      details: paymentDetails ?? [{ label: "Company", value: companyName }, { label: "Project", value: project.name }],
       preheader: `Invoice ${invoice.number} paid; project moved to Building.`,
-      heading: `${project.name} is go`,
-      paragraphs: [`Deposit ${invoice.number} is paid. The project moved from Kickoff to Building and the client was emailed.`],
+      heading: `${project.name} is ready for delivery work`,
+      paragraphs: [`Deposit invoice ${invoice.number} is paid. The project status has changed from Kickoff to Building.`],
       cta: { label: "Manage the project", href: portalLink(`/admin/projects/${project.id}`) },
     }),
   ]);

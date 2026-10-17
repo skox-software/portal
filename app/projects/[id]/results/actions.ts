@@ -62,8 +62,8 @@ export async function saveReport(formData: FormData) {
   if (formData.get("notify") === "on") {
     notifyLater(() => clientRecipients(client.id), {
       subject: `Your ${formatMonth(month)} results for ${project.name}`,
-      preheader: input.highlights.slice(0, 140) || "See what your product did for you this month.",
-      heading: `${formatMonth(month)}: here's what it did for you`,
+      preheader: input.highlights.slice(0, 140) || "Your monthly performance report is available in the portal.",
+      heading: `${formatMonth(month)} performance report`,
       paragraphs: [
         ...(values.visitors != null ? [`${values.visitors.toLocaleString("en-US")} visitors`] : []),
         ...(values.leads != null ? [`${values.leads.toLocaleString("en-US")} leads`] : []),
@@ -152,7 +152,7 @@ export async function postIdea(formData: FormData) {
     subject: `An idea for ${client.name}: ${parsed.data.title}`,
     preheader: parsed.data.pitch.slice(0, 140),
     heading: parsed.data.title,
-    paragraphs: [parsed.data.pitch, ...(parsed.data.estimate ? [`Rough size: ${parsed.data.estimate}`] : [])],
+    paragraphs: [parsed.data.pitch, ...(parsed.data.estimate ? [`Estimated scope: ${parsed.data.estimate}`] : [])],
     cta: { label: "Tell us what you think", href: portalLink(`${back}#ideas`) },
   });
   revalidatePath(back);
@@ -285,12 +285,12 @@ export async function markLaunched(formData: FormData) {
     }),
   ]);
   notifyLater(() => clientRecipients(client.id), {
-    subject: `${project.name} is live 🎉`,
+    subject: `${project.name} is live`,
     preheader: "Your launch kit, how-to videos and support are all in your portal.",
     heading: `${project.name} is live`,
     paragraphs: [
       `Congratulations. ${project.name} is live at ${parsed.data.liveUrl}.`,
-      "Your launch kit has walkthroughs and everything you need. Need a change? Hit “Request a change” in the portal and we'll take it from there.",
+      "Your launch resources and walkthroughs are available in the portal. For support or future updates, select “Request a change” to contact our team.",
     ],
     cta: { label: "Open your launch kit", href: portalLink(`/projects/${project.id}/results#launch-kit`) },
   });

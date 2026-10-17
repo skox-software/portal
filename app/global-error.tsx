@@ -8,7 +8,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           <p style={{ fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", color: "#676b62" }}>SKOX portal</p>
           <h1 style={{ fontFamily: "Georgia, serif", fontWeight: 400, fontSize: 36, margin: "8px 0 12px" }}>We hit a snag.</h1>
           <p style={{ lineHeight: 1.6 }}>
-            Nothing you saved has been lost. Try again in a moment, or email founders@skoxsoftware.com
+            Nothing you saved has been lost. Try again in a moment, or email founder@skoxsoftware.com
             {error.digest ? ` with reference ${error.digest}` : ""}.
           </p>
           <button

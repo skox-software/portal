@@ -2,7 +2,6 @@ import { and, asc, count, desc, eq, inArray, isNull, lt, max, ne } from "drizzle
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Notice, readMessage } from "@/components/Notice";
-import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import {
@@ -20,13 +19,11 @@ import {
   supportRequests,
   tasks,
   updates,
-  workspaces,
 } from "@/lib/db/schema";
-import { daysUntil, describeDaysUntil, formatDate, formatDateTime, formatMoney, kindLabel, nowMs, STATUS_LABEL, todayIso } from "@/lib/format";
-import { createClient, saveWorkspaceSettings, setReferralStatus } from "./actions";
+import { daysUntil, describeDaysUntil, formatDate, formatDateTime, formatMoney, nowMs, STATUS_LABEL, todayIso } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Mission control" };
+export const metadata: Metadata = { title: "Overview · SKOX" };
 
 const STALE_UPDATE_DAYS = 7;
 const DAY = 86_400_000;
@@ -39,14 +36,14 @@ export default async function MissionControl({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const { viewer, staff } = await requireStaff();
+  const { staff } = await requireStaff();
   const db = getDb();
   const ws = staff.workspaceId;
   const now = nowMs();
   const today = todayIso();
   const threeDaysAgo = new Date(now - 3 * DAY);
 
-  const [rows, waiting, lastUpdates, clientVisits, openInvoices, unsigned, newRequests, pendingApprovals, openMustFix, warmIdeas, referralList, [workspace]] =
+  const [rows, waiting, lastUpdates, clientVisits, openInvoices, unsigned, newRequests, pendingApprovals, openMustFix, warmIdeas, referralList] =
     await Promise.all([
       db
         .select({ client: clients, project: projects })
@@ -77,7 +74,6 @@ export default async function MissionControl({
       db.select({ projectId: feedback.projectId, n: count() }).from(feedback).where(and(eq(feedback.workspaceId, ws), eq(feedback.tag, "must_fix"), inArray(feedback.status, ["open", "in_progress"]))).groupBy(feedback.projectId),
       db.select({ idea: ideas, project: projects }).from(ideas).innerJoin(projects, eq(projects.id, ideas.projectId)).where(and(eq(ideas.workspaceId, ws), eq(ideas.status, "interested"))),
       db.select().from(referrals).where(eq(referrals.workspaceId, ws)).orderBy(desc(referrals.createdAt)).limit(20),
-      db.select().from(workspaces).where(eq(workspaces.id, ws)).limit(1),
     ]);
 
   const onboardingRows = await db
@@ -165,289 +161,44 @@ export default async function MissionControl({
   const outstanding = openInvoices.reduce((s, { invoice }) => s + invoice.amountCents, 0);
   const activeProjects = [...projectById.values()].filter((p) => p.status !== "launched" && p.status !== "paused").length;
 
-  /** 0–100: recent client visits, fresh updates, nothing overdue. */
-  function health(clientId: string, list: NonNullable<(typeof rows)[number]["project"]>[]) {
-    let score = 100;
-    const reasons: string[] = [];
-    const visit = visitBy.get(clientId)?.last;
-    const daysAway = visit ? Math.floor((now - new Date(visit).getTime()) / DAY) : null;
-    if (daysAway === null) {
-      score -= 30;
-      reasons.push("never signed in");
-    } else if (daysAway > 21) {
-      score -= 30;
-      reasons.push(`no visit in ${daysAway} days`);
-    } else if (daysAway > 10) {
-      score -= 15;
-      reasons.push(`last visit ${daysAway} days ago`);
-    }
-    for (const p of list) {
-      const last = lastBy.get(p.id);
-      if (p.status !== "launched" && p.status !== "paused" && (!last || now - new Date(last).getTime() > STALE_UPDATE_DAYS * DAY)) {
-        score -= 15;
-        reasons.push(`no update on ${p.name}`);
-      }
-      if (daysUntil(p.deliveryDate) < 0 && p.status !== "launched") {
-        score -= 20;
-        reasons.push(`${p.name} past delivery`);
-      }
-    }
-    const overdue = openInvoices.filter(({ invoice, project }) => project.clientId === clientId && invoice.dueOn < today).length;
-    if (overdue) {
-      score -= 15;
-      reasons.push("overdue invoice");
-    }
-    score = Math.max(0, score);
-    return { score, level: score >= 75 ? "good" : score >= 50 ? "watch" : "risk", reasons };
-  }
 
-  return (
-    <>
-      <TopBar viewer={viewer} current="mission" />
-      <main className="shell page">
-        <div className="page-head">
-          <div>
-            <p className="eyebrow">SKOX team</p>
-            <h1>Mission control</h1>
-          </div>
-          <Link className="btn btn-primary" href="/admin/onboard">
-            Onboard a new client →
-          </Link>
-        </div>
-        <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
-
-        <section className="kpi-row" aria-label="At a glance">
-          <div className="kpi">
-            <p className="label">Needs attention</p>
-            <p className="kpi-value">{attention.length}</p>
-          </div>
-          <div className="kpi">
-            <p className="label">Active builds</p>
-            <p className="kpi-value">{activeProjects}</p>
-          </div>
-          <div className="kpi">
-            <p className="label">Outstanding</p>
-            <p className="kpi-value">{formatMoney(outstanding)}</p>
-          </div>
-          <div className="kpi">
-            <p className="label">Clients</p>
-            <p className="kpi-value">{grouped.size}</p>
-          </div>
-        </section>
-
-        <div className="split">
-          <div>
-            <section className="card card-todo" aria-labelledby="attention-title">
-              <div className="card-head">
-                <h2 id="attention-title">Needs attention</h2>
-                {attention.length > 0 && <span className="chip chip-amber">{attention.length}</span>}
-              </div>
-              {attention.length === 0 ? (
-                <p className="all-clear">
-                  <span aria-hidden="true">✓</span> Nothing waiting on SKOX. Go build something.
-                </p>
-              ) : (
-                <ul className="attention-list">
-                  {attention.map((a) => (
-                    <li key={a.key} data-level={a.level}>
-                      <Link href={a.href}>{a.text}</Link>
-                      {a.when && <span className="when small muted">{formatDateTime(a.when)}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            {grouped.size === 0 ? (
-              <p className="empty" style={{ marginTop: 16 }}>
-                No clients yet. Add your first one.
-              </p>
-            ) : (
-              [...grouped.values()].map(({ client, projects: list }) => {
-                const h = health(client.id, list);
-                return (
-                  <section key={client.id} className="card client-block" aria-labelledby={`client-${client.id}`} style={{ marginTop: 16 }}>
-                    <div className="card-head">
-                      <h2 id={`client-${client.id}`}>
-                        <Link href={`/admin/clients/${client.id}`}>{client.name}</Link>
-                      </h2>
-                      <div className="row">
-                        <span className="health" data-level={h.level} title={h.reasons.join(", ") || "All good"}>
-                          Health {h.score}
-                        </span>
-                        <Link className="btn btn-ghost btn-small" href={`/admin/clients/${client.id}`}>
-                          People &amp; projects
-                        </Link>
-                      </div>
-                    </div>
-                    {h.reasons.length > 0 && <p className="small muted" style={{ marginTop: -6, marginBottom: 10 }}>{h.reasons.join(" · ")}</p>}
-                    {list.length === 0 ? (
-                      <p className="muted">No projects yet.</p>
-                    ) : (
-                      <div className="table-wrap">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Project</th>
-                              <th>Status</th>
-                              <th>Delivery</th>
-                              <th>Signals</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {list.map((p) => {
-                              const waitingOnClient = waitingBy.get(p.id) ?? 0;
-                              const last = lastBy.get(p.id);
-                              const stale =
-                                p.status !== "launched" &&
-                                p.status !== "paused" &&
-                                (!last || now - new Date(last).getTime() > STALE_UPDATE_DAYS * DAY);
-                              const days = daysUntil(p.deliveryDate);
-                              const late = days < 0 && p.status !== "launched";
-                              return (
-                                <tr key={p.id}>
-                                  <td>
-                                    <Link href={`/admin/projects/${p.id}`}>{p.name}</Link>
-                                    <div className="muted small">{kindLabel(p.kind)}</div>
-                                  </td>
-                                  <td>
-                                    <span className="chip">{STATUS_LABEL[p.status]}</span>
-                                  </td>
-                                  <td className="num">
-                                    {p.status === "launched" ? "Live" : formatDate(p.deliveryDate)}
-                                    {p.status !== "launched" && <div className="muted small">{describeDaysUntil(days)}</div>}
-                                  </td>
-                                  <td>
-                                    <div className="row">
-                                      {stale && <span className="chip chip-danger">No update {STALE_UPDATE_DAYS}d+</span>}
-                                      {waitingOnClient > 0 && <span className="chip chip-amber">{waitingOnClient} on client</span>}
-                                      {late && <span className="chip chip-danger">Past delivery</span>}
-                                      {!stale && waitingOnClient === 0 && !late && <span className="chip chip-ok">On track</span>}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </section>
-                );
-              })
-            )}
-          </div>
-
-          <aside>
-            <section className="card" aria-labelledby="new-client">
-              <div className="card-head">
-                <h2 id="new-client">Add a client</h2>
-              </div>
-              <form action={createClient} className="stack">
-                <div className="field">
-                  <label htmlFor="client-name">Company name</label>
-                  <input id="client-name" name="name" required maxLength={120} placeholder="e.g. Harbor Dental Group" />
-                </div>
-                <div>
-                  <button className="btn btn-primary" type="submit">
-                    Add client
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section className="card" id="referrals" aria-labelledby="referrals-title">
-              <div className="card-head">
-                <h2 id="referrals-title">Referrals</h2>
-                <span className="muted small">{referralList.length}</span>
-              </div>
-              {referralList.length === 0 ? (
-                <p className="small muted">Clients get a personal referral link on their Results page. Leads land here.</p>
-              ) : (
-                <ul className="task-list">
-                  {referralList.map((r) => (
-                    <li key={r.id} style={{ display: "grid", gap: 6 }}>
-                      <div>
-                        <strong style={{ fontWeight: 500 }}>{r.name}</strong>{" "}
-                        <a className="small" href={`mailto:${r.email}`}>
-                          {r.email}
-                        </a>
-                        <p className="small muted">
-                          {r.company ? `${r.company} · ` : ""}via {r.referrerEmail} · {formatDateTime(r.createdAt)}
-                        </p>
-                        {r.idea && <p className="small">{r.idea}</p>}
-                      </div>
-                      <form action={setReferralStatus} className="inline-form">
-                        <input type="hidden" name="referralId" value={r.id} />
-                        <select name="status" defaultValue={r.status} aria-label="Referral status">
-                          <option value="new">New</option>
-                          <option value="contacted">Contacted</option>
-                          <option value="won">Won</option>
-                          <option value="lost">Lost</option>
-                        </select>
-                        <button className="btn btn-ghost btn-small" type="submit">
-                          Save
-                        </button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className="card" aria-labelledby="settings-title">
-              <div className="card-head">
-                <h2 id="settings-title">Workspace settings</h2>
-              </div>
-              <form action={saveWorkspaceSettings} className="stack">
-                <div className="field">
-                  <label htmlFor="ws-scheduling">Kickoff booking link</label>
-                  <input id="ws-scheduling" name="schedulingUrl" type="url" defaultValue={workspace?.schedulingUrl ?? ""} maxLength={2048} placeholder="https://calendar.google.com/calendar/appointments/schedules/…" />
-                  <span className="hint">Set up a 45-minute kickoff in Google. Its canonical appointment URL embeds here and in onboarding; existing external links open separately.</span>
-                </div>
-                <div className="field">
-                  <label htmlFor="ws-project-review">Project review booking link</label>
-                  <input id="ws-project-review" name="projectReviewSchedulingUrl" type="url" maxLength={2048} defaultValue={workspace?.projectReviewSchedulingUrl ?? ""} placeholder="https://calendar.google.com/calendar/appointments/schedules/…" />
-                  <span className="hint">Set up a 30-minute review in Google. Leave blank until ready.</span>
-                </div>
-                <div className="field">
-                  <label htmlFor="ws-check-in">Check-in booking link</label>
-                  <input id="ws-check-in" name="checkInSchedulingUrl" type="url" maxLength={2048} defaultValue={workspace?.checkInSchedulingUrl ?? ""} placeholder="https://calendar.google.com/calendar/appointments/schedules/…" />
-                  <span className="hint">Set up a 15-minute check-in in Google. Leave blank until ready.</span>
-                </div>
-                <div className="small muted">
-                  In Google Calendar, choose Sharing options → Website embed → Inline booking page and copy only the iframe src URL. Use the same calendar for all three schedules, enable conflict checking, and add a required company/project field. Google manages hours, durations, Meet links, and emails. Save links after testing each schedule.
-                </div>
-                <div className="field">
-                  <label htmlFor="ws-intro">Team intro</label>
-                  <input id="ws-intro" name="teamIntro" defaultValue={workspace?.teamIntro ?? ""} maxLength={120} placeholder="Josh & Sam, co-founders" />
-                  <span className="hint">Signs the welcome note and emails.</span>
-                </div>
-                <div className="field">
-                  <label htmlFor="ws-video">Welcome video (optional)</label>
-                  <input id="ws-video" name="welcomeVideoUrl" type="url" defaultValue={workspace?.welcomeVideoUrl ?? ""} placeholder="https://www.loom.com/share/…" />
-                  <span className="hint">Leave empty until you record one. Nothing shows without it.</span>
-                </div>
-                <div className="field">
-                  <label htmlFor="ws-review">Review link</label>
-                  <input id="ws-review" name="reviewUrl" type="url" defaultValue={workspace?.reviewUrl ?? ""} placeholder="https://g.page/r/…/review" />
-                  <span className="hint">Launched clients see “Leave us a quick review”.</span>
-                </div>
-                <div className="field">
-                  <label htmlFor="ws-reward">Referral reward</label>
-                  <input id="ws-reward" name="referralReward" defaultValue={workspace?.referralReward ?? ""} maxLength={160} placeholder="you get $500 off your next invoice" />
-                  <span className="hint">Reads as: “When they start a project, …”</span>
-                </div>
-                <div>
-                  <button className="btn btn-ghost btn-small" type="submit">
-                    Save
-                  </button>
-                </div>
-              </form>
-            </section>
-          </aside>
-        </div>
-      </main>
-    </>
-  );
+  const sortedAttention = [...attention].sort((a,b) => Number(b.level === "high") - Number(a.level === "high"));
+  const upcoming = [...projectById.values()].filter(p => p.status !== "launched" && p.status !== "paused").sort((a,b) => a.deliveryDate.localeCompare(b.deliveryDate));
+  const overdue = openInvoices.filter(({invoice}) => invoice.dueOn < today);
+  const noContacts = [...grouped.values()].filter(({client}) => !visitBy.get(client.id)?.people);
+  return <main className="shell page">
+    <div className="page-head"><div><p className="eyebrow">YOUR BUSINESS, AT A GLANCE</p><h1>Overview</h1><p className="muted">What needs you, what’s moving, and what’s next.</p></div><Link className="btn btn-ghost" href="/admin/billing#create-invoice">Create invoice ↗</Link></div>
+    <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
+    <section className="admin-metrics" aria-label="Business overview">
+      <Link className="admin-metric" href="#attention"><span>Needs your attention ↗</span><strong>{attention.length + noContacts.length}</strong><small>Requests, payments & client setup</small></Link>
+      <Link className="admin-metric" href="/admin/projects?status=active"><span>Active projects ↗</span><strong>{activeProjects}</strong><small>{upcoming.filter(p => daysUntil(p.deliveryDate) <= 7 && daysUntil(p.deliveryDate) >= 0).length} due in the next 7 days</small></Link>
+      <Link className="admin-metric" href="/admin/billing"><span>Outstanding invoices ↗</span><strong>{formatMoney(outstanding)}</strong><small>{overdue.length} overdue · {openInvoices.length} unpaid</small></Link>
+      <Link className="admin-metric" href="/admin/clients"><span>Clients ↗</span><strong>{grouped.size}</strong><small>{noContacts.length ? `${noContacts.length} need a contact added` : "Client contacts & projects"}</small></Link>
+    </section>
+    <div className="admin-dashboard-grid"><div>
+      <section className="admin-panel" id="attention"><div className="admin-panel-head"><div><h2>Needs attention</h2><p>Your next actions, with urgent items first.</p></div><span className="chip">{attention.length + noContacts.length}</span></div>
+        <ul className="admin-action-list">
+          {noContacts.map(({client}) => <li key={client.id}><Link className="admin-action" data-priority="high" href={`/admin/clients/${client.id}#invite-title`}><span className="admin-action-icon" aria-hidden="true">◎</span><div><strong>Add a contact for {client.name}</strong><small>No invoice recipient is linked to this client.</small></div><span aria-hidden="true">↗</span></Link></li>)}
+          {sortedAttention.slice(0,8).map(a => <li key={a.key}><Link className="admin-action" data-priority={a.level} href={a.href === "#referrals" ? "/admin/settings#referrals" : a.href}><span className="admin-action-icon" aria-hidden="true">{a.level === "high" ? "!" : "→"}</span><div><strong>{a.text}</strong><small>{a.when ? formatDateTime(a.when) : "Open to review and take action"}</small></div><span aria-hidden="true">↗</span></Link></li>)}
+        </ul>
+        {!attention.length && !noContacts.length && <p className="admin-empty">You’re up to date. No outstanding actions need your attention.</p>}
+        {sortedAttention.length > 8 && <details><summary className="admin-empty">Show {sortedAttention.length - 8} more actions</summary><ul className="admin-action-list">{sortedAttention.slice(8).map(a => <li key={a.key}><Link className="admin-action" href={a.href === "#referrals" ? "/admin/settings#referrals" : a.href}><div><strong>{a.text}</strong></div><span aria-hidden="true">↗</span></Link></li>)}</ul></details>}
+      </section>
+      <section className="admin-panel admin-section-space"><div className="admin-panel-head"><div><h2>Projects in motion</h2><p>Delivery dates and the next thing to do.</p></div><Link href="/admin/projects">All projects →</Link></div>
+       <div className="table-wrap"><table className="admin-projects-table"><thead><tr><th>Project / client</th><th>Stage</th><th>Delivery</th><th>Next action</th></tr></thead><tbody>{upcoming.slice(0,6).map(p => {
+         const stale = !lastBy.get(p.id) || now - new Date(lastBy.get(p.id)!).getTime() > STALE_UPDATE_DAYS * DAY;
+         const invoice = openInvoices.find(row => row.project.id === p.id);
+         const next = invoice ? {label:"Review invoice",url:`/projects/${p.id}/billing`} : stale ? {label:"Post an update",url:`/projects/${p.id}`} : {label:waitingBy.get(p.id) ? "Review client tasks" : "Open project",url:`/projects/${p.id}`};
+         return <tr key={p.id}><td><Link href={`/admin/projects/${p.id}`}>{p.name}</Link><small>{grouped.get(p.clientId)?.client.name}</small></td><td><span className="chip">{STATUS_LABEL[p.status]}</span></td><td>{formatDate(p.deliveryDate)}<small>{describeDaysUntil(daysUntil(p.deliveryDate))}</small></td><td><Link href={next.url}>{next.label} ↗</Link></td></tr>;
+       })}</tbody></table></div>{!upcoming.length && <p className="admin-empty">No active projects. Add a client to get started.</p>}
+      </section>
+    </div><aside className="admin-side-stack">
+      <section className="admin-panel"><div className="admin-panel-head"><div><h2>Payments to follow up</h2><p>Oldest due dates first.</p></div><Link href="/admin/billing">Billing →</Link></div>
+       <ul className="admin-action-list">{[...openInvoices].sort((a,b)=>a.invoice.dueOn.localeCompare(b.invoice.dueOn)).slice(0,5).map(({invoice, project}) => <li key={invoice.id}><Link className="admin-action" href={`/projects/${project.id}/billing/invoices/${invoice.id}`}><div><strong>{grouped.get(project.clientId)?.client.name}</strong><small>{invoice.number} · {invoice.dueOn < today ? "Overdue" : "Due"} {formatDate(invoice.dueOn)}</small></div><strong>{formatMoney(invoice.amountCents, invoice.currency)}</strong></Link></li>)}</ul>
+       {!openInvoices.length && <p className="admin-empty">No outstanding invoices.</p>}
+      </section>
+      <section className="admin-panel"><div className="admin-panel-head"><h2>Quick actions</h2></div><div className="admin-quick-links"><Link href="/admin/onboard">+ Onboard a client</Link><Link href="/admin/billing#create-invoice">↗ Create invoice</Link><Link href="/admin/clients">◎ Manage contacts</Link><Link href="/admin/requests">↗ Review requests</Link></div></section>
+      <section className="admin-panel"><div className="admin-panel-head"><h2>Client setup</h2><Link href="/admin/onboard">Manage →</Link></div><ul className="admin-action-list">{onboardingRows.filter(({onboarding:o})=>o.status !== "completed").slice(0,4).map(({onboarding:o,client})=><li key={o.id}><Link className="admin-action" href={`/admin/onboard/${o.projectId}`}><div><strong>{client.name}</strong><small>{!o.welcomeSentAt ? "Welcome ready to send" : "Setup in progress"}</small></div><span aria-hidden="true">↗</span></Link></li>)}</ul>{!onboardingRows.some(({onboarding:o})=>o.status !== "completed") && <p className="admin-empty">No client setups in progress.</p>}</section>
+    </aside></div>
+  </main>;
 }

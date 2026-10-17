@@ -4,16 +4,7 @@ import { SkoxLogo } from "@/components/SkoxLogo";
 import type { Viewer } from "@/lib/access";
 import { staffMembershipIn } from "@/lib/permissions";
 
-type Section = "mission" | "pipeline" | "clients" | "inbox";
-
-const STAFF_NAV: { key: Section; href: string; label: string }[] = [
-  { key: "mission", href: "/admin", label: "Mission control" },
-  { key: "pipeline", href: "/admin/pipeline", label: "Pipeline" },
-  { key: "clients", href: "/admin/clients", label: "Clients" },
-  { key: "inbox", href: "/admin/inbox", label: "Inbox" },
-];
-
-export function TopBar({ viewer, current }: { viewer: Viewer; current?: Section }) {
+export function TopBar({ viewer }: { viewer: Viewer }) {
   const isStaff = Boolean(staffMembershipIn(viewer.memberships));
   return (
     <header className="topbar">
@@ -23,15 +14,8 @@ export function TopBar({ viewer, current }: { viewer: Viewer; current?: Section 
           <span className="brand-name">Client Portal</span>
         </Link>
         <nav className="topnav" aria-label="Main">
-          {isStaff ? (
-            STAFF_NAV.map((item) => (
-              <Link key={item.key} href={item.href} aria-current={current === item.key ? "page" : undefined}>
-                {item.label}
-              </Link>
-            ))
-          ) : (
-            <Link href="/">Your projects</Link>
-          )}
+          {isStaff ? <Link href="/admin">Admin overview</Link> : <Link href="/">Your projects</Link>}
+          {isStaff && <Link href="/admin/billing">Billing</Link>}
         </nav>
         <div className="who">
           <Link href="/settings" className="who-email" title="Email preferences">

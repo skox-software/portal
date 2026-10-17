@@ -61,8 +61,36 @@
     {
       "idx": 8,
       "version": "7",
-      "when": 1790114184640,
-      "tag": "0008_crm",
+      "when": 1790129028600,
+      "tag": "0008_pipeline_deals",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790354722989,
+      "tag": "0009_inbox_and_client_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791244647028,
+      "tag": "0010_website_leads",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792182116774,
+      "tag": "0011_deal_stage_initial_outreach",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792186816733,
+      "tag": "0012_deal_follow_ups",
       "breakpoints": true
     }
   ]

@@ -11,6 +11,7 @@ import { formatDate, formatDateTime, kindLabel, ROLE_LABEL } from "@/lib/format"
 import { ACCESS_STATUS, accessFor, lines, questionsFor } from "@/lib/onboarding-content";
 import { progress, stepsFor } from "@/lib/onboarding-flow";
 import { agreementState } from "@/lib/onboarding-server";
+import { withBase } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Project brief" };
@@ -60,7 +61,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
           </div>
           <div className="row no-print">
             <PrintButton />
-            <a className="btn btn-ghost btn-small" href={`/api/projects/${project.id}/welcome-guide`} target="_blank" rel="noopener noreferrer">
+            <a className="btn btn-ghost btn-small" href={withBase(`/api/projects/${project.id}/welcome-guide`)} target="_blank" rel="noopener noreferrer">
               Welcome guide (PDF)
             </a>
             <Link className="btn btn-ghost btn-small" href={`/projects/${project.id}/welcome`}>
@@ -204,11 +205,11 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
                     <li key={f.id}>
                       {f.contentType?.startsWith("image/") ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/api/files/${f.id}`} alt={f.name} />
+                        <img src={withBase(`/api/files/${f.id}`)} alt={f.name} />
                       ) : (
                         <span className="doc-icon">FILE</span>
                       )}
-                      <a className="small" href={`/api/files/${f.id}?download=1`}>
+                      <a className="small" href={withBase(`/api/files/${f.id}?download=1`)}>
                         {f.name}
                       </a>
                     </li>

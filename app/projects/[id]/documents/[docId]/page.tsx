@@ -7,7 +7,8 @@ import { ProjectHeader } from "@/components/ProjectHeader";
 import { SignPanel } from "@/components/SignPanel";
 import { getDb } from "@/lib/db";
 import { documents, documentSigners, invoices } from "@/lib/db/schema";
-import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney } from "@/lib/format";
+import { DOCUMENT_KIND_LABEL, formatDateTime, formatMoney, timeAgo } from "@/lib/format";
+import { withBase } from "@/lib/paths";
 import { canSign } from "@/lib/permissions";
 import { loadProjectShell } from "@/lib/project-shell";
 import { CONSENT_TEXT } from "@/lib/signing";
@@ -56,7 +57,9 @@ export default async function DocumentPage({
     });
   }
 
-  const pdfUrl = `/api/documents/${doc.id}${doc.status === "completed" ? "?signed=1" : ""}`;
+  // Hand-written, so it needs the base path spelled out: an iframe/anchor src
+  // is not something Next rewrites.
+  const pdfUrl = withBase(`/api/documents/${doc.id}${doc.status === "completed" ? "?signed=1" : ""}`);
 
   return (
     <>
@@ -110,7 +113,7 @@ export default async function DocumentPage({
                       Next: pay the deposit ({formatMoney(deposit.amountCents, deposit.currency)}) →
                     </Link>
                   )}
-                  <a className={deposit && !access.isStaff ? "btn btn-ghost" : "btn btn-primary"} href={`/api/documents/${doc.id}?signed=1&download=1`}>
+                  <a className={deposit && !access.isStaff ? "btn btn-ghost" : "btn btn-primary"} href={withBase(`/api/documents/${doc.id}?signed=1&download=1`)}>
                     Download signed PDF
                   </a>
                 </div>
@@ -136,7 +139,11 @@ export default async function DocumentPage({
                       {s.typedName && <span className="muted small"> · {s.email}</span>}
                     </span>
                     <span className={s.status === "signed" ? "chip chip-ok" : s.status === "viewed" ? "chip chip-amber" : "chip"}>
-                      {s.status === "signed" && s.signedAt ? `Signed ${formatDateTime(s.signedAt)}` : s.status === "viewed" ? "Opened" : "Not opened"}
+                      {s.status === "signed" && s.signedAt
+                        ? `Signed ${formatDateTime(s.signedAt)}`
+                        : s.status === "viewed"
+                          ? `Opened ${timeAgo(s.viewedAt) ?? ""}`.trim()
+                          : "Not opened"}
                     </span>
                   </li>
                 ))}

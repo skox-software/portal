@@ -59,7 +59,8 @@ Production env vars: `DATABASE_URL`, `NEON_AUTH_BASE_URL`,
 `NEON_AUTH_COOKIE_SECRET`, `PORTAL_URL=https://portal.skoxsoftware.com`.
 Don't run `vercel link` here: it rewrites `.env.local`.
 
-Release accounts: GitHub CLI must use `skox-software`; Vercel CLI must use
+Release accounts: GitHub CLI must have write access to `skox-software/portal`
+(the company account or an authorized collaborator); Vercel CLI must use
 `founders@skoxsoftware.com` (`founders-8267`) in the `skox` Hobby team.
 Check `gh api user --jq .login` and `npx vercel whoami` before releasing.
 This repository uses the company Git identity (set locally, not globally):
@@ -71,7 +72,6 @@ git config --local user.email 328514113+skox-software@users.noreply.github.com
 
 Apply reviewed database migrations before deploying code that reads new columns.
 Meeting booking setup and validation are documented in [docs/MEETINGS.md](docs/MEETINGS.md).
-The CRM (pipeline, clients, inbox) and its email setup are in [docs/CRM.md](docs/CRM.md).
 
 ## Neon Auth settings that live in the Neon Console
 

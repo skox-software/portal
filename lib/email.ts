@@ -13,6 +13,7 @@ export type EmailContent = {
   preheader: string;
   heading: string;
   paragraphs: string[];
+  details?: { label: string; value: string }[];
   cta?: { label: string; href: string };
   /** Small grey line under the button, e.g. "Due Sep 30". */
   footnote?: string;
@@ -41,6 +42,9 @@ export function renderEmail(content: EmailContent) {
         `<p style="margin:0 0 16px;font:400 16px/1.6 ${font};color:${INK};white-space:pre-line">${escapeHtml(p)}</p>`,
     )
     .join("");
+  const details = content.details?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;border-top:1px solid ${LINE}">${content.details.map(({ label, value }) => `<tr><td width="32%" valign="top" style="padding:10px 12px 10px 0;border-bottom:1px solid ${LINE};font:500 13px/1.5 ${font};color:${MUTED}">${escapeHtml(label)}</td><td valign="top" style="padding:10px 0;border-bottom:1px solid ${LINE};font:500 14px/1.5 ${font};color:${INK};overflow-wrap:anywhere;word-break:break-word">${escapeHtml(value)}</td></tr>`).join("")}</table>`
+    : "";
   const cta = content.cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px"><tr><td style="border-radius:999px;background:${AMBER}">
          <a href="${escapeHtml(content.cta.href)}" style="display:inline-block;padding:14px 26px;font:600 15px/1 ${font};color:${INK};text-decoration:none;border-radius:999px">${escapeHtml(content.cta.label)}</a>
@@ -62,11 +66,11 @@ export function renderEmail(content: EmailContent) {
     </td></tr>
     <tr><td style="background:#ffffff;border:1px solid ${LINE};border-radius:16px;padding:32px 28px">
       <h1 style="margin:0 0 16px;font:700 24px/1.25 Georgia,'Times New Roman',serif;color:${INK}">${escapeHtml(content.heading)}</h1>
-      ${paragraphs}${cta}${footnote}
+      ${paragraphs}${details}${cta}${footnote}
     </td></tr>
     <tr><td style="padding:20px 4px 0;font:400 12px/1.6 ${font};color:${MUTED}">
       SKOX Software · Good ideas deserve to be built.<br>
-      You're getting this because you have access to a project in the SKOX Client Portal. Reply to this email to reach the team.
+      This notification relates to your work with SKOX Software. If you have any questions, reply to this email to contact our team.
     </td></tr>
   </table>
 </td></tr></table>
@@ -76,6 +80,7 @@ export function renderEmail(content: EmailContent) {
     content.heading,
     "",
     ...content.paragraphs,
+    ...(content.details?.map(({ label, value }) => `${label}: ${value}`) ?? []),
     ...(content.cta ? ["", `${content.cta.label}: ${content.cta.href}`] : []),
     ...(content.footnote ? ["", content.footnote] : []),
     "",
@@ -94,33 +99,36 @@ let resend: Resend | null = null;
  */
 export async function sendEmail(to: string | string[], content: EmailContent) {
   const recipients = [...new Set((Array.isArray(to) ? to : [to]).filter(Boolean))];
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return false;
 
   const key = process.env.RESEND_API_KEY;
   const live = process.env.NODE_ENV === "production" || process.env.EMAIL_SEND_IN_DEV === "1";
   if (!key || !live) {
     console.info("[email] (not sent)", { to: recipients, subject: content.subject });
-    return;
+    return false;
   }
 
   resend ??= new Resend(key);
   const { html, text } = renderEmail(content);
   try {
     // One message per recipient so clients never see each other's addresses.
-    await Promise.all(
+    const results = await Promise.all(
       recipients.map(async (address) => {
         const { error } = await resend!.emails.send({
-          from: process.env.EMAIL_FROM ?? "SKOX <portal@skoxsoftware.com>",
-          replyTo: process.env.EMAIL_REPLY_TO ?? "founders@skoxsoftware.com",
+          from: process.env.EMAIL_FROM ?? "SKOX Software <portal@skoxsoftware.com>",
+          replyTo: process.env.EMAIL_REPLY_TO ?? "founder@skoxsoftware.com",
           to: address,
           subject: content.subject,
           html,
           text,
         });
         if (error) console.error("[email] send failed", { to: address, subject: content.subject, error });
+        return !error;
       }),
     );
+    return results.every(Boolean);
   } catch (error) {
     console.error("[email] send threw", { subject: content.subject, error });
+    return false;
   }
 }

@@ -123,13 +123,13 @@ export default async function SupportPage({
             {can.requestSupport(access) ? (
               <section className="card" aria-labelledby="new-request">
                 <div className="card-head">
-                  <h2 id="new-request">Request a change</h2>
+                  <h2 id="new-request">{sp.topic === "billing" ? "Ask a billing question" : "Request a change"}</h2>
                 </div>
                 <form action={createRequest} className="stack">
                   <input type="hidden" name="projectId" value={project.id} />
                   <div className="field">
                     <label htmlFor="q-title">What do you need?</label>
-                    <input id="q-title" name="title" required minLength={3} maxLength={160} placeholder="e.g. Update our opening hours" />
+                    <input id="q-title" name="title" defaultValue={sp.topic === "billing" ? "Billing question" : ""} required minLength={3} maxLength={160} placeholder="e.g. Update our opening hours" />
                   </div>
                   <div className="field">
                     <label htmlFor="q-body">Details</label>

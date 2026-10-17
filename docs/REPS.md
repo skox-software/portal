@@ -137,7 +137,7 @@ The $300 business expense does not reduce the $1,250 earned amount.
 
 | Action | Owner (`staff_owner`) | Staff | Rep |
 | --- | --- | --- | --- |
-| Invite reps, add partner shares, change rate or status | ✓ | | |
+| Invite reps, add founder shares, change rate or status | ✓ | | |
 | Assign leads to a rep, credit a project | ✓ | ✓ | |
 | Close a month (draft statements) | ✓ | ✓ | |
 | Approve, mark paid, discard, adjust | ✓ | | |

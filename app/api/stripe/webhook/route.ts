@@ -196,7 +196,7 @@ async function settleRefund(charge: Stripe.Charge) {
         ? `Stripe refunded ${amount} on invoice ${invoice.number} (${invoice.title}) for ${project.name}.`
         : `Stripe reports ${amount} refunded in total on invoice ${invoice.number} (${invoice.title}) for ${project.name}.`,
       result.ok
-        ? "If a sales rep earned commission on this invoice, a matching clawback is on their next statement."
+        ? "If anyone earned commission on this invoice, a matching clawback is on their next statement."
         : `The refund could not be recorded: ${result.message} Check it in the portal.`,
     ],
     cta: { label: "Open billing", href: portalLink(`/projects/${project.id}/billing`) },

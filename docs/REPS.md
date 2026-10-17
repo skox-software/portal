@@ -60,8 +60,14 @@ How the wall is enforced:
      `amount_refunded`; a manual refund is "already refunded + this amount").
      The new refund is the difference, computed under the invoice lock, so
      two refunds arriving together can't double-count or record a stale amount.
-   - If an invoice is reopened or voided after payment, a pending earning is
-     voided. An approved or paid earning gets a clawback instead.
+   - If an invoice is reopened or voided after payment, each recipient's
+     earning is voided when nobody has approved it yet: it is `pending` and on
+     no statement or only a draft. Its refund clawbacks are voided with it, so
+     the net is zero, voided lines leave the draft and the draft re-totals.
+     Each voided line logs `commission.voided`.
+   - An approved or paid earning (or one whose refund clawbacks are already
+     approved) is never edited: it gets a negative reversal `clawback` for
+     whatever is left of it instead.
 7. **Statements.**
    - **Drafting:** the daily cron drafts last month's statements, one per rep
      with money owed. Each takes every pending line earned through month end,
@@ -153,8 +159,8 @@ The $300 business expense does not reduce the $1,250 earned amount.
 - **Paused reps** earn nothing new, including on care plans for clients they
   brought. Keep them active if they should keep earning after they stop selling.
   Their 20% of a rep deal stays unallocated rather than going to the founders.
-- **Invoices voided after a Stripe payment** claw back as if refunded. Record a
-  real refund instead when money actually went back.
+- **Invoices voided after a Stripe payment** void or claw back the commission
+  as if refunded. Record a real refund instead when money actually went back.
 
 Team roles are displayed as **Founder** and **Sales rep**. The team page,
 account role labels, sales-rep desk and invitation emails use those names.

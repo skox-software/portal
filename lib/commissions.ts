@@ -132,7 +132,13 @@ async function liveEarnings(invoiceId: string) {
   return latest.filter(r => !reversed.has(r.id));
 }
 
-/** Reverses each recipient's remaining earnings, once; never edits paid history. */
+/**
+ * Takes back each recipient's remaining earnings when a paid invoice is
+ * re-opened or voided. An earning nobody has approved yet (pending, on no
+ * statement or only a draft) is voided outright, along with its refund
+ * clawbacks, so the net is zero and nothing shows on a statement. Anything
+ * approved or paid is never edited: it gets a negative reversal line instead.
+ */
 export async function reverseEarning(invoice: Invoice, actor: string, reason: string) {
   const earnings = await liveEarnings(invoice.id);
   if (!earnings.length) return;
@@ -141,13 +147,49 @@ export async function reverseEarning(invoice: Invoice, actor: string, reason: st
     eq(commissionEntries.invoiceId, invoice.id), eq(commissionEntries.kind, "clawback"), ne(commissionEntries.status, "void"),
     sql`${commissionEntries.refundId} is not null`, sql`${commissionEntries.earnedAt} >= ${earnings[0].earnedAt}`,
   ));
-  const entries = await db.insert(commissionEntries).values(earnings.map(earning => ({
+  const note = `Invoice ${invoice.number} ${reason}`;
+  const reverse: typeof earnings = [];
+  for (const earning of earnings) {
+    const own = refunds.filter(r => r.repMembershipId === earning.repMembershipId);
+    const ids = [earning.id, ...own.map(r => r.id)];
+    const statementIds = [...new Set([earning, ...own].map(e => e.statementId).filter((id): id is string => Boolean(id)))];
+    // All or nothing, decided under the invoice lock: if any line is approved,
+    // paid, or on a non-draft statement, nothing is voided and we reverse instead.
+    const [, voided] = await db.batch([
+      db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
+      db.execute(sql`
+        with blocked as (
+          select 1 from commission_entries c left join commission_statements s on s.id = c.statement_id
+          where c.id in (${sql.join(ids.map(id => sql`${id}::uuid`), sql`, `)})
+            and not (c.status = 'pending' and (c.statement_id is null or s.status = 'draft'))
+        ), voided as (
+          update commission_entries c set status = 'void', statement_id = null,
+            note = concat_ws(' · ', c.note, ${`voided: ${note}`}::text)
+          where c.id in (${sql.join(ids.map(id => sql`${id}::uuid`), sql`, `)}) and not exists (select 1 from blocked)
+          returning c.*
+        ), logged as (
+          insert into events (workspace_id, project_id, actor_id, verb, subject_type, subject_id, payload)
+          select workspace_id, ${invoice.projectId}::uuid, ${actor}, 'commission.voided', 'commission', id::text,
+            jsonb_build_object('invoice', ${invoice.number}::text, 'amountCents', amount_cents, 'reason', ${reason}::text)
+          from voided
+        ) select id from voided
+      `),
+      // A draft that lost lines shows its new total until it's approved (which re-totals anyway).
+      ...(statementIds.length ? [db.execute(sql`
+        update commission_statements s set total_cents = (select coalesce(sum(amount_cents), 0) from commission_entries where statement_id = s.id)
+        where s.status = 'draft' and s.id in (${sql.join(statementIds.map(id => sql`${id}::uuid`), sql`, `)})
+      `)] : []),
+    ]);
+    if (!voided.rows.length) reverse.push(earning);
+  }
+  if (!reverse.length) return;
+  const entries = await db.insert(commissionEntries).values(reverse.map(earning => ({
     workspaceId: invoice.workspaceId, repMembershipId: earning.repMembershipId,
     projectId: earning.projectId, invoiceId: invoice.id, kind: "clawback" as const,
     reversalOf: earning.id, baseCents: earning.baseCents, rateBps: earning.rateBps,
     amountCents: -(earning.amountCents + refunds.filter(r => r.repMembershipId === earning.repMembershipId).reduce((sum, r) => sum + r.amountCents, 0)),
     earnedAt: new Date(), clientName: earning.clientName,
-    note: `Invoice ${invoice.number} ${reason}`, createdBy: actor,
+    note, createdBy: actor,
   }))).onConflictDoNothing().returning();
   for (const entry of entries) await eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: actor,
     verb: "commission.clawback", subjectType: "commission", subjectId: entry.id, payload: { invoice: invoice.number, amountCents: entry.amountCents, reason } });

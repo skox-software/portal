@@ -8,25 +8,15 @@ import { PeriodSwitcher } from "@/components/PeriodSwitcher";
 import { ActivityFeed } from "@/components/finance/ActivityFeed";
 import { LiveProvider } from "@/components/finance/LiveProvider";
 import { LiveTicker } from "@/components/finance/LiveTicker";
-import { eq } from "drizzle-orm";
 import { requireStaff } from "@/lib/access";
-import { getDb } from "@/lib/db";
-import { workspaces } from "@/lib/db/schema";
-import { Funnel } from "@/components/finance/Funnel";
-import { GoalDial } from "@/components/finance/GoalDial";
-import { HeatMap } from "@/components/finance/HeatMap";
-import { MoneyFlow } from "@/components/finance/MoneyFlow";
-import { Race } from "@/components/finance/Race";
-import { Runway } from "@/components/finance/Runway";
-import { collectedByBucket, collectedSince, dailyActivity, dealsWonByOwner, funnel, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, raceStandings, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
-import { balanceSeries, projectForward } from "@/lib/forecast-math";
-import { addDays, salesToday } from "@/lib/follow-up";
-import { liveSnapshot } from "@/lib/finance-live";
+import { HEAT_METRICS, invoicesByPaymentIntent, leaderboard, outstanding, type HeatMetric } from "@/lib/finance-data";
+import { loadMission } from "@/lib/finance-mission";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
-import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, stripeTreasury, type StripeRead } from "@/lib/finance-stripe";
+import { stripeCharges, stripePayouts, type StripeRead } from "@/lib/finance-stripe";
 import { firstName, formatDate, formatMoney } from "@/lib/format";
 import { columnLabel } from "@/lib/pipeline";
 import { stripeEnabled } from "@/lib/stripe";
+import { FlowPanel, FunnelPanel, GoalPanel, HeatPanel, RacePanel, RunwayPanel } from "./panels";
 import "./finance.css";
 
 export const metadata: Metadata = { title: "Finance" };
@@ -46,44 +36,23 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const fresh = sp.fresh === "1";
   const range = periodRange(period);
   const heat: HeatMetric = HEAT_METRICS.includes(sp.heat as HeatMetric) ? (sp.heat as HeatMetric) : "cash";
-  const today = salesToday();
-  const yearStart = addDays(today, -364);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues, race, funnelData, [workspace], ytdCents] = await Promise.all([
-    collectedByBucket(ws, range),
-    refundsByBucket(ws, range),
+  const [m, owed, leaders, payouts, charges] = await Promise.all([
+    loadMission(ws, range, heat, fresh),
     outstanding(ws),
-    dealsWonByOwner(ws, range),
-    weightedPipeline(ws),
     leaderboard(ws, range),
-    stripeBalance(fresh),
     stripePayouts(fresh),
-    stripeActivity(range, fresh),
     stripeCharges(range, fresh),
-    stripeTreasury(fresh),
-    liveSnapshot(ws),
-    invoicedInPeriod(ws, range),
-    sharesByOwner(ws, range),
-    openInvoiceDues(ws),
-    unpaidStatements(ws),
-    dailyActivity(ws, heat, yearStart, today),
-    raceStandings(ws, today),
-    funnel(ws, range),
-    getDb().select({ goalCents: workspaces.revenueGoalCents, goalYear: workspaces.revenueGoalYear }).from(workspaces).where(eq(workspaces.id, ws)).limit(1),
-    collectedSince(ws, `${today.slice(0, 4)}-01-01`),
   ]);
-  const goalCents = workspace?.goalYear === Number(today.slice(0, 4)) ? workspace.goalCents : null;
-  // No Treasury account at all is a fact, not a failure; a permission error is.
-  const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
+  const { collected, refunds, won, pipeline, balance, activity, treasury, hasTreasury, collectedTotal, refundTotal, wonValue } = m.reads;
+  const live = m.live;
   const nextPayout = payouts.ok ? payouts.data.next : null;
   const chargeInvoices = charges.ok ? await invoicesByPaymentIntent(ws, charges.data.flatMap((c) => (c.paymentIntent ? [c.paymentIntent] : []))) : new Map();
 
   const keys = bucketKeys(range);
   const labels = keys.map((k) => bucketLabel(k, range.bucket));
-  const collectedTotal = collected.reduce((s, b) => s + b.value.cents, 0);
   const paymentCount = collected.reduce((s, b) => s + b.value.count, 0);
-  const refundTotal = refunds.reduce((s, b) => s + b.value, 0);
   const failures = [...new Set([balance, payouts, activity, charges, treasury].flatMap((r) => (r.ok ? [] : [r.reason])))];
 
   const revenue = keys.map((key, i) => {
@@ -113,30 +82,9 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     return { key, label: labels[i], parts, tip: `${labels[i]}: ${groups.map((g, j) => `${g} ${parts[j]}`).join(" · ")}` };
   });
   const wonCount = won.reduce((s, w) => s + w.count, 0);
-  const wonValue = won.reduce((s, w) => s + w.valueCents, 0);
 
   const notDue = owed.openCents - owed.overdueCents;
-  const flowInput = {
-    pipelineCents: pipeline.weightedCents,
-    wonCents: wonValue,
-    invoicedCents: invoiced,
-    paidCents: collectedTotal,
-    // Stripe's view of fees and refunds when it answers; the portal's refunds otherwise.
-    feesCents: activity.ok ? activity.data.totals.fees : 0,
-    refundsCents: activity.ok ? activity.data.totals.refunds : refundTotal,
-    shares,
-  };
-
-  // Runway: walk the balance back through the period from today's figure, then project 60 days on.
-  const runwayBalance = hasTreasury ? treasury.data.cash : balance.ok ? balance.data.available + balance.data.pending : null;
-  const runway =
-    runwayBalance !== null && activity.ok
-      ? {
-          history: balanceSeries({ date: today, cents: runwayBalance }, range.startIso, activity.data.days, !hasTreasury),
-          projection: projectForward(runwayBalance, dues, statementsDue, today),
-          sourceLabel: hasTreasury ? "Business account" : "Payments balance",
-        }
-      : null;
+  const heatHref = (metric: HeatMetric) => `/admin/finance?${new URLSearchParams({ period, ...(metric === "cash" ? {} : { heat: metric }) })}#heat`;
 
   return (
     <LiveProvider initial={live}>
@@ -151,6 +99,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         <div className="finance-head-actions">
           <PeriodSwitcher path="/admin/finance" current={period} params={heat === "cash" ? {} : { heat }} />
           {connected && <Link className="btn btn-ghost btn-small" href={`/admin/finance?period=${period}&fresh=1`}>Refresh Stripe</Link>}
+          <Link className="btn btn-ghost btn-small fwall-link" href={`/admin/finance/wall?period=${period}`} target="_blank" rel="noopener">Wall mode ↗</Link>
         </div>
       </div>
 
@@ -161,7 +110,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
       ) : null}
 
       <section className="admin-metrics finance-metrics" aria-label="Money summary">
-        {hasTreasury && (
+        {hasTreasury && treasury.ok && (
           <div className="admin-metric">
             <span>Business account</span>
             <strong>{formatMoney(treasury.data.cash)}</strong>
@@ -180,54 +129,12 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         <Link className="admin-metric" href="/admin/billing?status=overdue"><span>Outstanding</span><strong>{formatMoney(owed.openCents)}</strong><small>{owed.overdueCount} overdue · {formatMoney(owed.overdueCents)}</small></Link>
       </section>
 
-      <section className="admin-panel fpanel-hero" aria-labelledby="flow-title">
-        <div className="admin-panel-head">
-          <div><h2 id="flow-title">Money flow</h2><p>Open pipeline (weighted), won, invoiced and paid in {range.label.toLowerCase()}, then where the paid money went. Hover a band for the amount.</p></div>
-        </div>
-        <div className="finance-body"><MoneyFlow input={flowInput} periodLabel={range.label} /></div>
-      </section>
-
-      <section className="admin-panel finance-section" aria-labelledby="runway-title">
-        <div className="admin-panel-head">
-          <div><h2 id="runway-title">Runway</h2><p>The balance through {range.label.toLowerCase()}, rebuilt from Stripe activity, and the next 60 days if open invoices are paid on their due dates and commission statements go out on the 5th.</p></div>
-        </div>
-        <div className="finance-body">
-          {runway ? <Runway {...runway} /> : <p className="small muted">{connected ? "The runway draws from Stripe's balance and activity, which aren't available right now." : "Connect Stripe to see the balance over time and where it's heading."}</p>}
-        </div>
-      </section>
-
-      <section className="admin-panel finance-section" aria-labelledby="goal-title">
-        <div className="admin-panel-head">
-          <div><h2 id="goal-title">Goal</h2><p>Cash collected this year against the revenue target.</p></div>
-          <Link href="/admin/settings#ws-goal">Target</Link>
-        </div>
-        <div className="finance-body">
-          <GoalDial ytdCents={ytdCents} goalCents={goalCents} balanceCents={live.balanceCents} balanceLabel={live.balanceSource === "payments" ? "payments balance" : "business account"} today={today} />
-        </div>
-      </section>
-
-      <section className="admin-panel finance-section" aria-labelledby="race-title">
-        <div className="admin-panel-head">
-          <div><h2 id="race-title">The race</h2><p>Cash collected and deals won by owner, this month and this year.</p></div>
-        </div>
-        <div className="finance-body"><Race {...race} today={today} /></div>
-      </section>
-
-      <section className="admin-panel finance-section" aria-labelledby="heat-title" id="heat">
-        <div className="admin-panel-head">
-          <div><h2 id="heat-title">The year, day by day</h2><p>The last 12 months in Florida time, whatever the period above. Hover a day for its number.</p></div>
-        </div>
-        <div className="finance-body">
-          <HeatMap metric={heat} values={heatValues} startIso={yearStart} endIso={today} hrefFor={(m) => `/admin/finance?${new URLSearchParams({ period, ...(m === "cash" ? {} : { heat: m }) })}#heat`} />
-        </div>
-      </section>
-
-      <section className="admin-panel finance-section" aria-labelledby="funnel-title">
-        <div className="admin-panel-head">
-          <div><h2 id="funnel-title">Funnel</h2><p>How many deals reached each stage in {range.label.toLowerCase()}, and how many went on. Click a stage to see those clients.</p></div>
-        </div>
-        <div className="finance-body"><Funnel {...funnelData} periodLabel={range.label} /></div>
-      </section>
+      <FlowPanel m={m} />
+      <RunwayPanel m={m} connected={connected} />
+      <GoalPanel m={m} />
+      <RacePanel m={m} />
+      <HeatPanel m={m} hrefFor={heatHref} />
+      <FunnelPanel m={m} />
 
       <section className="admin-panel finance-section" aria-labelledby="revenue-title">
         <div className="admin-panel-head">

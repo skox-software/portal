@@ -232,3 +232,76 @@
 .fgoal-pace.is-ahead{color:var(--ok)}
 @keyframes fgoal-draw{from{stroke-dasharray:0 var(--c)}}
 @media(prefers-reduced-motion:reduce){.fgoal-arc{animation:none}}
+
+/*
+ * Mission Control theme. Finance only: the page's <main> (and wall mode)
+ * carries data-theme="mission" and these tokens re-skin everything inside,
+ * charts included, since they draw with tokens. Amber is unchanged; ok and
+ * danger are lifted so they read on the dark panels.
+ */
+[data-theme=mission]{
+  --canvas:#141617;--paper:#1c1f21;--fog:#24282a;--line:#2a2e30;--line-soft:#232729;--field-border:#4d5255;
+  --ink:#f1efe6;--muted:#9a9c95;--label:#a6a89f;
+  --amber-ink:#f0c24a;--blush:#2a2414;--blush-ink:#f0c24a;
+  --ok:#52c27e;--ok-bg:#1a2d21;--danger:#ef6b58;--danger-bg:#371c17;
+  --ring-track:rgba(241,239,230,.12);
+  color-scheme:dark;background:var(--canvas);color:var(--ink)
+}
+/* Rules elsewhere that hardcode white, re-pointed at the tokens on this page. */
+[data-theme=mission] .admin-metric,[data-theme=mission] .admin-panel,[data-theme=mission] .period-chips a{background:var(--paper)}
+[data-theme=mission] .admin-metric:first-child{background:var(--blush)}
+[data-theme=mission] .admin-metric:hover{border-color:var(--amber)}
+[data-theme=mission] .period-chips a[aria-current]{background:var(--amber);border-color:var(--amber);color:#141617}
+[data-theme=mission] .fchart-tip{background:var(--ink);color:var(--canvas)}
+[data-theme=mission] .btn-ghost{background:transparent;color:var(--ink)}
+[data-theme=mission] .btn-ghost:hover{border-color:var(--ink)}
+/* The rest of the admin frame around a mission page goes dark with it. */
+.admin-body:has(> [data-theme=mission]){background:#141617}
+.admin-body:has(> [data-theme=mission]) .admin-toolbar{background:#1c1f21;border-color:#2a2e30;color-scheme:dark}
+.admin-body:has(> [data-theme=mission]) .admin-toolbar>span{color:#9a9c95}
+
+/* Wall mode: covers the window; the admin frame behind it is hidden. */
+.admin-workspace:has(.fwall-root){display:block}
+.admin-workspace:has(.fwall-root)>:not(.admin-body),.admin-workspace:has(.fwall-root) .admin-toolbar{display:none}
+.fwall-root{position:fixed;inset:0;z-index:70;overflow:auto;background:#141617}
+.fwall{min-height:100vh;padding:32px 48px 40px;display:grid;grid-template-rows:auto auto auto 1fr;gap:24px;font-variant-numeric:tabular-nums}
+.fwall-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.fwall-head h1{font-size:48px;line-height:1.05;margin-top:4px}
+.fwall-period{font:13px var(--mono);color:var(--muted);margin-left:auto}
+.fwall-exit{font-size:13px;color:var(--muted)}
+.fwall-exit:hover{color:var(--ink)}
+.fwall .fticker{position:static;margin:0;padding:24px 32px}
+.fwall .fticker-items{gap:24px 64px}
+.fwall .fticker-items dt{font-size:13px}
+.fwall .fticker-items dd{font-size:40px}
+.fwall-phone{display:none;padding:24px;border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted)}
+.fwall-rotator{display:grid;grid-template-rows:auto auto 1fr;gap:16px;min-height:0}
+.fwall-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.fwall-tabs button{min-height:32px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:500 13px var(--sans);cursor:pointer;transition:color .15s,border-color .15s,background-color .15s}
+.fwall-tabs button:hover{color:var(--ink);border-color:var(--ink)}
+.fwall-tabs button[aria-current]{background:var(--amber);border-color:var(--amber);color:#141617}
+.fwall-tabs .fwall-pause{margin-left:auto}
+.fwall-progress{height:2px;background:var(--line);border-radius:1px;overflow:hidden}
+.fwall-progress span{display:block;height:100%;background:var(--amber);transform-origin:left;animation:fwall-progress linear both}
+@keyframes fwall-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.fwall-stage{display:grid}
+.fwall-slide{grid-area:1/1;opacity:0;visibility:hidden;transition:opacity .4s var(--ease-out),visibility 0s linear .4s}
+.fwall-slide[data-active]{opacity:1;visibility:visible;transition:opacity .4s var(--ease-out)}
+.fwall .admin-panel-head{padding:24px 32px}
+.fwall .admin-panel-head h2{font-size:32px}
+.fwall .admin-panel-head p{font-size:15px}
+.fwall .finance-body{padding:32px}
+.fwall .fflow-label{font-size:15px}.fwall .fflow-label b{font-size:22px}.fwall .fflow-label-end b{font-size:18px}
+.fwall .frunway-chart{grid-template-rows:440px auto}
+.fwall .frunway-figures dt{font-size:14px}.fwall .frunway-figures dd{font-size:32px}
+.fwall .frace-lanes li{grid-template-columns:160px minmax(0,1fr) 160px;gap:24px}
+.fwall .frace-name,.fwall .frace-value{font-size:20px}
+.fwall .frace-track{height:20px}
+.fwall .frace-label{font-size:15px}
+.fwall .ffunnel-row{grid-template-columns:200px minmax(0,1fr) 180px}
+.fwall .ffunnel-shape{height:72px}
+.fwall .ffunnel-name,.fwall .ffunnel-figs{font-size:20px}
+.fwall .ffunnel-shape b{font-size:22px}
+.fwall .fheat-summary{font-size:16px}
+@media(max-width:760px){.fwall{padding:24px 16px}.fwall-head h1{font-size:34px}.fwall-period{display:none}.fwall .fticker{padding:16px}.fwall .fticker-items dd{font-size:22px}.fwall-phone{display:block}.fwall-rotator{display:none}}
+@media(prefers-reduced-motion:reduce){.fwall-slide,.fwall-slide[data-active]{transition:none}.fwall-progress span{animation:none;transform:none;opacity:.4}}

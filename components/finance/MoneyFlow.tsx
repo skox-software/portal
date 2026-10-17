@@ -2,9 +2,8 @@ import { ChartTip } from "@/components/charts/ChartTip";
 import { formatMoney } from "@/lib/format";
 import { moneyFlow, sankeyLayout, spreadLabels, type MoneyFlowInput } from "@/lib/sankey-math";
 
-/** SVG units: x stretches to the panel, y is pixels, so labels can be HTML and never shrink. */
+/** SVG units: x stretches to the panel, y is pixels (the height), so labels can be HTML and never shrink. */
 const W = 1000;
-const H = 340;
 const NODE = 10;
 
 const KIND: Record<string, string> = { fees: "fees", refunds: "refunds", kept: "kept" };
@@ -17,7 +16,7 @@ const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / 
  * every band and node has a tooltip. On a phone the labels move to a list
  * under the drawing.
  */
-export function MoneyFlow({ input, periodLabel }: { input: MoneyFlowInput; periodLabel: string }) {
+export function MoneyFlow({ input, periodLabel, height: H = 340 }: { input: MoneyFlowInput; periodLabel: string; height?: number }) {
   const flow = moneyFlow(input);
   const { nodes, links, columns } = sankeyLayout(flow.nodes, flow.links, { w: W, h: H, nodeWidth: NODE, gap: 14 });
   if (!nodes.length) {

@@ -36,7 +36,7 @@ export function LiveTicker({ wall = false }: { wall?: boolean }) {
       </dl>
       <div className="fticker-meta">
         <span className="fticker-state"><i aria-hidden="true" />{status === "live" ? "live" : status === "reconnecting" ? "reconnecting" : "paused"} · <Ago at={snap.at} /></span>
-        {!wall && <SoundToggle />}
+        <SoundToggle />
       </div>
     </div>
   );

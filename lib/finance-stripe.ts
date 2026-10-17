@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { stripeClient, stripeEnabled } from "@/lib/stripe";
 import { toUnixRange, type PeriodRange } from "@/lib/finance-periods";
 import { sumBalanceTransactions } from "@/lib/fee-math";
+import { dailyNets } from "@/lib/forecast-math";
 
 /**
  * Live reads from Stripe for the finance dashboard. Nothing here is stored:
@@ -116,14 +117,17 @@ export function stripePayouts(fresh = false) {
   });
 }
 
-/** Gross, fees, net, refunds and payouts per bucket of the period. Capped at 2,000 transactions. */
+/**
+ * Gross, fees, net, refunds and payouts per bucket of the period, and the
+ * same transactions netted per day for the runway. Capped at 2,000.
+ */
 export function stripeActivity(range: PeriodRange, fresh = false) {
   const created = toUnixRange(range);
   return cached(`activity:${range.key}:${range.endIso}`, WINDOW_TTL_MS, fresh, async () => {
     const txns = await stripeClient()
       .balanceTransactions.list({ created, limit: 100 }, REQUEST)
       .autoPagingToArray({ limit: 2_000 });
-    return { ...sumBalanceTransactions(txns, range), count: txns.length, capped: txns.length >= 2_000 };
+    return { ...sumBalanceTransactions(txns, range), days: dailyNets(txns), count: txns.length, capped: txns.length >= 2_000 };
   });
 }
 

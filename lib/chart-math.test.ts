@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { barLayout, donutSegments, niceMax, polyline, stackedLayout, yFor, type Frame } from "./chart-math.ts";
+import { barLayout, donutSegments, niceExtent, niceMax, polyline, stackedLayout, yFor, type Frame } from "./chart-math.ts";
 
 const frame: Frame = { w: 120, h: 110, pad: { top: 10, right: 10, bottom: 0, left: 10 } };
 
@@ -68,4 +68,13 @@ test("a stacked axis can be raised to fit an overlaid line", () => {
   const { max, bars } = stackedLayout([{ key: "a", label: "A", parts: [50] }], frame, 180);
   assert.equal(max, 200);
   assert.equal(bars[0].segments[0].height, 25);
+});
+
+test("an axis range holds negatives and zero on round steps", () => {
+  assert.deepEqual(niceExtent([120, 900]), { lo: 0, hi: 1_000 });
+  assert.deepEqual(niceExtent([-300, -20]), { lo: -500, hi: 0 });
+  const both = niceExtent([-1_500, 8_000]);
+  assert.ok(both.lo <= -1_500 && both.hi >= 8_000);
+  assert.equal((both.hi - both.lo) % 2_500, 0);
+  assert.deepEqual(niceExtent([]), { lo: 0, hi: 1 });
 });

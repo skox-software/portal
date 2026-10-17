@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clients, commissionEntries, deals, events, invoiceRefunds, invoices, projects, repProfiles } from "@/lib/db/schema";
+import { clients, commissionEntries, commissionStatements, deals, events, invoiceRefunds, invoices, projects, repProfiles } from "@/lib/db/schema";
 import { repTotals, workspaceReps, EMPTY_TOTALS } from "@/lib/commissions";
 import { bucketKeys, STAGE_WEIGHTS, type PeriodRange } from "@/lib/finance-periods";
 import { SALES_TZ, salesToday } from "@/lib/follow-up";
@@ -241,4 +241,22 @@ export async function sharesByOwner(ws: string, range: PeriodRange) {
     .where(and(eq(commissionEntries.workspaceId, ws), ne(commissionEntries.status, "void"), inPeriod(commissionEntries.earnedAt, range)))
     .groupBy(commissionEntries.repMembershipId, repProfiles.displayName);
   return rows.map((r) => ({ id: r.id, name: r.name, cents: Number(r.cents) })).filter((r) => r.cents > 0).sort((a, b) => b.cents - a.cents);
+}
+
+/** Every open invoice's due date and amount: what the runway expects to come in. */
+export async function openInvoiceDues(ws: string) {
+  const rows = await getDb()
+    .select({ dueOn: invoices.dueOn, amountCents: invoices.amountCents })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "open")));
+  return rows.map((r) => ({ dueOn: r.dueOn, amountCents: Number(r.amountCents) }));
+}
+
+/** Commission statements drafted or approved but not paid: what the runway expects to go out. */
+export async function unpaidStatements(ws: string) {
+  const rows = await getDb()
+    .select({ periodEnd: commissionStatements.periodEnd, totalCents: commissionStatements.totalCents })
+    .from(commissionStatements)
+    .where(and(eq(commissionStatements.workspaceId, ws), inArray(commissionStatements.status, ["draft", "approved"])));
+  return rows.map((r) => ({ periodEnd: r.periodEnd, totalCents: Number(r.totalCents) })).filter((r) => r.totalCents > 0);
 }

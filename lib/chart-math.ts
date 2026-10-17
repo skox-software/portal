@@ -18,6 +18,20 @@ export function niceMax(value: number) {
   return 10 * power;
 }
 
+/**
+ * A round axis range that holds every value and zero: the max from niceMax,
+ * and for negatives a min that is a round step below zero.
+ */
+export function niceExtent(values: number[]) {
+  const hi = Math.max(0, ...values);
+  const lo = Math.min(0, ...values);
+  if (lo === 0) return { lo: 0, hi: niceMax(hi) };
+  if (hi === 0) return { lo: -niceMax(-lo), hi: 0 };
+  const span = niceMax(hi - lo);
+  const step = span / 4;
+  return { lo: -Math.ceil(-lo / step) * step, hi: Math.ceil(hi / step) * step };
+}
+
 function plot(frame: Frame) {
   const { w, h, pad } = frame;
   return { x0: pad.left, y0: pad.top, width: Math.max(0, w - pad.left - pad.right), height: Math.max(0, h - pad.top - pad.bottom) };

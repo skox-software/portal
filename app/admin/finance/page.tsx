@@ -10,7 +10,10 @@ import { LiveProvider } from "@/components/finance/LiveProvider";
 import { LiveTicker } from "@/components/finance/LiveTicker";
 import { requireStaff } from "@/lib/access";
 import { MoneyFlow } from "@/components/finance/MoneyFlow";
-import { collectedByBucket, dealsWonByOwner, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, outstanding, refundsByBucket, sharesByOwner, weightedPipeline } from "@/lib/finance-data";
+import { Runway } from "@/components/finance/Runway";
+import { collectedByBucket, dealsWonByOwner, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
+import { balanceSeries, projectForward } from "@/lib/forecast-math";
+import { salesToday } from "@/lib/follow-up";
 import { liveSnapshot } from "@/lib/finance-live";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
 import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, stripeTreasury, type StripeRead } from "@/lib/finance-stripe";
@@ -37,7 +40,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const range = periodRange(period);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -52,6 +55,8 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     liveSnapshot(ws),
     invoicedInPeriod(ws, range),
     sharesByOwner(ws, range),
+    openInvoiceDues(ws),
+    unpaidStatements(ws),
   ]);
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
@@ -106,6 +111,18 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     shares,
   };
 
+  // Runway: walk the balance back through the period from today's figure, then project 60 days on.
+  const today = salesToday();
+  const runwayBalance = hasTreasury ? treasury.data.cash : balance.ok ? balance.data.available + balance.data.pending : null;
+  const runway =
+    runwayBalance !== null && activity.ok
+      ? {
+          history: balanceSeries({ date: today, cents: runwayBalance }, range.startIso, activity.data.days, !hasTreasury),
+          projection: projectForward(runwayBalance, dues, statementsDue, today),
+          sourceLabel: hasTreasury ? "Business account" : "Payments balance",
+        }
+      : null;
+
   return (
     <LiveProvider initial={live}>
     <main className="shell page">
@@ -153,6 +170,15 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
           <div><h2 id="flow-title">Money flow</h2><p>Open pipeline (weighted), won, invoiced and paid in {range.label.toLowerCase()}, then where the paid money went. Hover a band for the amount.</p></div>
         </div>
         <div className="finance-body"><MoneyFlow input={flowInput} periodLabel={range.label} /></div>
+      </section>
+
+      <section className="admin-panel finance-section" aria-labelledby="runway-title">
+        <div className="admin-panel-head">
+          <div><h2 id="runway-title">Runway</h2><p>The balance through {range.label.toLowerCase()}, rebuilt from Stripe activity, and the next 60 days if open invoices are paid on their due dates and commission statements go out on the 5th.</p></div>
+        </div>
+        <div className="finance-body">
+          {runway ? <Runway {...runway} /> : <p className="small muted">{connected ? "The runway draws from Stripe's balance and activity, which aren't available right now." : "Connect Stripe to see the balance over time and where it's heading."}</p>}
+        </div>
       </section>
 
       <section className="admin-panel finance-section" aria-labelledby="revenue-title">

@@ -92,12 +92,14 @@ export function LiveProvider({ initial, children }: { initial: LiveSnapshot; chi
       busy = true;
       try {
         const res = await fetch(withBase("/api/finance/live"), { cache: "no-store", headers: { accept: "application/json" } });
-        if (res.status === 401 || res.status === 404) {
+        // A lapsed session is redirected to the sign-in page rather than answering 401.
+        const json = res.headers.get("content-type")?.includes("application/json");
+        if (res.status === 401 || res.status === 404 || (res.redirected && !json)) {
           stopped = true;
           setStatus("signed-out");
           return;
         }
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok || !json) throw new Error(String(res.status));
         apply((await res.json()) as LiveSnapshot);
         setStatus("live");
       } catch {

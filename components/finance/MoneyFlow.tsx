@@ -20,7 +20,7 @@ export function MoneyFlow({ input, periodLabel, height: H = 340 }: { input: Mone
   const flow = moneyFlow(input);
   const { nodes, links, columns } = sankeyLayout(flow.nodes, flow.links, { w: W, h: H, nodeWidth: NODE, gap: 14 });
   if (!nodes.length) {
-    return <p className="admin-empty">The flow from pipeline to paid draws here once there&apos;s an open deal, a won deal, an invoice or a payment in {periodLabel.toLowerCase()}.</p>;
+    return <p className="small muted">The flow from pipeline to paid draws here once there&apos;s an open deal, a won deal, an invoice or a payment in {periodLabel.toLowerCase()}.</p>;
   }
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const last = Math.max(...nodes.map((n) => n.column));

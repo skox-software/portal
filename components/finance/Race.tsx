@@ -51,7 +51,8 @@ export function Race({ mtd, ytd, lastMonth, today }: { mtd: LeaderRow[]; ytd: Le
           <div key={b.title} className="frace-block">
             <h3 className="finance-subhead">{b.title}</h3>
             {(["cash", "won"] as const).map((metric) => {
-              const paces = b.lanes.map((l) => paceToDate(l[metric], b.day, b.days));
+              // Cash pace in whole dollars: it's an estimate.
+              const paces = b.lanes.map((l) => (metric === "cash" ? Math.round(paceToDate(l.cash, b.day, b.days) / 100) * 100 : paceToDate(l.won, b.day, b.days)));
               const max = Math.max(1, ...b.lanes.map((l) => l[metric]), ...paces);
               const fmt = (n: number) => (metric === "cash" ? formatMoney(n) : `${n} won`);
               return (

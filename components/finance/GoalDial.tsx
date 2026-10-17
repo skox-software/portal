@@ -27,7 +27,8 @@ export function GoalDial({
 }) {
   const year = today.slice(0, 4);
   const p = calendarProgress(today);
-  const pace = paceToDate(ytdCents, p.dayOfYear, p.daysInYear);
+  // Projections are estimates: whole dollars, never cents.
+  const pace = Math.round(paceToDate(ytdCents, p.dayOfYear, p.daysInYear) / 100) * 100;
   const r = (SIZE - STROKE) / 2;
   const mid = SIZE / 2;
   const c = 2 * Math.PI * r;
@@ -40,7 +41,7 @@ export function GoalDial({
   const tick = (k: number) => [mid + Math.cos(angle) * (r + k), mid + Math.sin(angle) * (r + k)];
   const [tx1, ty1] = tick(-STROKE / 2 - 3);
   const [tx2, ty2] = tick(STROKE / 2 + 3);
-  const center = balanceCents ?? ytdCents;
+  const center = formatMoney(balanceCents ?? ytdCents);
 
   return (
     <div className="fgoal">
@@ -62,7 +63,7 @@ export function GoalDial({
           />
         )}
         {goalCents && <line x1={tx1} y1={ty1} x2={tx2} y2={ty2} className="fgoal-tick"><title>{`Where an even year would be by today: ${formatMoney(Math.round(goalCents * due))}`}</title></line>}
-        <text x="50%" y="44%" textAnchor="middle" dominantBaseline="central" className="fgoal-value">{formatMoney(center)}</text>
+        <text x="50%" y="44%" textAnchor="middle" dominantBaseline="central" className="fgoal-value" data-long={center.length > 9 ? "" : undefined}>{center}</text>
         <text x="50%" y="58%" textAnchor="middle" dominantBaseline="central" className="fgoal-caption">{balanceCents !== null ? balanceLabel : `collected in ${year}`}</text>
       </svg>
       <div className="fgoal-copy">

@@ -86,7 +86,7 @@ export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "
 export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
 export const onboardingStatus = pgEnum("onboarding_status", ["invited", "in_progress", "completed"]);
 /** Pre-sale stages only. Once a deal becomes a project, the project's status drives the board. */
-export const dealStage = pgEnum("deal_stage", ["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]);
+export const dealStage = pgEnum("deal_stage", ["lead", "initial_outreach", "follow_up_2", "follow_up_3", "persistent_follow_up", "proposal_sent", "negotiation", "won", "lost"]);
 
 export const workspaces = pgTable("workspaces", {
   id: id(),
@@ -135,6 +135,7 @@ export const memberships = pgTable(
     invitedBy: text("invited_by"),
     createdAt: createdAt(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
     /** Drives "since your last visit" and the client health score. */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     emailUpdates: boolean("email_updates").notNull().default(true),

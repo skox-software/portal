@@ -12,6 +12,8 @@ const items = [
   ["/admin/billing", "Billing", "$"],
   ["/admin/requests", "Requests", "↗"],
   ["/admin/activity", "Activity", "◷"],
+  ["/admin/team", "People & access", "◎"],
+  ["/sales", "Employee Portal", "⇉"],
   ["/admin/settings", "Settings", "⚙"],
 ];
 

@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const viewer = await requireViewer();
-  if (staffMembershipIn(viewer.memberships)) redirect("/admin");
+  const team = staffMembershipIn(viewer.memberships);
+  if (team) redirect(team.role === "staff_owner" ? "/admin" : "/sales");
 
   const clientIds = viewer.memberships.flatMap((m) => (m.clientId ? [m.clientId] : []));
   const rows = clientIds.length

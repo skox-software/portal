@@ -38,7 +38,7 @@ export async function sendWeeklyDigests(now = new Date()) {
     if (unwelcomed.has(project.id)) continue;
     const [recent, people, openTasks, openInvoices] = await Promise.all([
       db.select().from(events).where(and(eq(events.projectId, project.id), gt(events.createdAt, since))).orderBy(desc(events.createdAt)).limit(60),
-      db.select().from(memberships).where(and(eq(memberships.clientId, project.clientId), eq(memberships.emailUpdates, true))),
+      db.select().from(memberships).where(and(eq(memberships.clientId, project.clientId), eq(memberships.emailUpdates, true), isNull(memberships.revokedAt))),
       db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.projectId, project.id), eq(tasks.side, "client"), isNull(tasks.doneAt))),
       db.select({ id: invoices.id }).from(invoices).where(and(eq(invoices.projectId, project.id), eq(invoices.status, "open"))),
     ]);

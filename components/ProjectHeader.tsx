@@ -33,7 +33,7 @@ export function ProjectHeader({
   });
   return (
     <>
-      <TopBar viewer={viewer} />
+      <TopBar viewer={viewer} portal="Client Portal" />
       <div className="project-band">
         <div className="shell">
           <div className="page-head page-head-tight">
@@ -78,6 +78,7 @@ export function ProjectHeader({
           item("support", "Requests", "/support", "requests"),
         ]}
         more={[
+          item("messages", "Emails", "/messages", "mail"),
           item("meetings", "Meetings", "/meetings", "meetings"),
           item("documents", "Documents", "/documents", "documents"),
           item("files", "Files", "/files", "files"),

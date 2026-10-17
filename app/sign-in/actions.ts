@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth/server";
@@ -42,7 +42,7 @@ export async function signInWithCode(
     const [invited] = await getDb()
       .select({ id: memberships.id })
       .from(memberships)
-      .where(eq(memberships.email, email))
+      .where(and(eq(memberships.email, email), isNull(memberships.revokedAt)))
       .limit(1);
     if (invited) {
       const { error } = await getAuth().emailOtp.sendVerificationOtp({ email, type: "sign-in" });

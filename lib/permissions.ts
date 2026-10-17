@@ -17,6 +17,7 @@ export type MembershipLike = {
   workspaceId: string;
   clientId: string | null;
   role: PortalRole;
+  revokedAt?: Date | null;
 };
 
 export type ProjectAccess = {
@@ -39,6 +40,7 @@ export function staffMembershipIn<T extends MembershipLike>(
 ) {
   return memberships.find(
     (m) =>
+      !m.revokedAt &&
       m.clientId === null &&
       isStaffRole(m.role) &&
       (workspaceId === undefined || m.workspaceId === workspaceId),
@@ -54,9 +56,10 @@ export function accessToProject(
   memberships: MembershipLike[],
   project: { workspaceId: string; clientId: string },
 ): ProjectAccess | null {
-  const isStaff = Boolean(staffMembershipIn(memberships, project.workspaceId));
+  const isStaff = staffMembershipIn(memberships, project.workspaceId)?.role === "staff_owner";
   const client = memberships.find(
     (m) =>
+      !m.revokedAt &&
       m.workspaceId === project.workspaceId &&
       m.clientId === project.clientId &&
       !isStaffRole(m.role),

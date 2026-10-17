@@ -47,7 +47,7 @@ export async function loadPipeline(workspaceId: string) {
     db
       .select({ email: memberships.email })
       .from(memberships)
-      .where(and(eq(memberships.workspaceId, ws), isNull(memberships.clientId)))
+      .where(and(eq(memberships.workspaceId, ws), isNull(memberships.clientId), isNull(memberships.revokedAt)))
       .orderBy(memberships.createdAt),
     db.select().from(clients).where(eq(clients.workspaceId, ws)),
   ]);

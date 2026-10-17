@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { after } from "next/server";
 import { getDb } from "@/lib/db";
 import { memberships } from "@/lib/db/schema";
@@ -17,7 +17,7 @@ export async function clientRecipients(
   const rows = await getDb()
     .select({ email: memberships.email, role: memberships.role, emailUpdates: memberships.emailUpdates })
     .from(memberships)
-    .where(eq(memberships.clientId, clientId));
+    .where(and(eq(memberships.clientId, clientId), isNull(memberships.revokedAt)));
   return rows
     .filter((r) => opts.actionRequired || r.emailUpdates)
     .filter((r) => !opts.approversOnly || r.role === "client_approver")
@@ -33,7 +33,8 @@ export async function staffRecipients(workspaceId: string, exceptEmail?: string)
       and(
         eq(memberships.workspaceId, workspaceId),
         isNull(memberships.clientId),
-        inArray(memberships.role, ["staff_owner", "staff"]),
+        eq(memberships.role, "staff_owner"),
+        isNull(memberships.revokedAt),
       ),
     );
   return rows.map((r) => r.email).filter((e) => e !== exceptEmail);

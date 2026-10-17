@@ -14,7 +14,7 @@ export async function GET() {
   const viewer = await getViewer();
   if (!viewer) return new Response("Sign in", { status: 401 });
   const staff = staffMembershipIn(viewer.memberships);
-  if (!staff) return new Response("Not found", { status: 404 });
+  if (!staff || staff.role !== "staff_owner") return new Response("Not found", { status: 404 });
 
   const rows = await getDb()
     .select({

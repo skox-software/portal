@@ -14,7 +14,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/inbox/attach
   if (!z.uuid().safeParse(id).success) return new Response("Not found", { status: 404 });
 
   const [message] = await getDb().select().from(emailMessages).where(eq(emailMessages.id, id)).limit(1);
-  if (!message || !staffMembershipIn(viewer.memberships, message.workspaceId)) return new Response("Not found", { status: 404 });
+  if (!message || staffMembershipIn(viewer.memberships, message.workspaceId)?.role !== "staff_owner") return new Response("Not found", { status: 404 });
   const file = message.attachments[Number(index)];
   if (!file?.storageKey) return new Response("Not found", { status: 404 });
 

@@ -11,7 +11,10 @@
 
 export const COLUMNS = [
   { key: "lead", label: "Lead" },
-  { key: "initial_outreach", label: "Initial outreach" },
+  { key: "initial_outreach", label: "Follow up 1" },
+  { key: "follow_up_2", label: "Second follow up" },
+  { key: "follow_up_3", label: "Third follow up" },
+  { key: "persistent_follow_up", label: "Persistent follow up" },
   { key: "proposal_sent", label: "Proposal sent" },
   { key: "negotiation", label: "Negotiation" },
   { key: "won", label: "Won" },
@@ -20,15 +23,15 @@ export const COLUMNS = [
 ] as const;
 
 export type ColumnKey = (typeof COLUMNS)[number]["key"];
-export type DealStage = "lead" | "initial_outreach" | "proposal_sent" | "negotiation" | "won" | "lost";
+export type DealStage = "lead" | "initial_outreach" | "follow_up_2" | "follow_up_3" | "persistent_follow_up" | "proposal_sent" | "negotiation" | "won" | "lost";
 export type ProjectStatus = "kickoff" | "building" | "review" | "launched" | "paused";
 export type CardType = "deal" | "project" | "referral";
 
 /** The board shows only these; builds and launches live on Projects. */
-export const SALES_COLUMNS: readonly ColumnKey[] = ["lead", "initial_outreach", "proposal_sent", "negotiation", "won"];
+export const SALES_COLUMNS: readonly ColumnKey[] = ["lead", "initial_outreach", "follow_up_2", "follow_up_3", "persistent_follow_up", "proposal_sent", "negotiation", "won"];
 
 /** Pre-sale columns, where a card can sit untouched for too long. */
-export const PRESALE: readonly ColumnKey[] = ["lead", "initial_outreach", "proposal_sent", "negotiation"];
+export const PRESALE: readonly ColumnKey[] = ["lead", "initial_outreach", "follow_up_2", "follow_up_3", "persistent_follow_up", "proposal_sent", "negotiation"];
 export const STALL_DAYS = 10;
 
 export const DEAL_KINDS = [
@@ -75,7 +78,7 @@ export function dealStageForColumn(column: ColumnKey | "lost"): DealStage | null
 /** Which columns a card may move to, for its stage menu. */
 export function allowedColumns(type: CardType): readonly (ColumnKey | "lost")[] {
   if (type === "project") return ["won", "in_build", "shipped"];
-  return ["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"];
+  return ["lead", "initial_outreach", "follow_up_2", "follow_up_3", "persistent_follow_up", "proposal_sent", "negotiation", "won", "lost"];
 }
 
 export function daysSince(from: Date, now: Date) {
@@ -288,7 +291,7 @@ export function boardTotals(columns: ReturnType<typeof buildBoard>["columns"], n
   const sum = (keys: ColumnKey[]) =>
     columns.filter((c) => keys.includes(c.key)).reduce((n, c) => n + c.totalCents, 0);
   return {
-    openCents: sum(["lead", "initial_outreach", "proposal_sent", "negotiation"]),
+    openCents: sum(["lead", "initial_outreach", "follow_up_2", "follow_up_3", "persistent_follow_up", "proposal_sent", "negotiation"]),
     wonCents: sum(["won", "in_build"]),
     stalled: columns.flatMap((c) => c.cards).filter((card) => isStalled(card.column, card.since, now)).length,
   };

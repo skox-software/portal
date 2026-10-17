@@ -49,10 +49,10 @@ export async function getViewer(): Promise<Viewer | null> {
     await db
       .update(memberships)
       .set({ userId: user.id, acceptedAt: new Date() })
-      .where(and(eq(memberships.email, email), isNull(memberships.userId)));
+      .where(and(eq(memberships.email, email), isNull(memberships.userId), isNull(memberships.revokedAt)));
   }
 
-  const rows = await db.select().from(memberships).where(eq(memberships.userId, user.id));
+  const rows = await db.select().from(memberships).where(and(eq(memberships.userId, user.id), isNull(memberships.revokedAt)));
   return { userId: user.id, email, name: user.name || null, memberships: rows };
 }
 
@@ -66,7 +66,7 @@ export async function requireViewer() {
 export async function requireStaff() {
   const viewer = await requireViewer();
   const staff = staffMembershipIn(viewer.memberships);
-  if (!staff) notFound();
+  if (!staff || staff.role !== "staff_owner") notFound();
   return { viewer, staff };
 }
 

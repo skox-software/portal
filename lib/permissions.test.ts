@@ -16,7 +16,7 @@ const CLIENT = "client-acme";
 const OTHER_CLIENT = "client-globex";
 const project = { workspaceId: WS, clientId: CLIENT };
 
-const staff: MembershipLike = { workspaceId: WS, clientId: null, role: "staff" };
+const staff: MembershipLike = { workspaceId: WS, clientId: null, role: "staff_owner" };
 const approver: MembershipLike = { workspaceId: WS, clientId: CLIENT, role: "client_approver" };
 const member: MembershipLike = { workspaceId: WS, clientId: CLIENT, role: "client_member" };
 

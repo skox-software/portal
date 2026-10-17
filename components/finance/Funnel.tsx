@@ -25,7 +25,15 @@ export function Funnel({ rows, source, periodLabel }: { rows: FunnelRow[]; sourc
           const top = width(r.count);
           const bottom = next ? width(next.count) : top * 0.88;
           const label = stageName(r.stage);
-          const tip = `${label}: ${r.count} deal${r.count === 1 ? "" : "s"}${source === "events" ? " entered" : ""} · ${formatMoney(r.valueCents)}${r.conversion !== null && next ? ` · ${pct(r.conversion)} went on to ${stageName(next.stage)}` : ""}`;
+          // More deals can reach a stage than entered the one before it in the period (they were added earlier): no rate then.
+          const rate = r.conversion !== null && next && r.conversion <= 1 ? r.conversion : null;
+          const onward =
+            rate !== null
+              ? ` · ${pct(rate)} went on to ${stageName(next!.stage)}`
+              : next && r.conversion !== null
+                ? ` · ${next.count} reached ${stageName(next.stage)}, some from earlier periods`
+                : "";
+          const tip = `${label}: ${r.count} deal${r.count === 1 ? "" : "s"}${source === "events" ? " entered" : ""} · ${formatMoney(r.valueCents)}${onward}`;
           return (
             <li key={r.stage}>
               <Link href={`/admin/clients?stage=${r.stage}`} className="ffunnel-row" data-tip={tip} data-stage={r.stage} style={{ ["--i" as string]: i }}>
@@ -38,7 +46,7 @@ export function Funnel({ rows, source, periodLabel }: { rows: FunnelRow[]; sourc
                 </span>
                 <span className="ffunnel-figs">
                   <span>{formatMoney(r.valueCents)}</span>
-                  {r.conversion !== null && next && <small>{pct(r.conversion)} on</small>}
+                  {rate !== null && <small>{pct(rate)} on</small>}
                 </span>
               </Link>
             </li>

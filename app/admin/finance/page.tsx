@@ -103,7 +103,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
       </div>
 
       {!connected ? (
-        <p className="finance-strip"><strong>Connect Stripe</strong> to see balance, fees and payouts here. Add a restricted key with read access to Balance, Payouts, Charges, PaymentIntents and Treasury financial accounts as STRIPE_SECRET_KEY. Portal numbers below are complete without it.</p>
+        <p className="finance-strip"><strong>Connect Stripe</strong> to see balance, fees and payouts here. Add a restricted key with read access to Balance, Payouts, Charges, PaymentIntents and Financial accounts (Money management) as STRIPE_SECRET_KEY. Portal numbers below are complete without it.</p>
       ) : failures.length > 0 ? (
         <p className="finance-strip" role="status"><strong>Stripe unavailable:</strong> {failures.join("; ")}. Portal numbers below are unaffected.</p>
       ) : null}
@@ -113,7 +113,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
           <div className="admin-metric">
             <span>Business account</span>
             <strong>{formatMoney(treasury.data.cash)}</strong>
-            <small>{treasury.data.accounts[0].last4 ? `Stripe Treasury ··${treasury.data.accounts[0].last4}` : "Stripe Treasury"}{treasury.data.inboundPending ? ` · ${formatMoney(treasury.data.inboundPending)} arriving` : ""}</small>
+            <small>{treasury.data.accounts[0].name ?? "Stripe business account"}{treasury.data.inboundPending ? ` · ${formatMoney(treasury.data.inboundPending)} arriving` : ""}</small>
           </div>
         )}
         <div className="admin-metric"><span>Payments balance</span><strong>{stripeMoney(balance, (b) => b.available + b.pending)}</strong><small>{balance.ok && balance.data.pending ? `${formatMoney(balance.data.pending)} still settling` : hasTreasury ? "Auto-transfers to the business account" : "Available and settling"}</small></div>

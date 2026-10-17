@@ -11,8 +11,8 @@ import { sumBalanceTransactions } from "@/lib/fee-math";
  * The portal's own numbers never wait on these.
  *
  * Read permissions the key needs: Balance (includes balance transactions),
- * Payouts, Charges, PaymentIntents and, for the business account, Treasury
- * financial accounts. See docs/FINANCE.md.
+ * Payouts, Charges, PaymentIntents and, for the business account, Money
+ * management → Financial accounts (`financial_account_read`). See docs/FINANCE.md.
  */
 
 export type StripeRead<T> = { ok: true; data: T } | { ok: false; reason: string };
@@ -60,25 +60,44 @@ export function stripeBalance(fresh = false) {
   });
 }
 
-export type TreasuryAccount = { id: string; last4: string | null; cash: number; inboundPending: number; outboundPending: number };
+export type TreasuryAccount = { id: string; name: string | null; cash: number; inboundPending: number; outboundPending: number };
+
+/** A v2 FinancialAccount, as far as the dashboard reads it. Amounts are per currency: `{ usd: { value, currency } }`. */
+type V2FinancialAccount = {
+  id: string;
+  display_name: string | null;
+  status: "open" | "pending" | "closed";
+  type: string;
+  balance: Record<"available" | "inbound_pending" | "outbound_pending", Record<string, { value: number; currency: string }> | undefined>;
+};
+
+/** The v2 money-management API is in preview: it needs this version header, not the SDK default. */
+const V2_API_VERSION = "2026-09-30.preview";
 
 /**
- * SKOX's money sits in a Stripe Treasury business account, not the payments
- * balance: "Earnings auto-transfer" sweeps each payment there, so the
- * payments balance reads $0 and no payouts to a bank exist. This is the
- * balance Josh and Reiss mean when they say "the account".
+ * SKOX's money sits in a Stripe business account (a v2 FinancialAccount of
+ * type `storage`), not the payments balance: "Earnings auto-transfer"
+ * sweeps each payment there, so the payments balance reads $0 and no bank
+ * payouts exist. This is the balance Josh and Reiss mean by "the account".
+ *
+ * The installed SDK has no wrapper for `/v2/money_management`, so this is a
+ * raw request. Not the older `/v1/treasury` API, which is for platforms and
+ * returns "Unrecognized request URL" on this account.
  */
 export function stripeTreasury(fresh = false) {
-  return cached("treasury", BALANCE_TTL_MS, fresh, async () => {
-    const list = await stripeClient().treasury.financialAccounts.list({ limit: 5 }, REQUEST);
-    const accounts: TreasuryAccount[] = list.data
+  return cached("business-account", BALANCE_TTL_MS, fresh, async () => {
+    const page = (await stripeClient().rawRequest("GET", "/v2/money_management/financial_accounts?limit=10", undefined, { ...REQUEST, apiVersion: V2_API_VERSION })) as {
+      data?: V2FinancialAccount[];
+    };
+    const usd = (m?: Record<string, { value: number }>) => m?.usd?.value ?? 0;
+    const accounts: TreasuryAccount[] = (page.data ?? [])
       .filter((fa) => fa.status === "open")
       .map((fa) => ({
         id: fa.id,
-        last4: fa.financial_addresses?.find((a) => a.aba?.account_number_last4)?.aba?.account_number_last4 ?? null,
-        cash: fa.balance.cash.usd ?? 0,
-        inboundPending: fa.balance.inbound_pending.usd ?? 0,
-        outboundPending: fa.balance.outbound_pending.usd ?? 0,
+        name: fa.display_name,
+        cash: usd(fa.balance?.available),
+        inboundPending: usd(fa.balance?.inbound_pending),
+        outboundPending: usd(fa.balance?.outbound_pending),
       }));
     return { accounts, cash: accounts.reduce((s, a) => s + a.cash, 0), inboundPending: accounts.reduce((s, a) => s + a.inboundPending, 0) };
   });

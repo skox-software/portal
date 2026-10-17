@@ -59,10 +59,13 @@ export function barLayout(series: BarDatum[], frame: Frame) {
 
 export type StackDatum = { key: string; label: string; parts: number[] };
 
-/** Bars made of stacked parts (negative parts count as zero), bottom part first. */
-export function stackedLayout(series: StackDatum[], frame: Frame) {
+/**
+ * Bars made of stacked parts (negative parts count as zero), bottom part first.
+ * `atLeast` raises the axis so a line drawn over the bars (Stripe net) fits too.
+ */
+export function stackedLayout(series: StackDatum[], frame: Frame, atLeast = 0) {
   const totals = series.map((d) => d.parts.reduce((s, v) => s + Math.max(0, v), 0));
-  const max = niceMax(Math.max(0, ...totals));
+  const max = niceMax(Math.max(atLeast, ...totals));
   const baseline = plot(frame).y0 + plot(frame).height;
   const bars = series.map((d, i) => {
     const s = slot(i, series.length, frame);

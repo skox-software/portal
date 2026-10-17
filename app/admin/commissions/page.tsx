@@ -1,3 +1,5 @@
+import { financeWithdrawals } from "@/lib/finance-withdrawals";
+import { EarningsBreakdown } from "@/components/finance/EarningsBreakdown";
 import { and, desc, eq, ne } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -27,7 +29,7 @@ export default async function AdminCommissions({ searchParams }: { searchParams:
   const ws = staff.workspaceId;
   const db = getDb();
   const repFilter = typeof sp.rep === "string" ? sp.rep : "";
-  const [reps, totals, statements, entries] = await Promise.all([
+  const [reps, totals, statements, entries, withdrawals] = await Promise.all([
     workspaceReps(ws),
     repTotals(ws),
     db.select().from(commissionStatements).where(eq(commissionStatements.workspaceId, ws)).orderBy(desc(commissionStatements.periodStart)).limit(60),
@@ -37,6 +39,7 @@ export default async function AdminCommissions({ searchParams }: { searchParams:
       .where(and(eq(commissionEntries.workspaceId, ws), ne(commissionEntries.status, "void"), ...(repFilter ? [eq(commissionEntries.repMembershipId, repFilter)] : [])))
       .orderBy(desc(commissionEntries.earnedAt))
       .limit(200),
+    financeWithdrawals(ws),
   ]);
   const nameOf = new Map(reps.map((r) => [r.membership.id, r.profile.displayName]));
   const open = statements.filter((s) => s.status === "draft" || s.status === "approved");
@@ -62,11 +65,13 @@ export default async function AdminCommissions({ searchParams }: { searchParams:
       <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
 
       <div className="admin-metrics">
-        <div className="admin-metric"><span>Owed to reps</span><strong>{formatMoney(owed)}</strong></div>
+        <div className="admin-metric"><span>Unpaid gross ledger balance</span><strong>{formatMoney(owed)}</strong></div>
         <div className="admin-metric"><span>Statements to act on</span><strong>{open.length}</strong></div>
         <div className="admin-metric"><span>Paid in {year}</span><strong>{formatMoney(paidYear)}</strong></div>
         <div className="admin-metric"><span>Reps</span><strong>{reps.length}</strong></div>
       </div>
+
+      <EarningsBreakdown data={withdrawals} people={reps.map(r => ({ id: r.membership.id, name: r.profile.displayName }))} />
 
       <div className="rep-grid">
         <div className="stack">
@@ -147,7 +152,7 @@ export default async function AdminCommissions({ searchParams }: { searchParams:
                     <li key={r.membership.id}>
                       <Link className="rep-row" href={`/admin/commissions?rep=${r.membership.id}#ledger`}>
                         <strong>{r.profile.displayName}</strong>
-                        <span className="rep-money">{formatMoney(t.pending + t.approved)} owed</span>
+                        <span className="rep-money">{formatMoney(t.pending + t.approved)} unpaid gross</span>
                         <small>{formatMoney(t.paidThisYear)} paid in {year}</small>
                       </Link>
                     </li>

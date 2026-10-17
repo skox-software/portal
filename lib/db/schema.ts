@@ -914,3 +914,14 @@ export type Client = typeof clients.$inferSelect;
 export type Deal = typeof deals.$inferSelect;
 export type EmailThread = typeof emailThreads.$inferSelect;
 export type EmailMessage = typeof emailMessages.$inferSelect;
+
+/** Recorded business spending charged against a person's withdrawals, never gross ownership. */
+export const withdrawalExpenses = pgTable("withdrawal_expenses", {
+  id: id(),
+  workspaceId: workspaceId(),
+  membershipId: uuid("membership_id").notNull().references(() => memberships.id, { onDelete: "restrict" }),
+  reference: text("reference").notNull(),
+  description: text("description").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  createdAt: createdAt(),
+}, t => [unique("withdrawal_expenses_workspace_reference").on(t.workspaceId, t.reference)]);

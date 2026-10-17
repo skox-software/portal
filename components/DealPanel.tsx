@@ -137,7 +137,7 @@ export async function DealPanel({
               Call {deal.phone}
             </a>
           )}
-          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} />}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} />}
           {deal.website && (
             <a className="btn btn-ghost btn-small" href={deal.website} target="_blank" rel="noreferrer" data-reach="site" title="Website (W)">
               Website ↗

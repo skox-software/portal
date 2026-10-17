@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { logCall } from "@/app/admin/pipeline/actions";
 import { SubmitButton } from "@/components/SubmitButton";
-import { mailtoHref } from "@/lib/email-draft";
+import { updateLeadEmail } from "@/app/admin/pipeline/email-actions";
+import type { SavedEmailDraft } from "@/lib/call-brief";
+import { LEAD_SENDER_EMAIL } from "@/lib/lead-email";
 
 /**
  * The first email, drafted from the brief. Edit it here, then open it in the
- * mail app (subject and body filled in) or copy it. "Log as emailed" records
+ * portal from Reiss's address, save it, or copy it. "Log as emailed" records
  * it and sets the follow-up.
  */
 export function EmailDraft({
@@ -17,8 +19,12 @@ export function EmailDraft({
   base,
   back,
   initiallyOpen = false,
+  saved,
+  canSend,
 }: {
   initiallyOpen?: boolean;
+  saved?: SavedEmailDraft;
+  canSend: boolean;
   dealId: string;
   to: string | null;
   draft: { subject: string; body: string };
@@ -29,6 +35,23 @@ export function EmailDraft({
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const [copied, setCopied] = useState<string | null>(null);
+
+  const [pending, setPending] = useState(false);
+  const [status, setStatus] = useState(saved?.status ?? "draft");
+  const [message, setMessage] = useState("");
+  async function persist(intent: "save" | "send") {
+    if (!to || pending || status !== "draft") return;
+    setPending(true);
+    setMessage("");
+    try {
+      const result = await updateLeadEmail({ dealId, to, subject, body, intent });
+      setMessage(result.error ?? result.notice ?? "");
+      if (result.status) setStatus(result.status);
+    } catch {
+      setMessage("Could not confirm the result. Reload before trying again.");
+      if (intent === "send") setStatus("sending");
+    } finally { setPending(false); }
+  }
 
   async function copy(what: "subject" | "body" | "all") {
     const text = what === "subject" ? subject : what === "body" ? body : `Subject: ${subject}\n\n${body}`;
@@ -51,18 +74,20 @@ export function EmailDraft({
           <div className="email-draft-to small">
             To: {to ? <strong>{to}</strong> : <span className="muted">no email on file; add it in the mail app or Details</span>}
           </div>
+          <p className="small">From: <strong>{LEAD_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "sending" ? "Processing" : "Draft — not sent"}</p>
           <label className="sr-only" htmlFor={`email-subject-${dealId}`}>
             Subject
           </label>
-          <input id={`email-subject-${dealId}`} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />
+          <input id={`email-subject-${dealId}`} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} disabled={pending || status !== "draft"} />
           <label className="sr-only" htmlFor={`email-body-${dealId}`}>
             Body
           </label>
-          <textarea id={`email-body-${dealId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={12} />
+          <textarea id={`email-body-${dealId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={12} disabled={pending || status !== "draft"} />
           <div className="email-draft-actions">
-            <a className="btn btn-primary btn-small" href={mailtoHref(to, { subject, body })}>
-              Open in mail app
-            </a>
+            <button type="button" className="btn btn-primary btn-small" onClick={() => persist("send")} disabled={!canSend || !to || pending || status !== "draft"}>
+              {pending ? "Working…" : "Send email"}
+            </button>
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => persist("save")} disabled={!to || pending || status !== "draft"}>Save draft</button>
             <button type="button" className="btn btn-ghost btn-small" onClick={() => copy("all")}>
               {copied === "all" ? "Copied" : "Copy all"}
             </button>
@@ -79,6 +104,8 @@ export function EmailDraft({
               </SubmitButton>
             </form>
           </div>
+          {message && <p role="status" className="small">{message}</p>}
+          {!canSend && <p className="small muted">Sign in as {LEAD_SENDER_EMAIL} to send.</p>}
           {copied === "failed" && <p className="small muted">Couldn&apos;t reach the clipboard. Select the text and copy it.</p>}
         </section>
       )}

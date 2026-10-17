@@ -8,7 +8,7 @@ import { PeriodSwitcher } from "@/components/PeriodSwitcher";
 import { requireStaff } from "@/lib/access";
 import { collectedByBucket, dealsWonByOwner, invoicesByPaymentIntent, leaderboard, outstanding, refundsByBucket, weightedPipeline } from "@/lib/finance-data";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
-import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, type StripeRead } from "@/lib/finance-stripe";
+import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, stripeTreasury, type StripeRead } from "@/lib/finance-stripe";
 import { firstName, formatDate, formatMoney } from "@/lib/format";
 import { columnLabel } from "@/lib/pipeline";
 import { stripeEnabled } from "@/lib/stripe";
@@ -32,7 +32,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const range = periodRange(period);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -43,7 +43,11 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     stripePayouts(fresh),
     stripeActivity(range, fresh),
     stripeCharges(range, fresh),
+    stripeTreasury(fresh),
   ]);
+  // No Treasury account at all is a fact, not a failure; a permission error is.
+  const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
+  const nextPayout = payouts.ok ? payouts.data.next : null;
   const chargeInvoices = charges.ok ? await invoicesByPaymentIntent(ws, charges.data.flatMap((c) => (c.paymentIntent ? [c.paymentIntent] : []))) : new Map();
 
   const keys = bucketKeys(range);
@@ -51,7 +55,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const collectedTotal = collected.reduce((s, b) => s + b.value.cents, 0);
   const paymentCount = collected.reduce((s, b) => s + b.value.count, 0);
   const refundTotal = refunds.reduce((s, b) => s + b.value, 0);
-  const failures = [...new Set([balance, payouts, activity, charges].flatMap((r) => (r.ok ? [] : [r.reason])))];
+  const failures = [...new Set([balance, payouts, activity, charges, treasury].flatMap((r) => (r.ok ? [] : [r.reason])))];
 
   const revenue = keys.map((key, i) => {
     const cash = collected[i].value.cents;
@@ -99,19 +103,27 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
       </div>
 
       {!connected ? (
-        <p className="finance-strip"><strong>Connect Stripe</strong> to see balance, fees and payouts here. Add a restricted key with read access to Balance, Payouts, Charges and PaymentIntents as STRIPE_SECRET_KEY. Portal numbers below are complete without it.</p>
+        <p className="finance-strip"><strong>Connect Stripe</strong> to see balance, fees and payouts here. Add a restricted key with read access to Balance, Payouts, Charges, PaymentIntents and Treasury financial accounts as STRIPE_SECRET_KEY. Portal numbers below are complete without it.</p>
       ) : failures.length > 0 ? (
         <p className="finance-strip" role="status"><strong>Stripe unavailable:</strong> {failures.join("; ")}. Portal numbers below are unaffected.</p>
       ) : null}
 
       <section className="admin-metrics finance-metrics" aria-label="Money summary">
-        <div className="admin-metric"><span>Stripe available</span><strong>{stripeMoney(balance, (b) => b.available)}</strong><small>Ready to pay out</small></div>
-        <div className="admin-metric"><span>Stripe pending</span><strong>{stripeMoney(balance, (b) => b.pending)}</strong><small>Still settling</small></div>
-        <div className="admin-metric">
-          <span>Next payout</span>
-          <strong>{payouts.ok ? (payouts.data.next ? formatMoney(payouts.data.next.amount) : "None") : "—"}</strong>
-          <small>{payouts.ok ? (payouts.data.next ? `Arrives ${formatDate(unixToSalesDate(payouts.data.next.arrivalDate))}` : "Nothing scheduled") : "Stripe unavailable"}</small>
-        </div>
+        {hasTreasury && (
+          <div className="admin-metric">
+            <span>Business account</span>
+            <strong>{formatMoney(treasury.data.cash)}</strong>
+            <small>{treasury.data.accounts[0].last4 ? `Stripe Treasury ··${treasury.data.accounts[0].last4}` : "Stripe Treasury"}{treasury.data.inboundPending ? ` · ${formatMoney(treasury.data.inboundPending)} arriving` : ""}</small>
+          </div>
+        )}
+        <div className="admin-metric"><span>Payments balance</span><strong>{stripeMoney(balance, (b) => b.available + b.pending)}</strong><small>{balance.ok && balance.data.pending ? `${formatMoney(balance.data.pending)} still settling` : hasTreasury ? "Auto-transfers to the business account" : "Available and settling"}</small></div>
+        {(!hasTreasury || nextPayout) && (
+          <div className="admin-metric">
+            <span>Next payout</span>
+            <strong>{payouts.ok ? (nextPayout ? formatMoney(nextPayout.amount) : "None") : "—"}</strong>
+            <small>{payouts.ok ? (nextPayout ? `Arrives ${formatDate(unixToSalesDate(nextPayout.arrivalDate))}` : "Nothing scheduled") : "Stripe unavailable"}</small>
+          </div>
+        )}
         <Link className="admin-metric" href="/admin/billing?status=paid"><span>Collected</span><strong>{formatMoney(collectedTotal)}</strong><small>{paymentCount} paid invoice{paymentCount === 1 ? "" : "s"}{refundTotal ? ` · ${formatMoney(refundTotal)} refunded` : ""}</small></Link>
         <Link className="admin-metric" href="/admin/billing?status=overdue"><span>Outstanding</span><strong>{formatMoney(owed.openCents)}</strong><small>{owed.overdueCount} overdue · {formatMoney(owed.overdueCents)}</small></Link>
       </section>

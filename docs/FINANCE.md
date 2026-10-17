@@ -57,6 +57,16 @@ checkout and the webhook need, the dashboard needs **Read** on:
 | Payouts | recent and next payout |
 | Charges | recent charges and receipts |
 | PaymentIntents | matching charges to portal invoices |
+| Treasury → Financial accounts | the business account balance (see below) |
+
+### Where the money actually is
+
+SKOX's Stripe account has "Earnings auto-transfer" on: every payment is swept
+from the payments balance into a **Stripe Treasury business account**
+(``··7315``, earning yield). So the payments balance reads $0, there are no
+payouts to a bank, and the number that matters is the Treasury cash balance.
+The dashboard shows it first as **Business account**; the payments balance is
+the second card; "Next payout" appears only when a payout exists.
 
 ## Partner share
 

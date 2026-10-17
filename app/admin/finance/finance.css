@@ -1,13 +1,14 @@
 /* Finance dashboard (/admin/finance). Charts are server SVG; see components/charts. */
-.finance-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
-.finance-metrics .admin-metric strong{font-size:30px}
-.finance-head-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.finance-strip{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;margin-bottom:22px;border:1px dashed var(--line);border-radius:var(--radius);background:var(--fog);color:var(--muted);font-size:13px}
+.finance-metrics{grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:16px;margin-bottom:0}
+.finance-metrics .admin-metric{padding:24px;gap:8px}
+.finance-metrics .admin-metric strong{font-size:30px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.finance-head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.finance-strip{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px;margin:0;border:1px dashed var(--line);border-radius:var(--radius);background:var(--fog);color:var(--muted);font-size:13px}
 .finance-strip strong{color:var(--ink);font-weight:600}
-.finance-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;align-items:start;margin-top:22px}
-.finance-section{margin-top:22px}
-.finance-body{padding:20px 24px 24px}
-.finance-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 18px}
+.finance-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
+.finance-section{margin-top:24px}
+.finance-body{padding:24px}
+.finance-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0 0 16px}
 .finance-figures div{display:grid;gap:4px}.finance-figures dt{font-size:12px;color:var(--muted)}.finance-figures dd{margin:0;font-size:20px;font-variant-numeric:tabular-nums}
 .finance-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .finance-table th,.finance-table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line-soft)}
@@ -15,14 +16,14 @@
 .finance-table .num{text-align:right}
 .finance-table small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
 .finance-table-scroll{overflow-x:auto}
-.finance-subhead{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);margin:18px 24px 6px}
-.finance-pipeline{display:grid;gap:4px;margin-top:16px}
+.finance-subhead{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);margin:16px 24px 8px}
+.finance-pipeline{display:grid;gap:4px;margin:24px 0 16px}
 .finance-pipeline p{margin:0;font-size:13px;color:var(--muted)}
 .finance-pipeline strong{font-size:20px;font-variant-numeric:tabular-nums;color:var(--ink)}
 
 /* Period chips: like the call-logging chips, as links. */
-.period-chips{display:flex;gap:6px;flex-wrap:wrap}
-.period-chips a{font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none}
+.period-chips{display:flex;gap:4px;flex-wrap:wrap}
+.period-chips a{font-size:12px;padding:8px 12px;border-radius:8px;transition:background-color .15s,border-color .15s;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none}
 .period-chips a[aria-current]{background:var(--amber);border-color:var(--amber);font-weight:600}
 
 /* Charts. */
@@ -50,3 +51,281 @@
 
 @media(max-width:1100px){.finance-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.finance-grid{grid-template-columns:1fr}}
 @media(max-width:760px){.finance-metrics{grid-template-columns:1fr 1fr}.finance-metrics .admin-metric strong{font-size:22px}.finance-body{padding:16px}.finance-figures{grid-template-columns:1fr 1fr}.fchart{grid-template-columns:44px minmax(0,1fr);grid-template-rows:180px auto}.finance-table th:first-child,.finance-table td:first-child{padding-left:16px}.finance-table th:last-child,.finance-table td:last-child{padding-right:16px}.finance-subhead{margin-inline:16px}}
+
+/* Live layer: ticker, rolling digits, activity feed, confetti. */
+.fticker{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px 32px;flex-wrap:wrap;padding:16px 24px;margin-bottom:24px;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;font-variant-numeric:tabular-nums}
+.fticker-flash{position:absolute;inset:0;pointer-events:none;background:var(--amber);opacity:0;animation:fticker-flash .9s var(--ease-out)}
+@keyframes fticker-flash{from{opacity:.16}to{opacity:0}}
+.fticker-items{display:flex;gap:16px 40px;flex-wrap:wrap;margin:0;min-width:0}
+.fticker-items>div{display:grid;gap:4px;min-width:0}
+.fticker-items dt{font:500 11px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);white-space:nowrap}
+.fticker-items dd{margin:0;font:500 22px/1.2 var(--mono);color:var(--ink);white-space:nowrap}
+.fticker-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.fticker-state{display:inline-flex;align-items:center;gap:8px;font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.fticker-state i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 var(--ok);animation:fticker-pulse 2.4s var(--ease-out) infinite}
+.fticker[data-status=reconnecting] .fticker-state i{background:var(--amber);animation:none}
+.fticker[data-status=signed-out] .fticker-state i{background:var(--muted);animation:none}
+@keyframes fticker-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}70%,100%{box-shadow:0 0 0 8px transparent}}
+.fsound{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:500 12px var(--sans);cursor:pointer;transition:color .15s,border-color .15s}
+.fsound:hover{color:var(--ink);border-color:var(--ink)}
+.fsound[aria-pressed=true]{color:var(--ink);border-color:var(--amber)}
+.fsound[aria-pressed=true] svg{color:var(--amber)}
+
+.odo{display:inline-flex;line-height:1.2em;height:1.2em;vertical-align:top}
+.odo-col,.odo-char{display:inline-block;height:1.2em;overflow:hidden}
+.odo-strip{display:flex;flex-direction:column;transition:transform .4s var(--ease-out);will-change:transform}
+.odo-strip span{display:block;height:1.2em;text-align:center}
+
+.ffeed{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ffeed-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:16px 24px;border-bottom:1px solid var(--line)}
+.ffeed-head h2{font-size:20px}
+.ffeed-head span{font:12px var(--mono);color:var(--muted)}
+.ffeed-empty{padding:24px;color:var(--muted);font-size:13px}
+.ffeed-list{list-style:none;margin:0;padding:8px 0;max-height:min(720px,70vh);overflow-y:auto}
+.ffeed-list li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;grid-template-areas:"icon text amount" "icon time amount";column-gap:12px;row-gap:2px;padding:8px 24px;align-items:center}
+.ffeed-icon{grid-area:icon;align-self:start;display:grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--fog);color:var(--muted)}
+.ffeed-list li[data-icon=paid] .ffeed-icon,.ffeed-list li[data-icon=won] .ffeed-icon{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.ffeed-list li[data-icon=commission] .ffeed-icon,.ffeed-list li[data-icon=statement] .ffeed-icon{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.ffeed-text{grid-area:text;font-size:13px;line-height:1.4;color:var(--ink);overflow-wrap:anywhere}
+.ffeed-list time{grid-area:time;font:11px var(--mono);color:var(--muted)}
+.ffeed-amount{grid-area:amount;font:500 13px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ffeed-list li[data-icon=paid] .ffeed-amount{color:var(--ok)}
+.ffeed-list li.is-new{animation:ffeed-in .36s var(--ease-out) both}
+@keyframes ffeed-in{from{opacity:0;transform:translateY(-8px)}}
+
+.fconfetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:90}
+
+@media(prefers-reduced-motion:reduce){.fticker-flash,.fticker-state i,.ffeed-list li.is-new{animation:none}.odo-strip{transition:none}.fticker-flash{display:none}}
+@media(max-width:760px){.fticker{padding:16px;gap:16px}.fticker-items{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%}.fticker-items dt{white-space:normal}.fticker-items dd{font-size:18px}.ffeed-head,.ffeed-list li{padding-inline:16px}}
+
+/* Money flow (Sankey). Bands stretch horizontally; labels are HTML so they stay readable. */
+.fflow{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.fflow-plot{position:relative}
+.fflow-plot svg{display:block;width:100%;height:100%;overflow:visible}
+.fflow-band{fill:var(--amber);fill-opacity:.28;transition:fill-opacity .2s var(--ease-out);animation:fflow-in .4s var(--ease-out) both;animation-delay:calc(var(--i,0) * 60ms)}
+.fflow-band:hover{fill-opacity:.55}
+.fflow-band[data-kind=kept]{fill:var(--ok)}
+.fflow-band[data-kind=refunds]{fill:var(--danger)}
+.fflow-band[data-kind=fees]{fill:var(--muted)}
+.fflow-band[data-kind=share]{fill:var(--ink);fill-opacity:.16}
+.fflow-band[data-kind=share]:hover{fill-opacity:.32}
+.fflow-node{fill:var(--amber)}
+.fflow-node[data-kind=kept]{fill:var(--ok)}
+.fflow-node[data-kind=refunds]{fill:var(--danger)}
+.fflow-node[data-kind=fees]{fill:var(--muted)}
+.fflow-node[data-kind=share]{fill:var(--ink)}
+@keyframes fflow-in{from{opacity:0}}
+.fflow-labels{position:absolute;inset:0;pointer-events:none}
+.fflow-label{position:absolute;display:grid;gap:2px;font-size:12px;line-height:1.3;color:var(--muted);white-space:nowrap;text-shadow:0 0 4px var(--paper),0 0 2px var(--paper)}
+.fflow-label b{font:500 15px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.fflow-label-end{display:block;transform:translateY(-50%);text-align:right}
+.fflow-label-end b{font-size:13px;margin-left:6px}
+.fflow-list{display:none;margin:0;grid-template-columns:1fr 1fr;gap:8px 16px}
+.fflow-list div{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.fflow-list dt{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.fflow-list dt i{width:8px;height:8px;border-radius:2px;background:var(--amber)}
+.fflow-list [data-kind=kept] i{background:var(--ok)}.fflow-list [data-kind=refunds] i{background:var(--danger)}.fflow-list [data-kind=fees] i{background:var(--muted)}.fflow-list [data-kind=share] i{background:var(--ink)}
+.fflow-list dd{margin:0;font:500 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+@media(max-width:760px){.fflow-plot{height:220px!important}.fflow-labels{display:none}.fflow-list{display:grid;grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.fflow-band{animation:none;transition:none}}
+
+/* Runway: balance history and the 60-day projection. */
+.frunway{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.frunway-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0}
+.frunway-figures div{display:grid;gap:4px;min-width:0}
+.frunway-figures dt{font-size:12px;color:var(--muted)}
+.frunway-figures dd{margin:0;font:500 20px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.frunway-figures [data-tone=danger] dd{color:var(--danger)}
+.frunway-chart{grid-template-rows:240px auto}
+.frunway-chart .fchart-plot{position:relative}
+.frunway-area{fill:var(--amber);fill-opacity:.16}
+.frunway-line{fill:none;stroke:var(--amber);stroke-width:2}
+.frunway-expected{fill:none;stroke:var(--amber);stroke-width:2;stroke-dasharray:2 5;stroke-linecap:round}
+.frunway-floor{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4}
+.frunway-gap{opacity:.9}
+.frunway-hatch-line{stroke:var(--amber);stroke-opacity:.35;stroke-width:1.5}
+.frunway-zero{stroke:var(--line)}
+.frunway-today{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3}
+.frunway-mark{position:absolute;top:-4px;transform:translate(-50%,-100%);font:11px var(--mono);color:var(--muted);pointer-events:none}
+.frunway-end{position:absolute;width:0;height:0;pointer-events:none}
+.frunway-end i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:var(--paper);border:2px solid var(--amber)}
+.frunway-end span{position:absolute;right:-4px;bottom:10px;font:500 11px var(--mono);color:var(--ink);white-space:nowrap;text-shadow:0 0 4px var(--paper),0 0 2px var(--paper)}
+.frunway-x{grid-row:2;grid-column:2;position:relative;height:24px}
+.frunway-x span{position:absolute;top:6px;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap}
+.frunway-legend-dash{background:repeating-linear-gradient(90deg,var(--amber) 0 3px,transparent 3px 6px)!important}
+.frunway-legend-hatch{background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--amber) 45%,transparent) 0 2px,transparent 2px 5px)}
+@media(max-width:760px){.frunway-figures{grid-template-columns:1fr}.frunway-chart{grid-template-rows:180px auto}.frunway-x span[data-minor]{display:none}}
+
+/* Heat map: a year of days. */
+.fheat{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.fheat-top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.fheat-summary{font-size:13px;color:var(--muted)}
+.fheat-summary b{font:500 13px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.fheat-scroll{overflow-x:auto;direction:rtl;scrollbar-width:thin}
+.fheat-grid{direction:ltr;display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;gap:8px 8px;min-width:640px}
+.fheat-months{grid-column:2;display:grid;grid-template-columns:repeat(var(--weeks),minmax(0,1fr));gap:3px;font-size:11px;color:var(--muted);height:16px}
+.fheat-months span{white-space:nowrap;overflow:visible}
+.fheat-days{grid-column:1;grid-row:2;display:grid;grid-template-rows:repeat(7,minmax(0,1fr));gap:3px;font-size:10px;color:var(--muted);align-items:center}
+.fheat-cells{grid-column:2;grid-row:2;display:grid;grid-template-columns:repeat(var(--weeks),minmax(0,1fr));grid-template-rows:repeat(7,auto);grid-auto-flow:column;gap:3px}
+.fheat-cells i,.fheat-legend i{display:block;aspect-ratio:1;border-radius:3px;background:var(--fog)}
+.fheat-cells i.fheat-blank{background:transparent}
+.fheat-cells i[data-level]:hover{outline:1px solid var(--ink);outline-offset:1px}
+.fheat [data-level="1"]{--heat:25%}.fheat [data-level="2"]{--heat:48%}.fheat [data-level="3"]{--heat:72%}.fheat [data-level="4"]{--heat:100%}
+.fheat-cells i[data-level]:not([data-level="0"]),.fheat-legend i:not([data-level="0"]){background:color-mix(in srgb,var(--amber) var(--heat),var(--fog))}
+.fheat-legend{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--muted)}
+.fheat-legend i{width:12px;height:12px}
+.fheat-legend span{margin:0 4px}
+
+/* The race: owners side by side, with pace ticks. */
+.frace{display:grid;grid-template-columns:minmax(0,1fr);gap:24px}
+.frace-block{display:grid;gap:16px}
+.frace-block .finance-subhead{margin:0}
+.frace-metric{display:grid;gap:8px}
+.frace-label{font-size:12px;color:var(--muted)}
+.frace-lanes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.frace-lanes li{display:grid;grid-template-columns:96px minmax(0,1fr) 88px;align-items:center;gap:12px}
+.frace-name{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frace-move{font-size:9px;line-height:1}
+.frace-move[data-dir=up]{color:var(--ok)}.frace-move[data-dir=down]{color:var(--danger)}
+.frace-track{position:relative;height:12px;border-radius:999px;background:var(--fog)}
+.frace-bar{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--amber);transform-origin:left;animation:frace-grow .4s var(--ease-out) both}
+.frace-lanes li[data-tone=b] .frace-bar{background:var(--ink)}
+.frace-lanes li[data-tone=rest] .frace-bar{background:var(--muted)}
+.frace-pace{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:var(--ink);opacity:.55}
+.frace-value{font:500 13px var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--ink);white-space:nowrap}
+.frace-key{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.frace-key i{width:2px;height:12px;background:var(--ink);opacity:.55}
+@keyframes frace-grow{from{transform:scaleX(0)}}
+@media(prefers-reduced-motion:reduce){.frace-bar{animation:none}}
+@media(max-width:760px){.frace-lanes li{grid-template-columns:72px minmax(0,1fr) 76px;gap:8px}}
+
+/* Funnel. */
+.ffunnel{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.ffunnel-row{display:grid;grid-template-columns:128px minmax(0,1fr) 112px;align-items:center;gap:16px;padding:0 8px;border-radius:8px;text-decoration:none;color:var(--ink);transition:background-color .15s}
+.ffunnel-row:hover{background:var(--fog)}
+.ffunnel-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ffunnel-shape{position:relative;height:40px;display:grid;place-items:center}
+.ffunnel-shape svg{position:absolute;inset:0;width:100%;height:100%}
+.ffunnel-shape polygon{fill:var(--amber);fill-opacity:calc(.9 - var(--i,0) * .14);transform-origin:center;animation:ffunnel-in .4s var(--ease-out) both;animation-delay:calc(var(--i,0) * 50ms)}
+.ffunnel-row[data-stage=won] polygon{fill:var(--ok);fill-opacity:.85}
+.ffunnel-shape b{position:relative;font:600 14px var(--mono);font-variant-numeric:tabular-nums;color:var(--canvas)}
+.ffunnel-shape b[data-light]{color:var(--ink);transform:translateX(calc(50% + 16px))}
+.ffunnel-figs{display:grid;justify-items:end;gap:2px;font:500 13px var(--mono);font-variant-numeric:tabular-nums}
+.ffunnel-figs small{font:11px var(--mono);color:var(--muted)}
+.ffunnel-note{margin-top:16px;font-size:12px;color:var(--muted)}
+@keyframes ffunnel-in{from{opacity:0;transform:scaleX(.6)}}
+@media(prefers-reduced-motion:reduce){.ffunnel-shape polygon{animation:none}.ffunnel-row{transition:none}}
+@media(max-width:760px){.ffunnel-row{grid-template-columns:96px minmax(0,1fr) 88px;gap:8px}}
+
+/* Goal dial. */
+.fgoal{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.fgoal svg{display:block;flex-shrink:0}
+.fgoal-track{stroke:var(--line-soft)}
+.fgoal-arc{stroke:var(--amber);animation:fgoal-draw .4s var(--ease-out) both}
+.fgoal-arc[data-ahead]{stroke:var(--ok)}
+.fgoal-tick{stroke:var(--ink);stroke-width:2;stroke-linecap:round;opacity:.7}
+.fgoal-value{font:500 24px var(--mono);fill:var(--ink);font-variant-numeric:tabular-nums}
+.fgoal-value[data-long]{font-size:19px}
+.fgoal-caption{font-size:11px;fill:var(--muted)}
+.fgoal-copy{display:grid;gap:8px;min-width:0;flex:1 1 180px;font-size:13px;color:var(--muted)}
+.fgoal-share{color:var(--ink);font-size:15px}
+.fgoal-share b{font:500 28px var(--mono);font-variant-numeric:tabular-nums;margin-right:4px}
+.fgoal-pace{font:500 13px var(--mono);color:var(--amber)}
+.fgoal-pace.is-ahead{color:var(--ok)}
+@keyframes fgoal-draw{from{stroke-dasharray:0 var(--c)}}
+@media(prefers-reduced-motion:reduce){.fgoal-arc{animation:none}}
+
+/*
+ * Mission Control theme. Finance only: the page's <main> (and wall mode)
+ * carries data-theme="mission" and these tokens re-skin everything inside,
+ * charts included, since they draw with tokens. Amber is unchanged; ok and
+ * danger are lifted so they read on the dark panels.
+ */
+[data-theme=mission]{
+  --canvas:#141617;--paper:#1c1f21;--fog:#24282a;--line:#2a2e30;--line-soft:#232729;--field-border:#4d5255;
+  --ink:#f1efe6;--muted:#9a9c95;--label:#a6a89f;
+  --amber-ink:#f0c24a;--blush:#2a2414;--blush-ink:#f0c24a;
+  --ok:#52c27e;--ok-bg:#1a2d21;--danger:#ef6b58;--danger-bg:#371c17;
+  --ring-track:rgba(241,239,230,.12);
+  color-scheme:dark;background:var(--canvas);color:var(--ink)
+}
+/* Rules elsewhere that hardcode white, re-pointed at the tokens on this page. */
+[data-theme=mission] .admin-metric,[data-theme=mission] .admin-panel,[data-theme=mission] .period-chips a{background:var(--paper)}
+[data-theme=mission] .admin-metric:first-child{background:var(--blush)}
+[data-theme=mission] .admin-metric:hover{border-color:var(--amber)}
+[data-theme=mission] .period-chips a[aria-current]{background:var(--amber);border-color:var(--amber);color:#141617}
+[data-theme=mission] .fchart-tip{background:var(--ink);color:var(--canvas)}
+[data-theme=mission] .btn-ghost{background:transparent;color:var(--ink)}
+[data-theme=mission] .btn-ghost:hover{border-color:var(--ink)}
+/* The rest of the admin frame around a mission page goes dark with it. */
+.admin-body:has(> [data-theme=mission]){background:#141617}
+.admin-body:has(> [data-theme=mission]) .admin-toolbar{background:#1c1f21;border-color:#2a2e30;color-scheme:dark}
+.admin-body:has(> [data-theme=mission]) .admin-toolbar>span{color:#9a9c95}
+
+/* Wall mode: covers the window; the admin frame behind it is hidden. */
+.admin-workspace:has(.fwall-root){display:block}
+.admin-workspace:has(.fwall-root)>:not(.admin-body),.admin-workspace:has(.fwall-root) .admin-toolbar{display:none}
+.fwall-root{position:fixed;inset:0;z-index:70;overflow:auto;background:#141617}
+.fwall{min-height:100vh;padding:32px 48px 40px;display:grid;grid-template-rows:auto auto auto 1fr;gap:24px;font-variant-numeric:tabular-nums}
+.fwall-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.fwall-head h1{font-size:48px;line-height:1.05;margin-top:4px}
+.fwall-period{font:13px var(--mono);color:var(--muted);margin-left:auto}
+.fwall-exit{font-size:13px;color:var(--muted)}
+.fwall-exit:hover{color:var(--ink)}
+.fwall .fticker{position:static;margin:0;padding:24px 32px}
+.fwall .fticker-items{gap:24px 64px}
+.fwall .fticker-items dt{font-size:13px}
+.fwall .fticker-items dd{font-size:40px}
+.fwall-phone{display:none;padding:24px;border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted)}
+.fwall-rotator{display:grid;grid-template-rows:auto auto 1fr;gap:16px;min-height:0}
+.fwall-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.fwall-tabs button{min-height:32px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:500 13px var(--sans);cursor:pointer;transition:color .15s,border-color .15s,background-color .15s}
+.fwall-tabs button:hover{color:var(--ink);border-color:var(--ink)}
+.fwall-tabs button[aria-current]{background:var(--amber);border-color:var(--amber);color:#141617}
+.fwall-tabs .fwall-pause{margin-left:auto}
+.fwall-progress{height:2px;background:var(--line);border-radius:1px;overflow:hidden}
+.fwall-progress span{display:block;height:100%;background:var(--amber);transform-origin:left;animation:fwall-progress linear both}
+@keyframes fwall-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.fwall-stage{display:grid}
+.fwall-slide{grid-area:1/1;opacity:0;visibility:hidden;transition:opacity .4s var(--ease-out),visibility 0s linear .4s}
+.fwall-slide[data-active]{opacity:1;visibility:visible;transition:opacity .4s var(--ease-out)}
+.fwall .admin-panel-head{padding:24px 32px}
+.fwall .admin-panel-head h2{font-size:32px}
+.fwall .admin-panel-head p{font-size:15px}
+.fwall .finance-body{padding:32px}
+.fwall .fflow-label{font-size:15px}.fwall .fflow-label b{font-size:22px}.fwall .fflow-label-end b{font-size:18px}
+.fwall .frunway-chart{grid-template-rows:440px auto}
+.fwall .frunway-figures dt{font-size:14px}.fwall .frunway-figures dd{font-size:32px}
+.fwall .frace-lanes li{grid-template-columns:160px minmax(0,1fr) 160px;gap:24px}
+.fwall .frace-name,.fwall .frace-value{font-size:20px}
+.fwall .frace-track{height:20px}
+.fwall .frace-label{font-size:15px}
+.fwall .ffunnel-row{grid-template-columns:200px minmax(0,1fr) 180px}
+.fwall .ffunnel-shape{height:72px}
+.fwall .ffunnel-name,.fwall .ffunnel-figs{font-size:20px}
+.fwall .ffunnel-shape b{font-size:22px}
+.fwall .fheat-summary{font-size:16px}
+@media(max-width:760px){.fwall{padding:24px 16px}.fwall-head h1{font-size:34px}.fwall-period{display:none}.fwall .fticker{padding:16px}.fwall .fticker-items dd{font-size:22px}.fwall-phone{display:block}.fwall-rotator{display:none}}
+@media(prefers-reduced-motion:reduce){.fwall-slide,.fwall-slide[data-active]{transition:none}.fwall-progress span{animation:none;transform:none;opacity:.4}}
+
+/* Page composition: ticker on top, main column and a live rail on wide screens. 8px rhythm throughout. */
+.fmission{min-height:100%}
+.fmission-shell{padding-top:24px}
+.fmission-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:start}
+.fmission-main{display:grid;gap:24px;min-width:0}
+.fmission-main>.page-head{margin-bottom:0}
+.fmission-main .admin-panel-head{padding:24px}
+.fmission-cols{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
+.fmission-cols-even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.fmission-stack{display:grid;gap:24px;min-width:0}
+.fmission-rail{min-width:0}
+.fmission .admin-metric strong,.fmission .finance-figures dd,.fmission .finance-pipeline strong{font-family:var(--mono);font-weight:500;letter-spacing:-.01em}
+.fmission .fticker-items dd{min-width:7ch}
+@media(min-width:1280px){
+  .fmission-grid{grid-template-columns:minmax(0,1fr) 320px}
+  .fmission-rail{position:sticky;top:120px}
+  .fmission-rail .ffeed-list{max-height:calc(100vh - 220px)}
+}
+@media(max-width:1100px){.fmission-cols,.fmission-cols-even{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:760px){.fmission-shell{padding-top:16px}.fmission-grid,.fmission-main,.fmission-cols,.fmission-stack{gap:16px}.fmission-main .admin-panel-head{padding:16px}.finance-metrics .admin-metric{padding:16px}.fmission .fticker{position:static}}
+@media(prefers-reduced-motion:reduce){.period-chips a{transition:none}}

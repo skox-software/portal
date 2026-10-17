@@ -28,6 +28,7 @@ import { googleBookingEmbedUrl, safeBookingUrl } from "@/lib/meetings";
 import { normalizeEmail } from "@/lib/permissions";
 import { deletePrivate } from "@/lib/storage";
 import { readRepField } from "@/lib/rep-assign";
+import { salesToday } from "@/lib/follow-up";
 
 /*
  * Every action re-checks that the caller is SKOX staff and that the thing it
@@ -167,6 +168,12 @@ export async function saveWorkspaceSettings(formData: FormData) {
       checkInSchedulingUrl: bookingLink,
       welcomeVideoUrl: link,
       teamIntro: text(120),
+      // Dollars, commas allowed: "250,000". Empty clears the target. Seven digits keeps cents inside an integer column.
+      revenueGoal: z
+        .string()
+        .trim()
+        .transform((v) => v.replace(/[$,\s]/g, ""))
+        .refine((v) => v === "" || (/^\d{1,7}(\.\d{1,2})?$/.test(v) && Number(v) > 0), "Enter the revenue target in dollars, like 250,000."),
     })
     .safeParse({
       reviewUrl: formData.get("reviewUrl") ?? "",
@@ -176,8 +183,10 @@ export async function saveWorkspaceSettings(formData: FormData) {
       checkInSchedulingUrl: formData.get("checkInSchedulingUrl") ?? "",
       welcomeVideoUrl: formData.get("welcomeVideoUrl") ?? "",
       teamIntro: formData.get("teamIntro") ?? "",
+      revenueGoal: formData.get("revenueGoal") ?? "",
     });
   if (!parsed.success) backWith("/admin/settings", "error", parsed.error.issues[0]?.message ?? "Check the workspace settings.");
+  const goalCents = parsed.data.revenueGoal ? Math.round(Number(parsed.data.revenueGoal) * 100) : null;
   await getDb()
     .update(workspaces)
     .set({
@@ -188,9 +197,12 @@ export async function saveWorkspaceSettings(formData: FormData) {
       checkInSchedulingUrl: googleBookingEmbedUrl(parsed.data.checkInSchedulingUrl),
       welcomeVideoUrl: parsed.data.welcomeVideoUrl || null,
       teamIntro: parsed.data.teamIntro || null,
+      revenueGoalCents: goalCents,
+      revenueGoalYear: goalCents ? Number(salesToday().slice(0, 4)) : null,
     })
     .where(eq(workspaces.id, staff.workspaceId));
   revalidatePath("/admin");
+  revalidatePath("/admin/finance");
   revalidatePath("/projects/[id]/meetings", "page");
   revalidatePath("/projects/[id]/welcome", "page");
   revalidatePath("/admin/settings");

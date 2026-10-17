@@ -1,9 +1,11 @@
-import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clients, deals, invoiceRefunds, invoices, projects } from "@/lib/db/schema";
+import { clients, commissionEntries, commissionStatements, deals, events, invoiceRefunds, invoices, projects, repProfiles } from "@/lib/db/schema";
 import { repTotals, workspaceReps, EMPTY_TOTALS } from "@/lib/commissions";
 import { bucketKeys, STAGE_WEIGHTS, type PeriodRange } from "@/lib/finance-periods";
-import { SALES_TZ, salesToday } from "@/lib/follow-up";
+import { addDays, SALES_TZ, salesToday } from "@/lib/follow-up";
+import { funnelRows } from "@/lib/funnel-math";
+import { describeEvent, LIVE_VERBS, type LiveEvent } from "@/lib/live-feed";
 import { normalizeEmail } from "@/lib/permissions";
 
 /**
@@ -177,4 +179,171 @@ export async function invoicesByPaymentIntent(ws: string, intents: string[]) {
     .innerJoin(clients, eq(clients.id, projects.clientId))
     .where(and(eq(invoices.workspaceId, ws), inArray(invoices.stripePaymentIntentId, intents)));
   return new Map(rows.map((r) => [r.intent!, { id: r.id, number: r.number, projectId: r.projectId, clientName: r.clientName }]));
+}
+
+/** Cash collected on paid invoices from a sales-time-zone date (YYYY-MM-DD) to now. */
+export async function collectedSince(ws: string, iso: string) {
+  const [row] = await getDb()
+    .select({ cents: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "paid"), isNotNull(invoices.paidAt), sql`(${invoices.paidAt} at time zone ${TZ})::date >= ${iso}::date`));
+  return Number(row?.cents ?? 0);
+}
+
+/** Open invoices whose due date is `today` (sales time zone). */
+export async function dueTodayCount(ws: string, today: string) {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "open"), eq(invoices.dueOn, today)));
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * The latest money-moving events, worded for the feed. Deal edits that
+ * didn't change stage are left out in SQL, so a burst of edits can't push
+ * real news off the list. The client's name comes from the event's project.
+ */
+export async function liveEvents(ws: string, limit = 25): Promise<LiveEvent[]> {
+  const rows = await getDb()
+    .select({ id: events.id, verb: events.verb, payload: events.payload, at: events.createdAt, client: clients.name })
+    .from(events)
+    .leftJoin(projects, eq(projects.id, events.projectId))
+    .leftJoin(clients, eq(clients.id, projects.clientId))
+    .where(and(eq(events.workspaceId, ws), inArray(events.verb, [...LIVE_VERBS]), or(ne(events.verb, "deal.updated"), sql`${events.payload} ? 'to'`)))
+    .orderBy(desc(events.createdAt))
+    .limit(limit);
+  return rows.flatMap((r) => {
+    const payload = { ...(r.payload as Record<string, unknown>), ...(r.client ? { client: r.client } : {}) };
+    const line = describeEvent(r.verb, payload);
+    return line ? [{ ...line, id: r.id, verb: r.verb, at: r.at.toISOString() }] : [];
+  });
+}
+
+/** Invoices raised in the period (anything not voided), by the day they were created. */
+export async function invoicedInPeriod(ws: string, range: PeriodRange) {
+  const [row] = await getDb()
+    .select({ cents: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), ne(invoices.status, "void"), inPeriod(invoices.createdAt, range)));
+  return Number(row?.cents ?? 0);
+}
+
+/**
+ * Commission earned in the period per person: Reiss's partner share and any
+ * rep's, net of clawbacks, voided lines left out. Dated by when the money
+ * moved (`earned_at`), like the statements.
+ */
+export async function sharesByOwner(ws: string, range: PeriodRange) {
+  const rows = await getDb()
+    .select({ id: commissionEntries.repMembershipId, name: repProfiles.displayName, cents: sql<number>`coalesce(sum(${commissionEntries.amountCents}), 0)::int` })
+    .from(commissionEntries)
+    .innerJoin(repProfiles, eq(repProfiles.membershipId, commissionEntries.repMembershipId))
+    .where(and(eq(commissionEntries.workspaceId, ws), ne(commissionEntries.status, "void"), inPeriod(commissionEntries.earnedAt, range)))
+    .groupBy(commissionEntries.repMembershipId, repProfiles.displayName);
+  return rows.map((r) => ({ id: r.id, name: r.name, cents: Number(r.cents) })).filter((r) => r.cents > 0).sort((a, b) => b.cents - a.cents);
+}
+
+/** Every open invoice's due date and amount: what the runway expects to come in. */
+export async function openInvoiceDues(ws: string) {
+  const rows = await getDb()
+    .select({ dueOn: invoices.dueOn, amountCents: invoices.amountCents })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "open")));
+  return rows.map((r) => ({ dueOn: r.dueOn, amountCents: Number(r.amountCents) }));
+}
+
+/** Commission statements drafted or approved but not paid: what the runway expects to go out. */
+export async function unpaidStatements(ws: string) {
+  const rows = await getDb()
+    .select({ periodEnd: commissionStatements.periodEnd, totalCents: commissionStatements.totalCents })
+    .from(commissionStatements)
+    .where(and(eq(commissionStatements.workspaceId, ws), inArray(commissionStatements.status, ["draft", "approved"])));
+  return rows.map((r) => ({ periodEnd: r.periodEnd, totalCents: Number(r.totalCents) })).filter((r) => r.totalCents > 0);
+}
+
+export const HEAT_METRICS = ["cash", "won", "calls"] as const;
+export type HeatMetric = (typeof HEAT_METRICS)[number];
+
+/**
+ * One number per sales-time-zone day for the heat map: cash collected (cents),
+ * deals won (count, by `won_at`) or calls logged (count, from the audit trail).
+ */
+export async function dailyActivity(ws: string, metric: HeatMetric, startIso: string, endIso: string) {
+  const db = getDb();
+  const range = { startIso, endIso, bucket: "day" } as PeriodRange;
+  const day = (column: unknown) => sql<string>`to_char((${column} at time zone ${TZ})::date, 'YYYY-MM-DD')`;
+  let rows: { key: string; value: number }[];
+  if (metric === "cash") {
+    const key = day(invoices.paidAt);
+    rows = await db
+      .select({ key, value: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int` })
+      .from(invoices)
+      .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "paid"), isNotNull(invoices.paidAt), inPeriod(invoices.paidAt, range)))
+      .groupBy(key);
+  } else if (metric === "won") {
+    const key = day(deals.wonAt);
+    rows = await db
+      .select({ key, value: sql<number>`count(*)::int` })
+      .from(deals)
+      .where(and(eq(deals.workspaceId, ws), isWon, isNotNull(deals.wonAt), inPeriod(deals.wonAt, range)))
+      .groupBy(key);
+  } else {
+    const key = day(events.createdAt);
+    rows = await db
+      .select({ key, value: sql<number>`count(*)::int` })
+      .from(events)
+      .where(and(eq(events.workspaceId, ws), eq(events.verb, "deal.call_logged"), inPeriod(events.createdAt, range)))
+      .groupBy(key);
+  }
+  return new Map(rows.map((r) => [r.key, Number(r.value)]));
+}
+
+/**
+ * Month to date, year to date and last month, per owner, for the race:
+ * the same rows as the Team table, on calendar periods ending today.
+ */
+export async function raceStandings(ws: string, today: string) {
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const lastMonthEnd = addDays(monthStart, -1);
+  const span = (startIso: string, endIso: string, label: string) => ({ key: "ytd", startIso, endIso, bucket: "month", label }) as PeriodRange;
+  const [mtd, ytd, lastMonth] = await Promise.all([
+    leaderboard(ws, span(monthStart, today, "Month to date")),
+    leaderboard(ws, span(`${today.slice(0, 4)}-01-01`, today, "Year to date")),
+    leaderboard(ws, span(`${lastMonthEnd.slice(0, 7)}-01`, lastMonthEnd, "Last month")),
+  ]);
+  return { mtd, ytd, lastMonth };
+}
+
+/**
+ * Deals that entered each funnel stage in the period, from the audit trail:
+ * stage moves (`to` on deal.stage_changed, deal.updated and deal.call_logged)
+ * and new deals (their `stage`, a lead when none is given). Falls back to
+ * where open deals stand now, plus deals won in the period, when the trail
+ * has nothing for the period.
+ */
+export async function funnel(ws: string, range: PeriodRange) {
+  const db = getDb();
+  const stage = sql<string>`coalesce(${events.payload}->>'to', case when ${events.verb} = 'deal.created' then coalesce(${events.payload}->>'stage', 'lead') end)`;
+  const rows = await db
+    .select({ dealId: events.subjectId, stage, valueCents: deals.valueCents })
+    .from(events)
+    .innerJoin(deals, and(sql`${deals.id}::text = ${events.subjectId}`, eq(deals.workspaceId, ws)))
+    .where(
+      and(
+        eq(events.workspaceId, ws),
+        inPeriod(events.createdAt, range),
+        or(
+          and(inArray(events.verb, ["deal.stage_changed", "deal.updated", "deal.call_logged"]), sql`${events.payload} ? 'to'`),
+          and(eq(events.verb, "deal.created"), sql`coalesce(${events.payload}->>'from', '') <> 'project'`),
+        ),
+      ),
+    );
+  if (rows.length) return { source: "events" as const, rows: funnelRows(rows.map((r) => ({ dealId: r.dealId!, stage: r.stage, valueCents: r.valueCents }))) };
+
+  const current = await db
+    .select({ dealId: deals.id, stage: deals.stage, projectId: deals.projectId, valueCents: deals.valueCents })
+    .from(deals)
+    .where(and(eq(deals.workspaceId, ws), or(and(inArray(deals.stage, ["lead", "initial_outreach", "proposal_sent", "negotiation"]), sql`${deals.projectId} is null`), and(isWon, isNotNull(deals.wonAt), inPeriod(deals.wonAt, range)))));
+  return { source: "current" as const, rows: funnelRows(current.map((r) => ({ dealId: r.dealId, stage: r.projectId || r.stage === "won" ? "won" : r.stage, valueCents: r.valueCents }))) };
 }

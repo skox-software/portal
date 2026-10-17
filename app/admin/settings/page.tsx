@@ -2,7 +2,8 @@ import { desc, eq } from "drizzle-orm";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { referrals, workspaces } from "@/lib/db/schema";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatMoney } from "@/lib/format";
+import { salesToday } from "@/lib/follow-up";
 import { Notice, readMessage } from "@/components/Notice";
 import { saveWorkspaceSettings, setReferralStatus } from "../actions";
 export default async function AdminSettings({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -13,6 +14,9 @@ export default async function AdminSettings({ searchParams }: { searchParams: Pr
   db.select().from(workspaces).where(eq(workspaces.id, staff.workspaceId)).limit(1),
   db.select().from(referrals).where(eq(referrals.workspaceId, staff.workspaceId)).orderBy(desc(referrals.createdAt)).limit(20)
  ]);
+ const year = Number(salesToday().slice(0, 4));
+ const goalThisYear = workspace?.revenueGoalYear === year ? workspace.revenueGoalCents : null;
+ const lastGoal = workspace?.revenueGoalCents && workspace.revenueGoalYear && workspace.revenueGoalYear !== year ? `${workspace.revenueGoalYear}: ${formatMoney(workspace.revenueGoalCents)}` : null;
  return <main className="shell page"><div className="page-head"><div><p className="eyebrow">Workspace</p><h1>Settings & referrals</h1><p className="muted">Manage booking links, client communications, and new introductions.</p></div></div>
  <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
  <div className="split"><div>            <section className="card" aria-labelledby="settings-title">
@@ -52,6 +56,11 @@ export default async function AdminSettings({ searchParams }: { searchParams: Pr
                   <label htmlFor="ws-review">Review link</label>
                   <input id="ws-review" name="reviewUrl" type="url" defaultValue={workspace?.reviewUrl ?? ""} placeholder="https://g.page/r/…/review" />
                   <span className="hint">Launched clients see “Leave us a quick review”.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="ws-goal">Revenue target for {year}</label>
+                  <input id="ws-goal" name="revenueGoal" inputMode="decimal" autoComplete="off" defaultValue={goalThisYear ? (goalThisYear / 100).toLocaleString("en-US", { maximumFractionDigits: 2 }) : ""} maxLength={16} placeholder="250,000" />
+                  <span className="hint">Cash to collect this calendar year, in dollars. Drives the goal dial on Finance. Leave empty for no target.{lastGoal ? ` Last target was ${lastGoal}.` : ""}</span>
                 </div>
                 <div className="field">
                   <label htmlFor="ws-reward">Referral reward</label>

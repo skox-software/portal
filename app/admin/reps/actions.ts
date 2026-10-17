@@ -157,7 +157,7 @@ export async function addFounderShare(formData: FormData) {
   if (rateBps === null) backWith(BACK, "error", `The share must be ${rateRange(member.role)}.`);
   await db.batch([
     db.insert(repProfiles).values({ workspaceId: staff.workspaceId, membershipId, displayName, rateBps, startedOn: parsed.data.startedOn || todayIso() }),
-    eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "rep.partner_added", subjectType: "membership", subjectId: membershipId, payload: { email: member.email, displayName, rateBps } }),
+    eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "rep.founder_added", subjectType: "membership", subjectId: membershipId, payload: { email: member.email, displayName, rateBps } }),
   ]);
   revalidatePath(BACK);
   revalidatePath("/admin/commissions");

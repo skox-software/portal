@@ -56,8 +56,18 @@ How the wall is enforced:
    - **Stripe:** refunds arrive as `charge.refunded` and record themselves.
    - **Outside Stripe:** use "Record a refund" on the invoice.
    - Each refund adds a negative `clawback` line at the original rate.
-   - If an invoice is reopened or voided after payment, a pending earning is
-     voided. An approved or paid earning gets a clawback instead.
+   - Refunds are recorded against a cumulative target (Stripe's
+     `amount_refunded`; a manual refund is "already refunded + this amount").
+     The new refund is the difference, computed under the invoice lock, so
+     two refunds arriving together can't double-count or record a stale amount.
+   - If an invoice is reopened or voided after payment, each recipient's
+     earning is voided when nobody has approved it yet: it is `pending` and on
+     no statement or only a draft. Its refund clawbacks are voided with it, so
+     the net is zero, voided lines leave the draft and the draft re-totals.
+     Each voided line logs `commission.voided`.
+   - An approved or paid earning (or one whose refund clawbacks are already
+     approved) is never edited: it gets a negative reversal `clawback` for
+     whatever is left of it instead.
 7. **Statements.**
    - **Drafting:** the daily cron drafts last month's statements, one per rep
      with money owed. Each takes every pending line earned through month end,
@@ -82,15 +92,33 @@ account is not Josh's founder account.
 
 Explicit project credit wins, followed by the linked deal's credited rep,
 then its founder owner. Conflicting deal ownership requires an explicit
-project credit. A rep deal requires exactly two founder profiles;
-it fails rather than silently losing a founder's share if setup is incomplete.
+project credit. A rep deal requires exactly two founders: staff members with
+an active commission profile.
+
+A setup problem never blocks a payment. If the credited person has no
+commission profile, the project's deals have conflicting owners, or a rep
+deal doesn't find exactly two founders, the invoice is still marked paid, the
+client still gets a receipt and kickoff still runs. No commission is written;
+instead a `commission.needs_attention` event (invoice number and reason) is
+logged and the owner(s) get a "Commission review required" email. Fix the
+setup, then add the missing earning as an adjustment. An unexpected error
+while recording commission is handled the same way.
+
+**Paused profiles.** A paused rep on a rep deal earns nothing new: their 20%
+line is skipped and left unallocated, and the founders still get their 40%
+each. A paused founder's line is skipped the same way (on a rep deal the other
+founder and the rep keep their shares; on their own deal nothing is
+recorded). Skipped shares are named in the note on the `commission.earned`
+events, or in a `commission.skipped` event when no line is written at all.
 Profile rates are fixed at 100% for founders and 20% for reps. Each rep deal
 records 40% on the founders' actual ledger lines.
 
 These are earned shares, not bank balances or proof of a payout. Operating
 expenses and Stripe fees do not reduce the gross share. Actual client refunds
-reverse each recipient's allocation, with cumulative rounding so a full refund
-clears every cent. Odd cents in the 40/40 remainder go deterministically to
+reverse each recipient's allocation, with cumulative rounding measured against
+what each recipient has actually been clawed back, so a full refund clears
+every cent. A clawback line is never 0¢ and never positive: when rounding puts
+a recipient ahead of their target, that cent carries to the next line. Odd cents in the 40/40 remainder go deterministically to
 the founder whose membership ID sorts first.
 
 Migration `0015_deal_ownership_shares` permits one earning per recipient per
@@ -109,7 +137,7 @@ The $300 business expense does not reduce the $1,250 earned amount.
 
 | Action | Owner (`staff_owner`) | Staff | Rep |
 | --- | --- | --- | --- |
-| Invite reps, add partner shares, change rate or status | ✓ | | |
+| Invite reps, add founder shares, change rate or status | ✓ | | |
 | Assign leads to a rep, credit a project | ✓ | ✓ | |
 | Close a month (draft statements) | ✓ | ✓ | |
 | Approve, mark paid, discard, adjust | ✓ | | |
@@ -130,8 +158,9 @@ The $300 business expense does not reduce the $1,250 earned amount.
 
 - **Paused reps** earn nothing new, including on care plans for clients they
   brought. Keep them active if they should keep earning after they stop selling.
-- **Invoices voided after a Stripe payment** claw back as if refunded. Record a
-  real refund instead when money actually went back.
+  Their 20% of a rep deal stays unallocated rather than going to the founders.
+- **Invoices voided after a Stripe payment** void or claw back the commission
+  as if refunded. Record a real refund instead when money actually went back.
 
 Team roles are displayed as **Founder** and **Sales rep**. The team page,
 account role labels, sales-rep desk and invitation emails use those names.

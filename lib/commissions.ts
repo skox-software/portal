@@ -10,9 +10,11 @@ import {
   projects,
   repProfiles,
 } from "@/lib/db/schema";
-import { isStaffRole } from "@/lib/permissions";
 import { eventInsert } from "@/lib/events";
-import { dealAllocations, refundAllocations } from "@/lib/commission-math";
+import { planDealShares, refundClawbackLines } from "@/lib/commission-math";
+import { sendEmail } from "@/lib/email";
+import { formatMoney } from "@/lib/format";
+import { ownerRecipients, portalLink, staffRecipients } from "@/lib/notify";
 
 /**
  * The commission ledger. Append-only: payments add `earned` lines, refunds
@@ -22,7 +24,7 @@ import { dealAllocations, refundAllocations } from "@/lib/commission-math";
 
 type Invoice = typeof invoices.$inferSelect;
 
-/** Explicit project/deal credit wins; a founder deal owner is the fallback. */
+/** Explicit project/deal credit wins; a founder deal owner is the fallback. Never throws on setup problems. */
 async function allocationsForProject(projectId: string, workspaceId: string, baseCents: number) {
   const db = getDb();
   const [project] = await db.select({ repId: projects.repMembershipId, clientName: clients.name })
@@ -30,47 +32,87 @@ async function allocationsForProject(projectId: string, workspaceId: string, bas
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))).limit(1);
   if (!project) return null;
   const people = await workspaceReps(workspaceId);
-  let credited = people.find(p => p.membership.id === project.repId);
-  if (project.repId && !credited) throw new Error("Credited person has no commission profile");
-  if (!project.repId) {
-    const sources = await db.select({ repId: deals.repMembershipId, owner: deals.ownerEmail }).from(deals)
-      .where(and(eq(deals.projectId, projectId), eq(deals.workspaceId, workspaceId)));
-    const ids = new Set(sources.map(d => d.repId ?? people.find(p => isStaffRole(p.membership.role) && p.membership.email.toLowerCase() === d.owner?.toLowerCase())?.membership.id).filter(Boolean));
-    if (ids.size > 1) throw new Error("Conflicting deal owners: set the project's credited person");
-    credited = people.find(p => ids.has(p.membership.id));
-  }
-  if (!credited || credited.profile.status !== "active") return null;
-  const founders = people.filter(p => isStaffRole(p.membership.role));
-  const allocations = dealAllocations(baseCents, { id: credited.membership.id, role: credited.membership.role }, founders.map(p => ({ id: p.membership.id, role: p.membership.role })));
-  return { clientName: project.clientName, allocations, people };
+  const sources = project.repId ? [] : await db.select({ repId: deals.repMembershipId, ownerEmail: deals.ownerEmail }).from(deals)
+    .where(and(eq(deals.projectId, projectId), eq(deals.workspaceId, workspaceId)));
+  const plan = planDealShares({
+    baseCents, projectRepId: project.repId, deals: sources,
+    people: people.map(p => ({ id: p.membership.id, role: p.membership.role, email: p.membership.email, status: p.profile.status, name: p.profile.displayName })),
+  });
+  if (!plan || "attention" in plan) return plan;
+  return { clientName: project.clientName, allocations: plan.allocations, notes: plan.notes, people };
 }
 
-/** One atomic insert for all recipients. Retried payments cannot duplicate shares. */
+/**
+ * Commission setup needs a person: log it on the audit trail and email the
+ * owner(s). Never throws, so it can't take a payment down with it.
+ */
+export async function flagCommissionAttention(invoice: Invoice, reason: string, actor = "system") {
+  try {
+    await eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: actor,
+      verb: "commission.needs_attention", subjectType: "invoice", subjectId: invoice.id, payload: { invoice: invoice.number, reason } });
+  } catch (error) {
+    console.error("[commissions] could not log needs_attention", { invoiceId: invoice.id, reason, error });
+  }
+  try {
+    const owners = await ownerRecipients(invoice.workspaceId);
+    await sendEmail(owners.length ? owners : await staffRecipients(invoice.workspaceId), {
+      subject: `Check commission: invoice ${invoice.number}`,
+      preheader: "A payment was recorded, but its commission could not be allocated.",
+      heading: "Commission review required",
+      paragraphs: [
+        `Invoice ${invoice.number} (${invoice.title}) is paid for ${formatMoney(invoice.amountCents, invoice.currency)}, but no commission was recorded for it.`,
+        `Reason: ${reason}`,
+        "Fix the project's credit or the commission profiles, then add the earning as an adjustment.",
+      ],
+      cta: { label: "Open commissions", href: portalLink("/admin/commissions") },
+    });
+  } catch (error) {
+    console.error("[commissions] could not email needs_attention", { invoiceId: invoice.id, reason, error });
+  }
+}
+
+/**
+ * One atomic insert for all recipients. Retried payments cannot duplicate
+ * shares. Setup problems are flagged for a person and return null; they
+ * never throw, so a payment is always recorded.
+ */
 export async function recordEarning(invoice: Invoice, actor = "system") {
   if (invoice.status !== "paid" || !invoice.paidAt || invoice.amountCents <= 0) return null;
   const found = await allocationsForProject(invoice.projectId, invoice.workspaceId, invoice.amountCents);
   if (!found) return null;
+  if ("attention" in found) {
+    await flagCommissionAttention(invoice, found.attention, actor);
+    return null;
+  }
+  const note = found.notes.length ? found.notes.join(" ") : null;
+  if (!found.allocations.length) {
+    if (note) await eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: actor,
+      verb: "commission.skipped", subjectType: "invoice", subjectId: invoice.id, payload: { invoice: invoice.number, note } });
+    return null;
+  }
   const db = getDb();
   const values = found.allocations.map(share => ({
     id: crypto.randomUUID(), rep_id: share.id, rate_bps: share.rateBps, amount_cents: share.amountCents,
-    name: found.people.find(p => p.membership.id === share.id)?.profile.displayName,
+    name: found.people.find(p => p.membership.id === share.id)?.profile.displayName ?? null,
   }));
   // Serialize a payment's allocation, then freeze the entire first split. A
   // retry after ownership changes must not add a second set of recipients.
   const [, result] = await db.batch([
     db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
     db.execute(sql`
-      with inserted as (
+      with src as (
+        select * from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as x(id uuid, rep_id uuid, rate_bps int, amount_cents int, name text)
+      ), inserted as (
         insert into commission_entries (id, workspace_id, rep_membership_id, project_id, invoice_id, kind, base_cents, rate_bps, amount_cents, earned_at, client_name, note, created_by)
-        select x.id, ${invoice.workspaceId}::uuid, x.rep_id, ${invoice.projectId}::uuid, ${invoice.id}::uuid, 'earned', ${invoice.amountCents}, x.rate_bps, x.amount_cents, ${invoice.paidAt.toISOString()}::timestamptz, ${found.clientName}, ${`Invoice ${invoice.number} · gross deal share`}, ${actor}
-        from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as x(id uuid, rep_id uuid, rate_bps int, amount_cents int, name text)
+        select src.id, ${invoice.workspaceId}::uuid, src.rep_id, ${invoice.projectId}::uuid, ${invoice.id}::uuid, 'earned', ${invoice.amountCents}, src.rate_bps, src.amount_cents, ${invoice.paidAt.toISOString()}::timestamptz, ${found.clientName}, ${`Invoice ${invoice.number} · gross deal share`}, ${actor}
+        from src
         where not exists (select 1 from commission_entries where invoice_id = ${invoice.id}::uuid and earned_at = ${invoice.paidAt.toISOString()}::timestamptz and kind = 'earned')
         returning *
       ), logged as (
         insert into events (workspace_id, project_id, actor_id, verb, subject_type, subject_id, payload)
-        select workspace_id, project_id, ${actor}, 'commission.earned', 'commission', id::text,
-          jsonb_build_object('invoice', ${invoice.number}::text, 'amountCents', amount_cents, 'rateBps', rate_bps)
-        from inserted
+        select inserted.workspace_id, inserted.project_id, ${actor}, 'commission.earned', 'commission', inserted.id::text,
+          jsonb_strip_nulls(jsonb_build_object('invoice', ${invoice.number}::text, 'amountCents', inserted.amount_cents, 'rateBps', inserted.rate_bps, 'rep', src.name, 'note', ${note}::text))
+        from inserted join src on src.id = inserted.id
       ) select * from inserted
     `),
   ]);
@@ -90,7 +132,13 @@ async function liveEarnings(invoiceId: string) {
   return latest.filter(r => !reversed.has(r.id));
 }
 
-/** Reverses each recipient's remaining earnings, once; never edits paid history. */
+/**
+ * Takes back each recipient's remaining earnings when a paid invoice is
+ * re-opened or voided. An earning nobody has approved yet (pending, on no
+ * statement or only a draft) is voided outright, along with its refund
+ * clawbacks, so the net is zero and nothing shows on a statement. Anything
+ * approved or paid is never edited: it gets a negative reversal line instead.
+ */
 export async function reverseEarning(invoice: Invoice, actor: string, reason: string) {
   const earnings = await liveEarnings(invoice.id);
   if (!earnings.length) return;
@@ -99,13 +147,49 @@ export async function reverseEarning(invoice: Invoice, actor: string, reason: st
     eq(commissionEntries.invoiceId, invoice.id), eq(commissionEntries.kind, "clawback"), ne(commissionEntries.status, "void"),
     sql`${commissionEntries.refundId} is not null`, sql`${commissionEntries.earnedAt} >= ${earnings[0].earnedAt}`,
   ));
-  const entries = await db.insert(commissionEntries).values(earnings.map(earning => ({
+  const note = `Invoice ${invoice.number} ${reason}`;
+  const reverse: typeof earnings = [];
+  for (const earning of earnings) {
+    const own = refunds.filter(r => r.repMembershipId === earning.repMembershipId);
+    const ids = [earning.id, ...own.map(r => r.id)];
+    const statementIds = [...new Set([earning, ...own].map(e => e.statementId).filter((id): id is string => Boolean(id)))];
+    // All or nothing, decided under the invoice lock: if any line is approved,
+    // paid, or on a non-draft statement, nothing is voided and we reverse instead.
+    const [, voided] = await db.batch([
+      db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
+      db.execute(sql`
+        with blocked as (
+          select 1 from commission_entries c left join commission_statements s on s.id = c.statement_id
+          where c.id in (${sql.join(ids.map(id => sql`${id}::uuid`), sql`, `)})
+            and not (c.status = 'pending' and (c.statement_id is null or s.status = 'draft'))
+        ), voided as (
+          update commission_entries c set status = 'void', statement_id = null,
+            note = concat_ws(' · ', c.note, ${`voided: ${note}`}::text)
+          where c.id in (${sql.join(ids.map(id => sql`${id}::uuid`), sql`, `)}) and not exists (select 1 from blocked)
+          returning c.*
+        ), logged as (
+          insert into events (workspace_id, project_id, actor_id, verb, subject_type, subject_id, payload)
+          select workspace_id, ${invoice.projectId}::uuid, ${actor}, 'commission.voided', 'commission', id::text,
+            jsonb_build_object('invoice', ${invoice.number}::text, 'amountCents', amount_cents, 'reason', ${reason}::text)
+          from voided
+        ) select id from voided
+      `),
+      // A draft that lost lines shows its new total until it's approved (which re-totals anyway).
+      ...(statementIds.length ? [db.execute(sql`
+        update commission_statements s set total_cents = (select coalesce(sum(amount_cents), 0) from commission_entries where statement_id = s.id)
+        where s.status = 'draft' and s.id in (${sql.join(statementIds.map(id => sql`${id}::uuid`), sql`, `)})
+      `)] : []),
+    ]);
+    if (!voided.rows.length) reverse.push(earning);
+  }
+  if (!reverse.length) return;
+  const entries = await db.insert(commissionEntries).values(reverse.map(earning => ({
     workspaceId: invoice.workspaceId, repMembershipId: earning.repMembershipId,
     projectId: earning.projectId, invoiceId: invoice.id, kind: "clawback" as const,
     reversalOf: earning.id, baseCents: earning.baseCents, rateBps: earning.rateBps,
     amountCents: -(earning.amountCents + refunds.filter(r => r.repMembershipId === earning.repMembershipId).reduce((sum, r) => sum + r.amountCents, 0)),
     earnedAt: new Date(), clientName: earning.clientName,
-    note: `Invoice ${invoice.number} ${reason}`, createdBy: actor,
+    note, createdBy: actor,
   }))).onConflictDoNothing().returning();
   for (const entry of entries) await eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: actor,
     verb: "commission.clawback", subjectType: "commission", subjectId: entry.id, payload: { invoice: invoice.number, amountCents: entry.amountCents, reason } });
@@ -120,50 +204,68 @@ export async function refundedCents(invoiceId: string) {
   return Number(row?.total ?? 0);
 }
 
+/** Refund clawbacks already written against the latest earnings, per recipient (positive cents). */
+async function clawedSoFar(invoiceId: string, earnings: Awaited<ReturnType<typeof liveEarnings>>) {
+  if (!earnings.length) return [];
+  const rows = await getDb().select({ rep: commissionEntries.repMembershipId, amountCents: commissionEntries.amountCents }).from(commissionEntries).where(and(
+    eq(commissionEntries.invoiceId, invoiceId), eq(commissionEntries.kind, "clawback"), ne(commissionEntries.status, "void"),
+    sql`${commissionEntries.refundId} is not null`, sql`${commissionEntries.earnedAt} >= ${earnings[0].earnedAt}`,
+  ));
+  return earnings.map(e => -rows.filter(r => r.rep === e.repMembershipId).reduce((sum, r) => sum + r.amountCents, 0));
+}
+
 /**
- * Records a refund and claws back the rep's share at the rate they earned.
- * `stripeRefundId` makes Stripe retries a no-op.
+ * Records a refund and claws back each recipient's share at the rate they
+ * earned. The caller says what the invoice's cumulative refunded total should
+ * now be (Stripe's `amount_refunded`); the new refund is the difference from
+ * what's recorded, computed under the invoice lock, so concurrent refunds
+ * never double-count. `stripeRefundId` makes Stripe retries a no-op.
+ * `recordedCents` is what this call added (0 when there was nothing new).
  */
 export async function recordRefund(
   invoice: Invoice,
-  input: { amountCents: number; reason: string | null; actor: string; stripeRefundId?: string | null },
-  attempt = 0,
-): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) return { ok: false, message: "Enter the amount refunded." };
+  input: { targetRefundedCents: number; reason: string | null; actor: string; stripeRefundId?: string | null },
+): Promise<{ ok: true; recordedCents: number } | { ok: false; message: string }> {
+  const target = input.targetRefundedCents;
+  if (!Number.isInteger(target) || target <= 0) return { ok: false, message: "Enter the amount refunded." };
+  if (target > invoice.amountCents) return { ok: false, message: "That's more than was paid on this invoice." };
   const db = getDb();
   const existingRefund = async () => input.stripeRefundId ? (await db.select({ id: invoiceRefunds.id }).from(invoiceRefunds).where(eq(invoiceRefunds.stripeRefundId, input.stripeRefundId)).limit(1))[0] : undefined;
-  if (await existingRefund()) return { ok: true };
-  const already = await refundedCents(invoice.id);
-  if (already + input.amountCents > invoice.amountCents) return { ok: false, message: "That's more than was paid on this invoice." };
-  const earnings = await liveEarnings(invoice.id);
-  const allocations = refundAllocations(invoice.amountCents, earnings.map(e => ({ id: e.repMembershipId, rateBps: e.rateBps, amountCents: e.amountCents })), already, input.amountCents);
-  const refundId = crypto.randomUUID();
-  const now = new Date();
-  const entries = allocations.map((share, i) => ({
-    id: crypto.randomUUID(), workspaceId: invoice.workspaceId, repMembershipId: share.id,
-    projectId: invoice.projectId, invoiceId: invoice.id, refundId, kind: "clawback" as const,
-    baseCents: input.amountCents, rateBps: share.rateBps, amountCents: share.amountCents,
-    earnedAt: now, clientName: earnings[i].clientName, note: `Refund on invoice ${invoice.number}`, createdBy: input.actor,
-  }));
-  try {
-    // Refund and every recipient's clawback commit together, including their audit events.
-    await db.batch([
-      db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
-      // If another refund committed after our read, roll back and recalculate.
-      db.execute(sql`select 1 / case when coalesce(sum(amount_cents),0) = ${already} then 1 else 0 end from invoice_refunds where invoice_id=${invoice.id}::uuid`),
-      db.insert(invoiceRefunds).values({ id: refundId, workspaceId: invoice.workspaceId, invoiceId: invoice.id, amountCents: input.amountCents, reason: input.reason, stripeRefundId: input.stripeRefundId ?? null, createdBy: input.actor, createdAt: now }),
-      eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "invoice.refunded", subjectType: "invoice", subjectId: invoice.id, payload: { number: invoice.number, amountCents: input.amountCents, reason: input.reason } }),
-      ...(entries.length ? [db.insert(commissionEntries).values(entries)] : []),
-      ...entries.map(entry => eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "commission.clawback", subjectType: "commission", subjectId: entry.id, payload: { invoice: invoice.number, amountCents: entry.amountCents } })),
-    ]);
-  } catch (error) {
-    // A concurrent Stripe retry may have committed the same refund first.
-    if (await existingRefund()) return { ok: true };
-    const code = (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code;
-    if (code === "22012" && attempt < 3) return recordRefund(invoice, input, attempt + 1);
-    throw error;
+  if (await existingRefund()) return { ok: true, recordedCents: 0 };
+  for (let attempt = 0; ; attempt++) {
+    const already = await refundedCents(invoice.id);
+    const amountCents = target - already;
+    if (amountCents <= 0) return { ok: true, recordedCents: 0 };
+    const earnings = await liveEarnings(invoice.id);
+    const lines = refundClawbackLines(invoice.amountCents, earnings.map(e => ({ id: e.repMembershipId, rateBps: e.rateBps, amountCents: e.amountCents })), await clawedSoFar(invoice.id, earnings), target);
+    const refundId = crypto.randomUUID();
+    const now = new Date();
+    const entries = lines.map(line => ({
+      id: crypto.randomUUID(), workspaceId: invoice.workspaceId, repMembershipId: line.id,
+      projectId: invoice.projectId, invoiceId: invoice.id, refundId, kind: "clawback" as const,
+      baseCents: amountCents, rateBps: line.rateBps, amountCents: line.amountCents,
+      earnedAt: now, clientName: earnings[line.index].clientName, note: `Refund on invoice ${invoice.number}`, createdBy: input.actor,
+    }));
+    try {
+      // Refund and every recipient's clawback commit together, including their audit events.
+      await db.batch([
+        db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
+        // If another refund committed after our read, roll back and recalculate from the target.
+        db.execute(sql`select 1 / case when coalesce(sum(amount_cents),0) = ${already} then 1 else 0 end from invoice_refunds where invoice_id=${invoice.id}::uuid`),
+        db.insert(invoiceRefunds).values({ id: refundId, workspaceId: invoice.workspaceId, invoiceId: invoice.id, amountCents, reason: input.reason, stripeRefundId: input.stripeRefundId ?? null, createdBy: input.actor, createdAt: now }),
+        eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "invoice.refunded", subjectType: "invoice", subjectId: invoice.id, payload: { number: invoice.number, amountCents, reason: input.reason } }),
+        ...(entries.length ? [db.insert(commissionEntries).values(entries)] : []),
+        ...entries.map(entry => eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "commission.clawback", subjectType: "commission", subjectId: entry.id, payload: { invoice: invoice.number, amountCents: entry.amountCents } })),
+      ]);
+      return { ok: true, recordedCents: amountCents };
+    } catch (error) {
+      // A concurrent Stripe retry may have committed the same refund first.
+      if (await existingRefund()) return { ok: true, recordedCents: 0 };
+      const code = (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code;
+      if (code === "22012" && attempt < 2) continue;
+      throw error;
+    }
   }
-  return { ok: true };
 }
 
 export type RepTotals = { pending: number; approved: number; paidThisYear: number; paidLifetime: number };

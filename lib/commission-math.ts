@@ -99,3 +99,110 @@ export function refundAllocations(baseCents: number, shares: DealAllocation[], a
   const after = at(alreadyRefunded + refundCents);
   return shares.map((share, i) => ({ ...share, amountCents: before[i] - after[i] }));
 }
+
+/** Someone who can be credited on a deal: their membership, role and commission profile. */
+export type ShareCandidate = { id: string; role: string; email: string; status: string; name: string };
+
+/**
+ * Who shares in one paid invoice, decided without throwing.
+ *
+ * - `{ attention }`: setup is broken or ambiguous and a person must decide.
+ *   The payment itself is never blocked by this.
+ * - `null`: nobody is credited, so there's nothing to record.
+ * - `{ allocations, notes }`: the lines to write. A paused recipient's line
+ *   is left out and explained in `notes`; the others keep their exact share.
+ */
+export function planDealShares(input: {
+  baseCents: number;
+  projectRepId: string | null;
+  deals: { repId: string | null; ownerEmail: string | null }[];
+  people: ShareCandidate[];
+}): { attention: string } | { allocations: DealAllocation[]; notes: string[] } | null {
+  const { people } = input;
+  const isFounder = (p: ShareCandidate) => p.role === "staff_owner" || p.role === "staff";
+  let credited: ShareCandidate | undefined;
+  if (input.projectRepId) {
+    credited = people.find((p) => p.id === input.projectRepId);
+    if (!credited) return { attention: "The project's credited person has no commission profile." };
+  } else {
+    const ids = new Set(
+      input.deals
+        .map((d) => d.repId ?? people.find((p) => isFounder(p) && p.email.toLowerCase() === d.ownerEmail?.toLowerCase())?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    if (ids.size > 1) return { attention: "This project's deals have different owners. Set the project's credited person." };
+    if (ids.size === 0) return null;
+    credited = people.find((p) => ids.has(p.id));
+    if (!credited) return { attention: "The deal's credited rep has no commission profile." };
+  }
+
+  // Founders are staff with an active profile. Exactly two share a rep deal;
+  // if one of exactly two founders is paused, their line is skipped below.
+  let founders: ShareCandidate[] = [];
+  if (credited.role === "rep") {
+    const all = people.filter(isFounder);
+    const active = all.filter((p) => p.status === "active");
+    if (active.length === 2) founders = active;
+    else if (all.length === 2) founders = all;
+    else return { attention: `Rep deals need exactly two active founder profiles; found ${active.length}.` };
+  }
+
+  let allocations: DealAllocation[];
+  try {
+    allocations = dealAllocations(input.baseCents, { id: credited.id, role: credited.role }, founders.map((p) => ({ id: p.id, role: p.role })));
+  } catch (error) {
+    return { attention: (error as Error).message };
+  }
+  const notes: string[] = [];
+  const paused = new Set([credited, ...founders].filter((p) => p.status !== "active").map((p) => p.id));
+  for (const share of allocations) {
+    if (!paused.has(share.id)) continue;
+    const who = people.find((p) => p.id === share.id);
+    notes.push(`${who?.name ?? "A recipient"} is paused: their ${formatRate(share.rateBps)} share (${share.amountCents}¢) was left unallocated.`);
+  }
+  return { allocations: allocations.filter((share) => !paused.has(share.id)), notes };
+}
+
+/**
+ * One refund's clawback lines, measured against what each recipient has
+ * actually been clawed back so far (`clawedSoFar`, positive cents, same order
+ * as `shares`). Each recipient's cumulative clawback tracks the rounded
+ * proportional target, so a full refund always clears every cent.
+ *
+ * Rounding can put a recipient ahead of their target, which would make their
+ * line a positive "clawback". That line is skipped and the cents carry into
+ * the next line instead, so lines are only ever negative, and 0¢ lines are
+ * dropped. Returned lines keep the index of the share they belong to.
+ */
+export function refundClawbackLines(
+  baseCents: number,
+  shares: DealAllocation[],
+  clawedSoFar: number[],
+  refundedAfter: number,
+): (DealAllocation & { index: number })[] {
+  if (clawedSoFar.length !== shares.length) throw new Error("Every share needs its clawback so far");
+  const target = refundAllocations(baseCents, shares, 0, refundedAfter).map((x) => -x.amountCents);
+  const raw = shares.map((_, i) => clawedSoFar[i] - target[i]);
+  return carryPositive(raw)
+    .map((amountCents, index) => ({ ...shares[index], amountCents, index }))
+    .filter((line) => line.amountCents !== 0);
+}
+
+/** Moves positive amounts into the following lines (wrapping to earlier ones) so none stays positive. */
+export function carryPositive(lines: number[]) {
+  const out = [...lines];
+  let carry = 0;
+  for (let i = 0; i < out.length; i++) {
+    out[i] += carry;
+    carry = Math.max(0, out[i]);
+    out[i] -= carry;
+  }
+  // Left over after the last line: absorb into the latest negative lines.
+  for (let i = out.length - 1; i >= 0 && carry > 0; i--) {
+    const take = Math.min(carry, -out[i]);
+    out[i] += take;
+    carry -= take;
+  }
+  if (carry > 0) throw new Error("Clawback lines cannot net positive");
+  return out;
+}

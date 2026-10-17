@@ -12,6 +12,10 @@ The recovered version includes the existing admin sidebar, overview, pipeline, c
 
 No production database migration is required merely to synchronize this source snapshot. Do not replay the older, divergent CRM migration history against the live database. Database changes must be reviewed against the current deployed schema and migration journal.
 
+## Git deployment connection
+
+Vercel is connected to `skox-software/portal`, with `main` as its production branch. Branch pushes create previews; merges to `main` publish production. Run CI and review the preview before merging. Avoid deploying uncommitted local edits directly, which would put production ahead of GitHub again.
+
 ## Verification and release
 
 Run `npm install --no-audit --no-fund`, `npm test`, `npm run lint`, and `npm run build`. CI runs the same checks without production secrets.

@@ -82,8 +82,24 @@ account is not Josh's founder account.
 
 Explicit project credit wins, followed by the linked deal's credited rep,
 then its founder owner. Conflicting deal ownership requires an explicit
-project credit. A rep deal requires exactly two founder profiles;
-it fails rather than silently losing a founder's share if setup is incomplete.
+project credit. A rep deal requires exactly two founders: staff members with
+an active commission profile.
+
+A setup problem never blocks a payment. If the credited person has no
+commission profile, the project's deals have conflicting owners, or a rep
+deal doesn't find exactly two founders, the invoice is still marked paid, the
+client still gets a receipt and kickoff still runs. No commission is written;
+instead a `commission.needs_attention` event (invoice number and reason) is
+logged and the owner(s) get a "Commission review required" email. Fix the
+setup, then add the missing earning as an adjustment. An unexpected error
+while recording commission is handled the same way.
+
+**Paused profiles.** A paused rep on a rep deal earns nothing new: their 20%
+line is skipped and left unallocated, and the founders still get their 40%
+each. A paused founder's line is skipped the same way (on a rep deal the other
+founder and the rep keep their shares; on their own deal nothing is
+recorded). Skipped shares are named in the note on the `commission.earned`
+events, or in a `commission.skipped` event when no line is written at all.
 Profile rates are fixed at 100% for founders and 20% for reps. Each rep deal
 records 40% on the founders' actual ledger lines.
 
@@ -130,6 +146,7 @@ The $300 business expense does not reduce the $1,250 earned amount.
 
 - **Paused reps** earn nothing new, including on care plans for clients they
   brought. Keep them active if they should keep earning after they stop selling.
+  Their 20% of a rep deal stays unallocated rather than going to the founders.
 - **Invoices voided after a Stripe payment** claw back as if refunded. Record a
   real refund instead when money actually went back.
 

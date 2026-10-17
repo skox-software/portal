@@ -17,7 +17,7 @@ import { clientRecipients, notifyLater, portalLink } from "@/lib/notify";
 import { invoiceLocked } from "@/lib/onboarding";
 import { projectForAction } from "@/lib/project-access";
 import { stripeEnabled, stripeSandbox } from "@/lib/stripe";
-import { recordEarning, recordRefund, reverseEarning } from "@/lib/commissions";
+import { flagCommissionAttention, recordEarning, recordRefund, reverseEarning } from "@/lib/commissions";
 
 export async function createInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
@@ -213,7 +213,13 @@ export async function setInvoiceStatus(formData: FormData) {
     await reverseEarning(invoice, viewer.userId, parsed.data.status === "void" ? "voided after payment" : "re-opened after payment");
   }
   if (parsed.data.status === "paid") {
-    await recordEarning(invoice, viewer.userId);
+    // Commission never blocks marking the invoice paid: a failure is flagged for a person.
+    try {
+      await recordEarning(invoice, viewer.userId);
+    } catch (error) {
+      console.error("[billing] commission could not be recorded", { invoiceId: invoice.id, error });
+      await flagCommissionAttention(invoice, `Recording commission failed: ${(error as Error)?.message ?? String(error)}`, viewer.userId);
+    }
     notifyLater(() => clientRecipients(client.id, { approversOnly: true, actionRequired: true }), {
       subject: `Payment received: invoice ${invoice.number}`,
       preheader: "Thank you for your payment. Your receipt is available in the portal.",

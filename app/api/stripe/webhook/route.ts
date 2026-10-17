@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { clients, invoices, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
-import { recordEarning, recordRefund, refundedCents } from "@/lib/commissions";
+import { flagCommissionAttention, recordEarning, recordRefund, refundedCents } from "@/lib/commissions";
 import { eventInsert } from "@/lib/events";
 import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       // A retry after a partial failure: finish the kickoff step and the rep's
       // commission (both are guarded, so this is safe).
       await afterInvoicePaid(existing);
-      await recordEarning(existing, "stripe");
+      await safeRecordEarning(existing);
       return Response.json({ received: true });
     }
     // Paid again, paid after being voided, or a different amount: a person should look.
@@ -103,8 +103,8 @@ export async function POST(request: Request) {
     const link = portalLink(`/projects/${project.id}/billing`);
     // Kickoff first: if emails fail, the retry path above still has nothing left to do but notify.
     await afterInvoicePaid(row, paymentEmailDetails(session, companyName, project.name));
-    // If this throws, Stripe retries and the "already paid" path above finishes it.
-    await recordEarning(row, "stripe");
+    // Commission never blocks the payment: a failure is flagged for a person.
+    await safeRecordEarning(row);
     await eventInsert({ workspaceId: row.workspaceId, projectId: row.projectId, actorId: "stripe", verb: "invoice.paid", subjectType: "invoice", subjectId: row.id, payload: { title: row.title, amountCents: row.amountCents } });
     await Promise.allSettled([
       clientRecipients(project.clientId, { approversOnly: true, actionRequired: true }).then((to) =>
@@ -129,6 +129,16 @@ export async function POST(request: Request) {
     ]);
   }
   return Response.json({ received: true });
+}
+
+/** Records commission, but a ledger failure must never stop the receipt, emails or kickoff. */
+async function safeRecordEarning(invoice: typeof invoices.$inferSelect) {
+  try {
+    await recordEarning(invoice, "stripe");
+  } catch (error) {
+    console.error("[stripe] commission could not be recorded", { invoiceId: invoice.id, error });
+    await flagCommissionAttention(invoice, `Recording commission failed: ${(error as Error)?.message ?? String(error)}`, "stripe");
+  }
 }
 
 /**

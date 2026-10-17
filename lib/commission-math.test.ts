@@ -98,3 +98,87 @@ test("partial refunds reverse every allocation and final refund clears odd cents
   assert.equal(first.reduce((sum, x) => sum + x.amountCents, 0), -33);
   shares.forEach((share, i) => assert.equal(first[i].amountCents + last[i].amountCents, -share.amountCents));
 });
+
+const person = (id: string, role: string, status = "active") => ({ id, role, email: `${id}@skox.test`, status, name: id[0].toUpperCase() + id.slice(1) });
+const team = [person("reiss", "staff_owner"), person("josh", "staff_owner"), person("rep", "rep")];
+
+test("deal shares: founder close is 100%, rep deal is 20/40/40", () => {
+  assert.deepEqual(math.planDealShares({ baseCents: 62500, projectRepId: "reiss", deals: [], people: team }), {
+    allocations: [{ id: "reiss", rateBps: 10000, amountCents: 62500 }], notes: [],
+  });
+  const rep = math.planDealShares({ baseCents: 125000, projectRepId: null, deals: [{ repId: "rep", ownerEmail: null }], people: team });
+  assert.ok(rep && "allocations" in rep);
+  assert.deepEqual(rep.allocations.map(a => [a.id, a.amountCents]), [["rep", 25000], ["josh", 50000], ["reiss", 50000]]);
+  // A founder deal owner is the fallback credit.
+  const owned = math.planDealShares({ baseCents: 100, projectRepId: null, deals: [{ repId: null, ownerEmail: "JOSH@skox.test" }], people: team });
+  assert.ok(owned && "allocations" in owned);
+  assert.deepEqual(owned.allocations, [{ id: "josh", rateBps: 10000, amountCents: 100 }]);
+});
+
+test("deal shares never throw: broken setup asks for attention", () => {
+  const attention = (r: ReturnType<typeof math.planDealShares>) => assert.ok(r && "attention" in r, JSON.stringify(r));
+  attention(math.planDealShares({ baseCents: 100, projectRepId: "ghost", deals: [], people: team }));
+  attention(math.planDealShares({ baseCents: 100, projectRepId: null, deals: [{ repId: "rep", ownerEmail: null }, { repId: null, ownerEmail: "reiss@skox.test" }], people: team }));
+  attention(math.planDealShares({ baseCents: 100, projectRepId: "rep", deals: [], people: [team[0], team[2]] }));
+  attention(math.planDealShares({ baseCents: 100, projectRepId: "rep", deals: [], people: [...team, person("third", "staff")] }));
+  attention(math.planDealShares({ baseCents: 100, projectRepId: "client", deals: [], people: [...team, person("client", "client_member")] }));
+  // Nobody credited: nothing to record.
+  assert.equal(math.planDealShares({ baseCents: 100, projectRepId: null, deals: [], people: team }), null);
+});
+
+test("founders are staff with an active profile; a paused third staffer doesn't count", () => {
+  const r = math.planDealShares({ baseCents: 1000, projectRepId: "rep", deals: [], people: [...team, person("old", "staff", "paused")] });
+  assert.ok(r && "allocations" in r);
+  assert.deepEqual(r.allocations.map(a => a.id), ["rep", "josh", "reiss"]);
+});
+
+test("a paused rep's 20% is left unallocated; the founders keep 40/40", () => {
+  const r = math.planDealShares({ baseCents: 125000, projectRepId: "rep", deals: [], people: [team[0], team[1], person("rep", "rep", "paused")] });
+  assert.ok(r && "allocations" in r);
+  assert.deepEqual(r.allocations, [{ id: "josh", rateBps: 4000, amountCents: 50000 }, { id: "reiss", rateBps: 4000, amountCents: 50000 }]);
+  assert.match(r.notes[0], /Rep is paused.*20%.*25000/);
+});
+
+test("a paused founder's line is skipped and noted", () => {
+  const people = [person("reiss", "staff_owner", "paused"), team[1], team[2]];
+  const rep = math.planDealShares({ baseCents: 125000, projectRepId: "rep", deals: [], people });
+  assert.ok(rep && "allocations" in rep);
+  assert.deepEqual(rep.allocations.map(a => [a.id, a.amountCents]), [["rep", 25000], ["josh", 50000]]);
+  assert.match(rep.notes[0], /Reiss is paused/);
+  const own = math.planDealShares({ baseCents: 62500, projectRepId: "reiss", deals: [], people });
+  assert.ok(own && "allocations" in own);
+  assert.deepEqual(own.allocations, []);
+  assert.equal(own.notes.length, 1);
+});
+
+test("base 7¢, already 3¢, refund 1¢: no positive or 0¢ clawback lines", () => {
+  const shares = math.dealAllocations(7, rep, [reiss, josh]);
+  // The raw cumulative difference flips the rep's line positive...
+  assert.deepEqual(math.refundAllocations(7, shares, 3, 1).map(x => x.amountCents), [1, -1, -1]);
+  // ...so it carries into the next line.
+  assert.deepEqual(math.carryPositive([1, -1, -1]), [0, 0, -1]);
+  const first = math.refundClawbackLines(7, shares, [0, 0, 0], 3);
+  assert.deepEqual(first.map(x => [x.id, x.amountCents]), [["rep", -1], ["josh", -1], ["reiss", -1]]);
+  const second = math.refundClawbackLines(7, shares, [1, 1, 1], 4);
+  assert.deepEqual(second.map(x => [x.id, x.amountCents, x.index]), [["reiss", -1, 2]]);
+});
+
+test("ledger-based clawbacks still clear every cent on a full refund", () => {
+  for (const base of [7, 101, 125000, 99_999]) {
+    const shares = math.dealAllocations(base, rep, [reiss, josh]);
+    const clawed = shares.map(() => 0);
+    let refunded = 0;
+    for (const step of [3, 1, 5, 2, base]) {
+      const amount = Math.min(step, base - refunded);
+      if (amount <= 0) break;
+      refunded += amount;
+      const lines = math.refundClawbackLines(base, shares, clawed, refunded);
+      for (const line of lines) {
+        assert.ok(line.amountCents < 0, `line ${JSON.stringify(line)} must be negative`);
+        clawed[line.index] -= line.amountCents;
+      }
+      assert.equal(clawed.reduce((s, x) => s + x, 0), -math.refundAllocations(base, shares, 0, refunded).reduce((s, x) => s + x.amountCents, 0));
+    }
+    shares.forEach((share, i) => assert.equal(clawed[i], share.amountCents));
+  }
+});

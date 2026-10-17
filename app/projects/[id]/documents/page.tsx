@@ -9,6 +9,7 @@ import { documents, documentSigners, memberships } from "@/lib/db/schema";
 import { DOCUMENT_KIND_LABEL, formatDate, ROLE_LABEL } from "@/lib/format";
 import { loadProjectShell } from "@/lib/project-shell";
 import { sendDocument } from "./actions";
+import { isStaffRole } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Documents" };
@@ -36,7 +37,7 @@ export default async function DocumentsPage({
         .where(eq(memberships.workspaceId, project.workspaceId))
         .orderBy(asc(memberships.email))
     : [];
-  const eligible = people.filter((p) => p.clientId === project.clientId || p.clientId === null);
+  const eligible = people.filter((p) => p.clientId === project.clientId || (p.clientId === null && isStaffRole(p.role)));
 
   const needsMe = docs.filter(
     (d) => d.status === "out_for_signature" && signers.some((s) => s.documentId === d.id && s.email === viewer.email && s.status !== "signed"),

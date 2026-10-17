@@ -89,6 +89,15 @@ project's status, the same as its status menu.
   staff member's own address, threaded, with a copy to their mailbox.
   Needs: `RESEND_WEBHOOK_SECRET`, `RESEND_INBOUND_API_KEY`, `INBOX_COPY_ADDRESS`.
 
+### Sales rep portal and commissions (2026-10-16)
+See [REPS.md](REPS.md). Outside 1099 reps sign in to `/rep`, a separate area
+with only their leads and their money. They work leads SKOX assigns, submit
+their own (first to submit wins), and mark scope calls booked. SKOX closes. Each
+paid invoice on a client project credits the project's rep at their rate
+(10–20%), care plans included. Refunds claw back, and months close into
+statements the owner approves and marks paid. Staff manage reps at
+`/admin/reps` and money at `/admin/commissions`. Migration 0013.
+
 ## Next
 
 ### Phase 3, remaining

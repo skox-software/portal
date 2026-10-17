@@ -176,6 +176,7 @@ export const ROLE_LABEL = {
   staff: "SKOX team",
   client_approver: "Approver",
   client_member: "Team member",
+  rep: "Sales rep",
 } as const;
 
 /** Current time in ms. Lives here so server components read the clock through one place. */

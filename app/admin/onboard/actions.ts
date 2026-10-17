@@ -119,6 +119,11 @@ export async function startOnboarding(formData: FormData) {
             .update(deals)
             .set({ clientId, projectId, stage: "won", wonAt: sql`coalesce(${deals.wonAt}, now())` })
             .where(and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId), isNull(deals.projectId))),
+          // The deal's sales rep earns commission on everything this project pays.
+          db
+            .update(projects)
+            .set({ repMembershipId: sql`(select d.rep_membership_id from deals d where d.id = ${dealId} and d.project_id = ${projectId})` })
+            .where(eq(projects.id, projectId)),
         ]
       : []),
     eventInsert({

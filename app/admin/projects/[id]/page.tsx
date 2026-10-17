@@ -22,9 +22,11 @@ import {
   changeDeliveryDate,
   postUpdate,
   setMilestoneState,
+  setProjectRep,
   setProjectStatus,
   toggleTask,
 } from "../../actions";
+import { repOptions } from "@/lib/rep-assign";
 import { markLaunched } from "@/app/projects/[id]/results/actions";
 
 export const dynamic = "force-dynamic";
@@ -52,11 +54,12 @@ export default async function ProjectAdmin({
   if (!row) notFound();
   const { project, client } = row;
 
-  const [steps, allTasks, recent, changes] = await Promise.all([
+  const [steps, allTasks, recent, changes, reps] = await Promise.all([
     db.select().from(milestones).where(eq(milestones.projectId, project.id)).orderBy(asc(milestones.position), asc(milestones.dueOn)),
     db.select().from(tasks).where(eq(tasks.projectId, project.id)).orderBy(asc(tasks.doneAt), asc(tasks.dueOn)),
     db.select().from(updates).where(eq(updates.projectId, project.id)).orderBy(desc(updates.createdAt)).limit(3),
     db.select().from(dateChanges).where(eq(dateChanges.projectId, project.id)).orderBy(desc(dateChanges.createdAt)),
+    repOptions(staff.workspaceId),
   ]);
 
   const hidden = <input type="hidden" name="projectId" value={project.id} />;
@@ -189,6 +192,23 @@ export default async function ProjectAdmin({
           </div>
 
           <aside>
+            <section className="card" aria-labelledby="rep-title">
+              <div className="card-head">
+                <h2 id="rep-title">Commission rep</h2>
+              </div>
+              <form action={setProjectRep} className="inline-form">
+                <input type="hidden" name="projectId" value={project.id} />
+                <label className="sr-only" htmlFor="project-rep">Sales rep credited on this client</label>
+                <select id="project-rep" name="repMembershipId" defaultValue={project.repMembershipId ?? ""}>
+                  <option value="">No rep</option>
+                  {reps.filter((r) => r.active || r.id === project.repMembershipId).map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}{r.active ? "" : " (paused)"}</option>
+                  ))}
+                </select>
+                <button className="btn btn-ghost btn-small" type="submit">Save</button>
+              </form>
+              <p className="small muted">The rep earns their rate on every invoice paid from now on, including care plans. Past payments aren&apos;t re-credited.</p>
+            </section>
             <section className="card" aria-labelledby="date-title">
               <div className="card-head">
                 <h2 id="date-title">Delivery date</h2>

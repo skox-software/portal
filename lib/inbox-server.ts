@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { getDb } from "@/lib/db";
 import { deals, emailMessages, emailThreads, memberships, workspaces } from "@/lib/db/schema";
@@ -15,6 +15,7 @@ import {
   type KnownContact,
 } from "@/lib/inbox";
 import { putPrivate } from "@/lib/storage";
+import { staffOf, staffRow } from "@/lib/staff-filter";
 
 /** The address the Workspace routing rule copies mail to; never a counterpart. */
 export function inboxCopyAddress() {
@@ -25,7 +26,7 @@ async function staffEmails(workspaceId: string) {
   const rows = await getDb()
     .select({ email: memberships.email })
     .from(memberships)
-    .where(and(eq(memberships.workspaceId, workspaceId), isNull(memberships.clientId)));
+    .where(staffOf(workspaceId));
   return rows.map((r) => r.email.toLowerCase());
 }
 
@@ -227,7 +228,7 @@ export async function workspaceForAddresses(addresses: string[]) {
     const [hit] = await db
       .select({ workspaceId: memberships.workspaceId })
       .from(memberships)
-      .where(and(inArray(memberships.email, emails), isNull(memberships.clientId)))
+      .where(and(inArray(memberships.email, emails), staffRow()))
       .limit(1);
     if (hit) return hit.workspaceId;
   }

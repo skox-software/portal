@@ -7,6 +7,7 @@ import { clients, memberships, projects, type Membership } from "@/lib/db/schema
 import {
   accessToProject,
   normalizeEmail,
+  repMembershipIn,
   staffMembershipIn,
   type ProjectAccess,
 } from "@/lib/permissions";
@@ -68,6 +69,14 @@ export async function requireStaff() {
   const staff = staffMembershipIn(viewer.memberships);
   if (!staff) notFound();
   return { viewer, staff };
+}
+
+/** Sales reps only. Staff and clients get a 404 too: the rep area is a separate world. */
+export async function requireRep() {
+  const viewer = await requireViewer();
+  const rep = repMembershipIn(viewer.memberships);
+  if (!rep) notFound();
+  return { viewer, rep };
 }
 
 const uuid = z.uuid();

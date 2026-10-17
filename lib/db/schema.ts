@@ -8,10 +8,13 @@ import {
   pgTable,
   real,
   text,
+  type AnyPgColumn,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * SKOX Client Portal — phase 1 data model.
@@ -40,6 +43,8 @@ export const portalRole = pgEnum("portal_role", [
   "staff",
   "client_approver",
   "client_member",
+  /** Outside sales rep: sees only their own leads and earnings, never the delivery side. */
+  "rep",
 ]);
 export const projectStatus = pgEnum("project_status", [
   "kickoff",
@@ -168,6 +173,8 @@ export const projects = pgTable(
     launchedOn: date("launched_on", { mode: "string" }),
     /** A target set at onboarding, confirmed at kickoff. */
     dateTentative: boolean("date_tentative").notNull().default(false),
+    /** The rep who sourced this client. Every paid invoice on the project earns them commission. */
+    repMembershipId: uuid("rep_membership_id").references((): AnyPgColumn => memberships.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -413,11 +420,15 @@ export const invoices = pgTable(
     createdAt: createdAt(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    /** Set by the Stripe webhook; the payment intent matches later refunds. */
+    stripeSessionId: text("stripe_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
   },
   (t) => [
     index("invoices_project_idx").on(t.projectId, t.status),
     index("invoices_document_idx").on(t.documentId),
     index("invoices_workspace_idx").on(t.workspaceId, t.status),
+    index("invoices_payment_intent_idx").on(t.stripePaymentIntentId),
   ],
 );
 
@@ -631,7 +642,7 @@ export const deals = pgTable(
     stage: dealStage("stage").notNull().default("lead"),
     /** Staff email; shown as initials on the card. */
     ownerEmail: text("owner_email"),
-    /** manual | referral | import | website */
+    /** manual | referral | import | website | rep */
     source: text("source").notNull().default("manual"),
     referralId: uuid("referral_id")
       .unique()
@@ -659,11 +670,23 @@ export const deals = pgTable(
     nextStepOn: date("next_step_on"),
     /** Last call, voicemail or email logged against the deal. */
     lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
+    /** The sales rep working this lead (a `rep` membership). Separate from the SKOX owner who closes it. */
+    repMembershipId: uuid("rep_membership_id").references(() => memberships.id, { onDelete: "set null" }),
+    /** assigned (SKOX gave it to the rep) | self (the rep brought it) */
+    repSource: text("rep_source"),
+    /** The rep's own notes. Internal `notes` are never shown to reps. */
+    repNotes: text("rep_notes"),
+    /** When the rep booked the scope call with SKOX. */
+    meetingAt: timestamp("meeting_at", { withTimezone: true }),
     stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by").notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index("deals_workspace_idx").on(t.workspaceId, t.stage), index("deals_next_step_idx").on(t.workspaceId, t.nextStepOn)],
+  (t) => [
+    index("deals_workspace_idx").on(t.workspaceId, t.stage),
+    index("deals_next_step_idx").on(t.workspaceId, t.nextStepOn),
+    index("deals_rep_idx").on(t.repMembershipId),
+  ],
 );
 
 export const emailDirection = pgEnum("email_direction", ["inbound", "outbound"]);
@@ -748,6 +771,129 @@ export const rateEvents = pgTable(
   (t) => [index("rate_events_key_idx").on(t.key, t.createdAt)],
 );
 
+/* ---------------------------------------------------------------------------
+ * Sales reps and commissions.
+ *
+ * Reps are 1099 contractors paid a percentage of cash SKOX collects from the
+ * clients they bring. The ledger is append-only: a payment adds an `earned`
+ * entry, a refund adds a negative `clawback`, corrections are `adjustment`s.
+ * Each month's pending entries roll into a statement that the workspace owner
+ * approves and marks paid.
+ * ------------------------------------------------------------------------- */
+
+export const commissionKind = pgEnum("commission_kind", ["earned", "clawback", "adjustment"]);
+export const commissionStatus = pgEnum("commission_status", ["pending", "approved", "paid", "void"]);
+export const statementStatus = pgEnum("statement_status", ["draft", "approved", "paid", "void"]);
+
+/** One per `rep` membership: their rate and paperwork. */
+export const repProfiles = pgTable("rep_profiles", {
+  id: id(),
+  workspaceId: workspaceId(),
+  membershipId: uuid("membership_id")
+    .notNull()
+    .unique()
+    .references(() => memberships.id, { onDelete: "cascade" }),
+  displayName: text("display_name").notNull(),
+  /** Commission rate in basis points: 1500 = 15%. */
+  rateBps: integer("rate_bps").notNull(),
+  /** active | paused. Paused reps keep their history but earn nothing new. */
+  status: text("status").notNull().default("active"),
+  phone: text("phone"),
+  /** How SKOX pays them, in words ("Zelle to phone"). Never bank numbers. */
+  payoutNotes: text("payout_notes"),
+  w9ReceivedAt: timestamp("w9_received_at", { withTimezone: true }),
+  agreementSignedAt: timestamp("agreement_signed_at", { withTimezone: true }),
+  startedOn: date("started_on", { mode: "string" }),
+  createdAt: createdAt(),
+});
+
+/** Money returned to a client. Each refund claws back the rep's share once. */
+export const invoiceRefunds = pgTable(
+  "invoice_refunds",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    reason: text("reason"),
+    stripeRefundId: text("stripe_refund_id").unique(),
+    createdBy: text("created_by").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("invoice_refunds_invoice_idx").on(t.invoiceId)],
+);
+
+export const commissionStatements = pgTable(
+  "commission_statements",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    repMembershipId: uuid("rep_membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "restrict" }),
+    periodStart: date("period_start", { mode: "string" }).notNull(),
+    periodEnd: date("period_end", { mode: "string" }).notNull(),
+    totalCents: integer("total_cents").notNull(),
+    status: statementStatus("status").notNull().default("draft"),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    paidBy: text("paid_by"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    /** Transfer memo or confirmation number. */
+    paymentReference: text("payment_reference"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("commission_statements_rep_period_key").on(t.repMembershipId, t.periodStart),
+    index("commission_statements_workspace_idx").on(t.workspaceId, t.status),
+  ],
+);
+
+export const commissionEntries = pgTable(
+  "commission_entries",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    repMembershipId: uuid("rep_membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+    refundId: uuid("refund_id")
+      .unique()
+      .references(() => invoiceRefunds.id, { onDelete: "set null" }),
+    kind: commissionKind("kind").notNull(),
+    /** What the rate applied to: the invoice paid, or the refund. Zero for adjustments. */
+    baseCents: integer("base_cents").notNull(),
+    rateBps: integer("rate_bps").notNull(),
+    /** Signed: clawbacks are negative. */
+    amountCents: integer("amount_cents").notNull(),
+    status: commissionStatus("status").notNull().default("pending"),
+    /** When the money moved (invoice paid, refund issued). Decides the statement month. */
+    earnedAt: timestamp("earned_at", { withTimezone: true }).notNull(),
+    statementId: uuid("statement_id").references(() => commissionStatements.id, { onDelete: "set null" }),
+    /** Client company at the time, so the rep's ledger never needs to read the project. */
+    clientName: text("client_name"),
+    note: text("note"),
+    createdBy: text("created_by").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // One earning per payment: a webhook retry carries the same paid-at time and is ignored.
+    uniqueIndex("commission_entries_earned_payment_key")
+      .on(t.invoiceId, t.earnedAt)
+      .where(sql`kind = 'earned'`),
+    index("commission_entries_rep_idx").on(t.repMembershipId, t.earnedAt),
+    index("commission_entries_statement_idx").on(t.statementId),
+  ],
+);
+
+export type RepProfile = typeof repProfiles.$inferSelect;
+export type CommissionEntry = typeof commissionEntries.$inferSelect;
+export type CommissionStatement = typeof commissionStatements.$inferSelect;
 export type Onboarding = typeof onboardings.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
 export type Project = typeof projects.$inferSelect;

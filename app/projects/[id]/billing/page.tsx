@@ -13,7 +13,7 @@ import { formatDate, formatDateTime, formatMoney, todayIso } from "@/lib/format"
 import { invoiceLocked } from "@/lib/onboarding";
 import { loadProjectShell } from "@/lib/project-shell";
 import { stripeEnabled, stripeSandbox } from "@/lib/stripe";
-import { payInvoice, setInvoiceStatus } from "./actions";
+import { payInvoice, recordInvoiceRefund, setInvoiceStatus } from "./actions";
 import { CreateInvoiceForm } from "./CreateInvoiceForm";
 import "./billing.css";
 
@@ -80,6 +80,7 @@ export default async function BillingPage({ params, searchParams }: {
         <div className="row">{access.isStaff ? <InvoiceOwnerActions invoice={inv} stripe={stripe} sandbox={sandbox} locked={isLocked} /> : inv.status === "open" && paymentButton(inv)}</div>
       </div>
       {access.isStaff && <details className="billing-status-control"><summary>Update invoice status</summary><p className="small muted">Card payments update automatically. Record payment here only if it was received another way.</p><form action={setInvoiceStatus} className="row"><input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="invoiceId" value={inv.id} /><select name="status" defaultValue={inv.status} aria-label={`Status for ${inv.number}`}><option value="open">Open</option><option value="paid">Paid outside checkout</option><option value="void">Cancelled</option></select><SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">Save status</SubmitButton></form></details>}
+      {access.isStaff && isPaid && !inv.stripePaymentIntentId && <details className="billing-status-control"><summary>Record a refund</summary><p className="small muted">For payments received outside Stripe. Stripe refunds record themselves. A sales rep&apos;s commission on this invoice is clawed back at the same rate.</p><form action={recordInvoiceRefund} className="row"><input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="invoiceId" value={inv.id} /><label className="sr-only" htmlFor={`refund-${inv.id}`}>Amount refunded</label><input id={`refund-${inv.id}`} name="amount" inputMode="decimal" placeholder="Amount, e.g. 1250.00" required style={{ maxWidth: 180 }} /><label className="sr-only" htmlFor={`refund-reason-${inv.id}`}>Reason</label><input id={`refund-reason-${inv.id}`} name="reason" maxLength={300} placeholder="Reason (optional)" /><SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">Record refund</SubmitButton></form></details>}
     </article>;
   }
 

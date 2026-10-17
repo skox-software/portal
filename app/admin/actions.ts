@@ -27,6 +27,7 @@ import { backWith } from "@/lib/http";
 import { googleBookingEmbedUrl, safeBookingUrl } from "@/lib/meetings";
 import { normalizeEmail } from "@/lib/permissions";
 import { deletePrivate } from "@/lib/storage";
+import { readRepField } from "@/lib/rep-assign";
 
 /*
  * Every action re-checks that the caller is SKOX staff and that the thing it
@@ -665,4 +666,25 @@ export async function postUpdate(formData: FormData) {
   revalidatePath(back);
   revalidatePath(`/projects/${project.id}`);
   backWith(back, "notice", "Update posted. The client sees it on their project home.");
+}
+
+/** Credits a sales rep on a client project: every invoice paid from now on earns them commission. */
+export async function setProjectRep(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const projectId = String(formData.get("projectId") ?? "");
+  if (!z.uuid().safeParse(projectId).success) backWith("/admin/projects", "error", "Unknown project.");
+  const back = `/admin/projects/${projectId}`;
+  const db = getDb();
+  const [project] = await db.select({ id: projects.id, name: projects.name, rep: projects.repMembershipId }).from(projects).where(and(eq(projects.id, projectId), eq(projects.workspaceId, staff.workspaceId))).limit(1);
+  if (!project) backWith("/admin/projects", "error", "Unknown project.");
+  const field = await readRepField(formData, staff.workspaceId);
+  if (!field.ok) backWith(back, "error", "Pick a sales rep from the list.");
+  const repId = field.value ?? null;
+  if (repId === project.rep) backWith(back, "notice", "No change.");
+  await db.batch([
+    db.update(projects).set({ repMembershipId: repId }).where(eq(projects.id, project.id)),
+    eventInsert({ workspaceId: staff.workspaceId, projectId: project.id, actorId: viewer.userId, verb: "project.rep_changed", subjectType: "project", subjectId: project.id, payload: { from: project.rep, to: repId } }),
+  ]);
+  revalidatePath(back);
+  backWith(back, "notice", repId ? `${project.name} now credits that rep on new payments.` : `${project.name} no longer credits a rep.`);
 }

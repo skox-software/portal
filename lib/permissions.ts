@@ -9,6 +9,7 @@ export const PORTAL_ROLES = [
   "staff",
   "client_approver",
   "client_member",
+  "rep",
 ] as const;
 export type PortalRole = (typeof PORTAL_ROLES)[number];
 export type ClientRole = Extract<PortalRole, "client_approver" | "client_member">;
@@ -24,8 +25,41 @@ export type ProjectAccess = {
   clientRole: ClientRole | null;
 };
 
+export const STAFF_ROLES = ["staff_owner", "staff"] as const satisfies readonly PortalRole[];
+
 export function isStaffRole(role: PortalRole) {
   return role === "staff_owner" || role === "staff";
+}
+
+export function isClientRole(role: PortalRole): role is ClientRole {
+  return role === "client_approver" || role === "client_member";
+}
+
+/** Outside sales reps. Never staff, never a client: they see leads and earnings only. */
+export function isRepRole(role: PortalRole) {
+  return role === "rep";
+}
+
+/** The rep membership for a workspace, if the person is a sales rep. */
+export function repMembershipIn<T extends MembershipLike>(memberships: T[], workspaceId?: string) {
+  return memberships.find(
+    (m) =>
+      m.clientId === null &&
+      isRepRole(m.role) &&
+      (workspaceId === undefined || m.workspaceId === workspaceId),
+  );
+}
+
+/** Approving and paying commission statements is the workspace owner's alone. */
+export function canApproveCommissions(role: PortalRole) {
+  return role === "staff_owner";
+}
+
+/** Rates are whole basis points from 10% to 20%. */
+export const REP_RATE_MIN_BPS = 1000;
+export const REP_RATE_MAX_BPS = 2000;
+export function isValidRepRate(bps: number) {
+  return Number.isInteger(bps) && bps >= REP_RATE_MIN_BPS && bps <= REP_RATE_MAX_BPS;
 }
 
 export function normalizeEmail(value: string) {
@@ -59,7 +93,7 @@ export function accessToProject(
     (m) =>
       m.workspaceId === project.workspaceId &&
       m.clientId === project.clientId &&
-      !isStaffRole(m.role),
+      isClientRole(m.role),
   );
   if (!isStaff && !client) return null;
   return { isStaff, clientRole: client ? (client.role as ClientRole) : null };
@@ -99,6 +133,6 @@ export function canSign(
 
 /** Client-side invitations can only ever grant client roles. */
 export function canInviteRole(inviter: ProjectAccess, role: PortalRole) {
-  if (isStaffRole(role)) return false;
+  if (!isClientRole(role)) return false;
   return can.inviteTeammates(inviter);
 }

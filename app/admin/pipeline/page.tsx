@@ -37,7 +37,7 @@ export default async function PipelinePage({
   const { viewer, staff } = await requireStaff();
   const ws = staff.workspaceId;
 
-  const { dealRows, projectRows, billing, columns, lost, owners } = await loadPipeline(ws);
+  const { dealRows, projectRows, billing, columns, lost, owners, reps } = await loadPipeline(ws);
   const dealById = new Map(dealRows.map((d) => [d.id, d]));
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).slice(0, 200) : "");
   const filters: BoardView = { view: "board", q: str("q"), owner: str("owner"), stage: "" };
@@ -202,6 +202,7 @@ export default async function PipelinePage({
             <DealPanel
               deal={editing}
               owners={owners}
+              reps={reps}
               me={viewer.email}
               linkedProject={linkedProject ? { id: linkedProject.project.id, name: linkedProject.project.name } : null}
               nav={{

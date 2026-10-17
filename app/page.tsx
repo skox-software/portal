@@ -6,13 +6,14 @@ import { requireViewer } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, onboardings, projects } from "@/lib/db/schema";
 import { describeDaysUntil, daysUntil, formatDate, kindLabel, STATUS_LABEL } from "@/lib/format";
-import { staffMembershipIn } from "@/lib/permissions";
+import { repMembershipIn, staffMembershipIn } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const viewer = await requireViewer();
   if (staffMembershipIn(viewer.memberships)) redirect("/admin");
+  if (repMembershipIn(viewer.memberships)) redirect("/rep");
 
   const clientIds = viewer.memberships.flatMap((m) => (m.clientId ? [m.clientId] : []));
   const rows = clientIds.length

@@ -16,7 +16,10 @@ export function LogCallForm({
   back,
   nextId,
   nextStep,
+  action = logCall,
 }: {
+  /** The server action that saves it. Reps use their own, which checks the lead is theirs. */
+  action?: (formData: FormData) => Promise<void>;
   dealId: string;
   today: string;
   base: string;
@@ -29,7 +32,7 @@ export function LogCallForm({
   const closing = outcome === "not_interested";
 
   return (
-    <form action={logCall} className="logcall" aria-labelledby={`logcall-${dealId}`}>
+    <form action={action} className="logcall" aria-labelledby={`logcall-${dealId}`}>
       <input type="hidden" name="dealId" value={dealId} />
       <input type="hidden" name="base" value={base} />
       <input type="hidden" name="back" value={back} />

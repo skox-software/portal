@@ -24,6 +24,8 @@ export type ClientRow = {
   slow: boolean;
   source: string | null;
   owner: string | null;
+  /** The sales rep credited on the lead, by name. */
+  rep: string | null;
   followUp: string | null;
   followUpState: "overdue" | "today" | "upcoming" | "none";
   followUpOn: string | null;
@@ -75,6 +77,7 @@ export function ClientsList({
   openDealId,
   panelOpen,
   owners,
+  reps = [],
   me,
   empty,
 }: {
@@ -82,6 +85,7 @@ export function ClientsList({
   openDealId: string | null;
   panelOpen: boolean;
   owners: string[];
+  reps?: { id: string; name: string; active: boolean }[];
   me: string;
   empty: string;
 }) {
@@ -153,7 +157,7 @@ export function ClientsList({
     return () => select?.removeEventListener("change", onChange);
   }, []);
 
-  function bulk(change: { stage?: string; ownerEmail?: string; nextStepOn?: string }, label: string) {
+  function bulk(change: { stage?: string; ownerEmail?: string; nextStepOn?: string; repMembershipId?: string }, label: string) {
     if (!picked.length) return;
     setMessage(null);
     startTransition(async () => {
@@ -212,6 +216,27 @@ export function ClientsList({
               ))}
             <option value="none">Unassigned</option>
           </select>
+          {reps.length > 0 && (
+            <>
+              <label className="sr-only" htmlFor="bulk-rep">
+                Give to sales rep
+              </label>
+              <select
+                id="bulk-rep"
+                value=""
+                disabled={pending}
+                onChange={(e) => e.target.value && bulk({ repMembershipId: e.target.value === "none" ? "" : e.target.value }, e.target.value === "none" ? "Rep removed" : "Given to rep")}
+              >
+                <option value="">Sales rep…</option>
+                {reps.filter((r) => r.active).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+                <option value="none">No rep</option>
+              </select>
+            </>
+          )}
           <label className="sr-only" htmlFor="bulk-follow">
             Set follow-up
           </label>
@@ -315,6 +340,7 @@ export function ClientsList({
                             {r.name}
                           </Link>
                           {(r.subtitle || r.source) && <small>{r.subtitle ?? r.source}</small>}
+                          {r.rep && <small className="crm-rep">Rep · {r.rep}</small>}
                         </td>
                         <td className="crm-contact crm-hide-split" data-label="Contact">
                           {r.contactName || r.contactEmail ? (

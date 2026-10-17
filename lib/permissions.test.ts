@@ -5,7 +5,10 @@ import {
   can,
   canInviteRole,
   canSign,
+  canApproveCommissions,
+  isValidRepRate,
   normalizeEmail,
+  repMembershipIn,
   staffMembershipIn,
   type MembershipLike,
 } from "./permissions.ts";
@@ -93,4 +96,39 @@ test("clients raise requests and react to ideas; staff run billing and share lin
 
 test("emails are compared case- and space-insensitively", () => {
   assert.equal(normalizeEmail("  Founders@SKOXsoftware.com "), "founders@skoxsoftware.com");
+});
+
+const rep: MembershipLike = { workspaceId: WS, clientId: null, role: "rep" };
+
+test("a sales rep is never staff and never reaches a project", () => {
+  assert.equal(staffMembershipIn([rep]), undefined);
+  assert.equal(staffMembershipIn([rep], WS), undefined);
+  assert.equal(accessToProject([rep], project), null);
+  assert.equal(repMembershipIn([rep], WS), rep);
+  assert.equal(repMembershipIn([staff], WS), undefined);
+  assert.equal(repMembershipIn([rep], OTHER_WS), undefined);
+});
+
+test("nobody can invite a rep or staff from a project", () => {
+  const a = accessToProject([approver], project)!;
+  assert.equal(canInviteRole(a, "rep"), false);
+  const s = accessToProject([staff], project)!;
+  assert.equal(canInviteRole(s, "rep"), false);
+  assert.equal(canInviteRole(s, "staff"), false);
+});
+
+test("only the workspace owner approves commissions", () => {
+  assert.equal(canApproveCommissions("staff_owner"), true);
+  assert.equal(canApproveCommissions("staff"), false);
+  assert.equal(canApproveCommissions("rep"), false);
+  assert.equal(canApproveCommissions("client_approver"), false);
+});
+
+test("rep rates are whole basis points between 10% and 20%", () => {
+  assert.equal(isValidRepRate(1000), true);
+  assert.equal(isValidRepRate(1250), true);
+  assert.equal(isValidRepRate(2000), true);
+  assert.equal(isValidRepRate(999), false);
+  assert.equal(isValidRepRate(2001), false);
+  assert.equal(isValidRepRate(12.5), false);
 });

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
@@ -12,6 +12,7 @@ import { canSign, normalizeEmail } from "@/lib/permissions";
 import { projectForAction, requestFingerprint } from "@/lib/project-access";
 import { buildSignedPdf, CONSENT_TEXT } from "@/lib/signing";
 import { projectPrefix, putPrivate, readPrivateBytes, sha256, statPrivate } from "@/lib/storage";
+import { staffRow } from "@/lib/staff-filter";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -59,7 +60,7 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
         eq(memberships.workspaceId, project.workspaceId),
         inArray(memberships.email, input.signers),
         // This project's client, or SKOX staff: people from another client could never open it.
-        or(eq(memberships.clientId, project.clientId), isNull(memberships.clientId)),
+        or(eq(memberships.clientId, project.clientId), staffRow()),
       ),
     );
   const allowedEmails = new Set(allowed.map((a) => a.email));

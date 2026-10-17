@@ -10,6 +10,8 @@ const items = [
   ["/admin/inbox", "Inbox", "✉"],
   ["/admin/projects", "Projects", "▦"],
   ["/admin/billing", "Billing", "$"],
+  ["/admin/reps", "Sales reps", "☍"],
+  ["/admin/commissions", "Commissions", "%"],
   ["/admin/requests", "Requests", "↗"],
   ["/admin/activity", "Activity", "◷"],
   ["/admin/settings", "Settings", "⚙"],

@@ -1,7 +1,9 @@
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients, deals, invoices, memberships, milestones, onboardings, projects, referrals } from "@/lib/db/schema";
 import { buildBoard } from "@/lib/pipeline";
+import { staffOf } from "@/lib/staff-filter";
+import { repOptions } from "@/lib/rep-assign";
 
 /**
  * Everything the Pipeline and the Clients list are built from, read once:
@@ -47,7 +49,7 @@ export async function loadPipeline(workspaceId: string) {
     db
       .select({ email: memberships.email })
       .from(memberships)
-      .where(and(eq(memberships.workspaceId, ws), isNull(memberships.clientId)))
+      .where(staffOf(ws))
       .orderBy(memberships.createdAt),
     db.select().from(clients).where(eq(clients.workspaceId, ws)),
   ]);
@@ -92,7 +94,10 @@ export async function loadPipeline(workspaceId: string) {
     }),
   });
 
+  const reps = await repOptions(ws);
+
   return {
+    reps,
     dealRows,
     projectRows,
     billing,

@@ -34,6 +34,7 @@ export type PanelNav = {
 export async function DealPanel({
   deal,
   owners,
+  reps = [],
   me,
   linkedProject,
   nav,
@@ -44,6 +45,7 @@ export async function DealPanel({
 }: {
   deal: Deal | null;
   owners: string[];
+  reps?: { id: string; name: string; active: boolean }[];
   me: string;
   linkedProject: { id: string; name: string } | null;
   nav: PanelNav;
@@ -138,7 +140,7 @@ export async function DealPanel({
         <LogCallForm key={deal.id} dealId={deal.id} today={today} base={nav.base} back={nav.back} nextId={nav.nextId} nextStep={deal.nextStep} />
       )}
 
-      <DealForm deal={deal} owners={owners} me={me} linked={!!linkedProject} nav={nav} />
+      <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} />
 
       {history.length > 0 && (
         <section className="lead-history" aria-label="History">
@@ -173,7 +175,7 @@ export async function DealPanel({
   );
 }
 
-function DealForm({ deal, owners, me, linked, nav }: { deal: Deal | null; owners: string[]; me: string; linked: boolean; nav: PanelNav }) {
+function DealForm({ deal, owners, reps, me, linked, nav }: { deal: Deal | null; owners: string[]; reps: { id: string; name: string; active: boolean }[]; me: string; linked: boolean; nav: PanelNav }) {
   const f = (id: string) => `deal-${id}`;
   return (
     <form key={deal?.id ?? "new"} action={deal ? saveDeal : createDeal} className="stack lead-form">
@@ -231,6 +233,23 @@ function DealForm({ deal, owners, me, linked, nav }: { deal: Deal | null; owners
             ))}
           </select>
         </div>
+        {(reps.length > 0 || deal?.repMembershipId) && (
+          <div className="field">
+            <label htmlFor={f("rep")}>Sales rep</label>
+            <select id={f("rep")} name="repMembershipId" defaultValue={deal?.repMembershipId ?? ""}>
+              <option value="">No rep</option>
+              {reps
+                .filter((r) => r.active || r.id === deal?.repMembershipId)
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.active ? "" : " (paused)"}
+                  </option>
+                ))}
+            </select>
+            <span className="hint">{deal?.repSource === "self" ? "The rep brought this lead." : "Earns their rate on every payment once this becomes a client."}</span>
+          </div>
+        )}
         <div className="field">
           <label htmlFor={f("nextStepOn")}>Follow up on</label>
           <input id={f("nextStepOn")} name="nextStepOn" type="date" defaultValue={deal?.nextStepOn ?? ""} />

@@ -4,6 +4,8 @@ import { getDb } from "@/lib/db";
 import { clients, invoices, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
+import { recordEarning, recordRefund, refundedCents } from "@/lib/commissions";
+import { eventInsert } from "@/lib/events";
 import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
 import { paymentEmailDetails } from "@/lib/payment-email";
@@ -22,6 +24,11 @@ export async function POST(request: Request) {
   const payload = await request.text();
   const event = stripeEvent(payload, request.headers.get("stripe-signature"), secret);
   if (!event) return new Response("Bad signature", { status: 400 });
+
+  if (event.type === "charge.refunded") {
+    await settleRefund(event.data.object as Stripe.Charge);
+    return Response.json({ received: true });
+  }
 
   const handled = [
     "checkout.session.completed",
@@ -44,7 +51,12 @@ export async function POST(request: Request) {
   const db = getDb();
   const [row] = await db
     .update(invoices)
-    .set({ status: "paid", paidAt: new Date() })
+    .set({
+      status: "paid",
+      paidAt: new Date(),
+      stripeSessionId: session.id,
+      stripePaymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent?.id ?? null),
+    })
     .where(
       and(
         eq(invoices.id, invoiceId),
@@ -58,8 +70,10 @@ export async function POST(request: Request) {
     const [existing] = await db.select().from(invoices).where(eq(invoices.id, invoiceId)).limit(1);
     if (!existing) return Response.json({ received: true });
     if (existing.status === "paid" && typeof session.amount_total === "number" && session.amount_total === existing.amountCents) {
-      // A retry after a partial failure: finish the kickoff step (it's guarded, so this is safe).
+      // A retry after a partial failure: finish the kickoff step and the rep's
+      // commission (both are guarded, so this is safe).
       await afterInvoicePaid(existing);
+      await recordEarning(existing, "stripe");
       return Response.json({ received: true });
     }
     // Paid again, paid after being voided, or a different amount: a person should look.
@@ -89,6 +103,9 @@ export async function POST(request: Request) {
     const link = portalLink(`/projects/${project.id}/billing`);
     // Kickoff first: if emails fail, the retry path above still has nothing left to do but notify.
     await afterInvoicePaid(row, paymentEmailDetails(session, companyName, project.name));
+    // If this throws, Stripe retries and the "already paid" path above finishes it.
+    await recordEarning(row, "stripe");
+    await eventInsert({ workspaceId: row.workspaceId, projectId: row.projectId, actorId: "stripe", verb: "invoice.paid", subjectType: "invoice", subjectId: row.id, payload: { title: row.title, amountCents: row.amountCents } });
     await Promise.allSettled([
       clientRecipients(project.clientId, { approversOnly: true, actionRequired: true }).then((to) =>
         sendEmail(to, {
@@ -133,6 +150,41 @@ async function reportFailedPayment(invoiceId: string, session: Stripe.Checkout.S
     paragraphs: [
       `${project.name} started paying invoice ${invoice.number} (${invoice.title}) for ${formatMoney(invoice.amountCents, invoice.currency)}, and Stripe reports the payment failed.`,
       `This happens with bank transfers that are confirmed later. The invoice is still open${session.customer_email ? `, and the payer was ${session.customer_email}` : ""}.`,
+    ],
+    cta: { label: "Open billing", href: portalLink(`/projects/${project.id}/billing`) },
+  });
+}
+
+/**
+ * A refund issued in Stripe. `amount_refunded` is cumulative, so the new
+ * refund is the difference from what's already recorded; keying it on the
+ * charge and that total makes a retried event a no-op.
+ */
+async function settleRefund(charge: Stripe.Charge) {
+  const intent = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+  if (!intent) return;
+  const db = getDb();
+  const [invoice] = await db.select().from(invoices).where(eq(invoices.stripePaymentIntentId, intent)).limit(1);
+  if (!invoice) return;
+  const delta = charge.amount_refunded - (await refundedCents(invoice.id));
+  if (delta <= 0) return;
+  const result = await recordRefund(invoice, {
+    amountCents: delta,
+    reason: "Refunded in Stripe",
+    actor: "stripe",
+    stripeRefundId: `${charge.id}:${charge.amount_refunded}`,
+  });
+  const [project] = await db.select().from(projects).where(eq(projects.id, invoice.projectId)).limit(1);
+  if (!project) return;
+  await sendEmail(await staffRecipients(project.workspaceId), {
+    subject: `Refund recorded: invoice ${invoice.number}`,
+    preheader: `${formatMoney(delta, invoice.currency)} refunded in Stripe.`,
+    heading: "Refund recorded",
+    paragraphs: [
+      `Stripe refunded ${formatMoney(delta, invoice.currency)} on invoice ${invoice.number} (${invoice.title}) for ${project.name}.`,
+      result.ok
+        ? "If a sales rep earned commission on this invoice, a matching clawback is on their next statement."
+        : `The refund could not be recorded: ${result.message} Check it in the portal.`,
     ],
     cta: { label: "Open billing", href: portalLink(`/projects/${project.id}/billing`) },
   });

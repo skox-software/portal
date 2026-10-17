@@ -18,6 +18,8 @@ const PATHS = {
   signout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
   mail: "M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 7l9 6 9-6",
   plus: "M12 5v14M5 12h14",
+  earnings: "M12 2v20M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.7 7 6.8c0 4.7 10 2.6 10 7.6 0 2.2-2.2 3.6-5 3.6s-5.2-1.2-5.2-3.4",
+  leads: "M3 5h18M3 12h18M3 19h12",
 } as const;
 
 export type IconName = keyof typeof PATHS;

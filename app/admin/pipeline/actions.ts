@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
@@ -19,6 +19,9 @@ import {
   projectStatusForColumn,
   type ColumnKey,
 } from "@/lib/pipeline";
+import { staffOf } from "@/lib/staff-filter";
+import { after } from "next/server";
+import { creditProjectFromDeal, emailAssignedLeads, readRepField } from "@/lib/rep-assign";
 
 /*
  * Pipeline moves write to whichever record the card is: a deal changes stage,
@@ -37,7 +40,7 @@ async function staffEmails(workspaceId: string) {
   const rows = await getDb()
     .select({ email: memberships.email })
     .from(memberships)
-    .where(and(eq(memberships.workspaceId, workspaceId), isNull(memberships.clientId)));
+    .where(staffOf(workspaceId));
   return new Set(rows.map((r) => r.email));
 }
 
@@ -240,6 +243,8 @@ export async function createDeal(formData: FormData) {
   const input = parsed.data;
   const owners = await staffEmails(staff.workspaceId);
   if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(`${BACK}?new=1`, "error", "The owner must be on the SKOX team.");
+  const repField = await readRepField(formData, staff.workspaceId);
+  if (!repField.ok) backWith(`${BACK}?new=1`, "error", "Pick a sales rep from the list.");
 
   const id = crypto.randomUUID();
   const db = getDb();
@@ -250,6 +255,7 @@ export async function createDeal(formData: FormData) {
       ...dealValues(input),
       stage: input.stage,
       ownerEmail: input.ownerEmail || viewer.email,
+      ...(repField.value ? { repMembershipId: repField.value, repSource: "assigned" } : {}),
       createdBy: viewer.userId,
     }),
     eventInsert({
@@ -261,6 +267,10 @@ export async function createDeal(formData: FormData) {
       payload: { company: input.company, stage: input.stage },
     }),
   ]);
+  if (repField.value) {
+    const repId = repField.value;
+    after(() => emailAssignedLeads(repId, [id]).catch((error) => console.error("[pipeline] rep email failed", error)));
+  }
   refresh();
   backWith(backTo(formData), "notice", `${input.company} added to ${input.stage === "lost" ? "lost deals" : columnLabel(input.stage)}.`);
 }
@@ -300,6 +310,9 @@ export async function saveDeal(formData: FormData) {
   const input = parsed.data;
   const owners = await staffEmails(staff.workspaceId);
   if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(back, "error", "The owner must be on the SKOX team.");
+  const repField = await readRepField(formData, staff.workspaceId);
+  if (!repField.ok) backWith(back, "error", "Pick a sales rep from the list.");
+  const repChanged = repField.value !== undefined && repField.value !== deal.repMembershipId;
   // Once onboarded, the project owns the stage; the form's stage is ignored.
   const stage = deal.projectId ? deal.stage : input.stage;
 
@@ -309,6 +322,7 @@ export async function saveDeal(formData: FormData) {
       .set({
         ...dealValues(input),
         ownerEmail: input.ownerEmail || null,
+        ...(repChanged ? { repMembershipId: repField.value ?? null, repSource: repField.value ? "assigned" : null } : {}),
         stage,
         lostReason: stage === "lost" ? String(formData.get("lostReason") ?? "").trim().slice(0, 300) || null : null,
         ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
@@ -322,9 +336,14 @@ export async function saveDeal(formData: FormData) {
       verb: "deal.updated",
       subjectType: "deal",
       subjectId: deal.id,
-      payload: { company: input.company, ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}) },
+      payload: { company: input.company, ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}), ...(repChanged ? { rep: repField.value ?? null } : {}) },
     }),
   ]);
+  if (repChanged && repField.value) {
+    const repId = repField.value;
+    await creditProjectFromDeal(deal.projectId, repId);
+    after(() => emailAssignedLeads(repId, [deal.id]).catch((error) => console.error("[pipeline] rep email failed", error)));
+  }
   refresh();
   const nextId = String(formData.get("nextId") ?? "");
   if (formData.get("intent") === "next" && z.uuid().safeParse(nextId).success) {
@@ -522,7 +541,7 @@ export async function logCall(formData: FormData) {
 type BulkResult = { ok: true; count: number } | { ok: false; error: string };
 
 /** Changes the stage, owner or follow-up of several deals at once. Onboarded deals keep their project's stage. */
-export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ownerEmail?: string; nextStepOn?: string }): Promise<BulkResult> {
+export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ownerEmail?: string; nextStepOn?: string; repMembershipId?: string }): Promise<BulkResult> {
   const { viewer, staff } = await requireStaff();
   const parsed = z
     .object({
@@ -530,17 +549,25 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
       stage: z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]).optional(),
       ownerEmail: z.string().trim().max(200).optional(),
       nextStepOn: z.union([z.literal(""), z.iso.date()]).optional(),
+      repMembershipId: z.union([z.literal(""), z.uuid()]).optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Pick some deals and a change to make." };
   const { ids, stage, nextStepOn } = parsed.data;
   const ownerEmail = parsed.data.ownerEmail === undefined ? undefined : normalizeEmail(parsed.data.ownerEmail);
   if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) return { ok: false, error: "The owner must be on the SKOX team." };
-  if (stage === undefined && ownerEmail === undefined && nextStepOn === undefined) return { ok: false, error: "Choose what to change." };
+  const repId = parsed.data.repMembershipId;
+  if (repId) {
+    const fd = new FormData();
+    fd.set("repMembershipId", repId);
+    const check = await readRepField(fd, staff.workspaceId);
+    if (!check.ok) return { ok: false, error: "Pick a sales rep from the list." };
+  }
+  if (stage === undefined && ownerEmail === undefined && nextStepOn === undefined && repId === undefined) return { ok: false, error: "Choose what to change." };
 
   const db = getDb();
   const rows = await db
-    .select({ id: deals.id, stage: deals.stage, projectId: deals.projectId, wonAt: deals.wonAt })
+    .select({ id: deals.id, stage: deals.stage, projectId: deals.projectId, wonAt: deals.wonAt, rep: deals.repMembershipId })
     .from(deals)
     .where(and(eq(deals.workspaceId, staff.workspaceId), inArray(deals.id, ids)));
   if (!rows.length) return { ok: false, error: "Those deals don't exist." };
@@ -553,6 +580,7 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
         ...(nextStage ? { stage: nextStage, stageChangedAt: now, ...(nextStage === "won" && !d.wonAt ? { wonAt: now } : {}) } : {}),
         ...(ownerEmail !== undefined ? { ownerEmail: ownerEmail || null } : {}),
         ...(nextStepOn !== undefined ? { nextStepOn: nextStepOn || null } : {}),
+        ...(repId !== undefined && (repId || null) !== d.rep ? { repMembershipId: repId || null, repSource: repId ? "assigned" : null } : {}),
       })
       .where(eq(deals.id, d.id));
   });
@@ -565,9 +593,14 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
       verb: "deal.bulk_updated",
       subjectType: "deal",
       subjectId: null,
-      payload: { count: rows.length, ...(stage ? { stage } : {}), ...(ownerEmail !== undefined ? { ownerEmail } : {}), ...(nextStepOn !== undefined ? { nextStepOn } : {}) },
+      payload: { count: rows.length, ...(stage ? { stage } : {}), ...(ownerEmail !== undefined ? { ownerEmail } : {}), ...(nextStepOn !== undefined ? { nextStepOn } : {}), ...(repId !== undefined ? { rep: repId || null } : {}) },
     }),
   ]);
+  if (repId) {
+    const fresh = rows.filter((d) => d.rep !== repId);
+    for (const d of fresh) await creditProjectFromDeal(d.projectId, repId);
+    after(() => emailAssignedLeads(repId, fresh.map((d) => d.id)).catch((error) => console.error("[pipeline] rep email failed", error)));
+  }
   refresh();
   return { ok: true, count: rows.length };
 }

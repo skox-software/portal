@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNull, lt, max, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, max, ne } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Notice, readMessage } from "@/components/Notice";
@@ -60,7 +60,7 @@ export default async function MissionControl({
       db
         .select({ clientId: memberships.clientId, last: max(memberships.lastSeenAt), people: count() })
         .from(memberships)
-        .where(and(eq(memberships.workspaceId, ws), ne(memberships.role, "staff"), ne(memberships.role, "staff_owner")))
+        .where(and(eq(memberships.workspaceId, ws), isNotNull(memberships.clientId)))
         .groupBy(memberships.clientId),
       db.select({ invoice: invoices, project: projects }).from(invoices).innerJoin(projects, eq(projects.id, invoices.projectId)).where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "open"))),
       db

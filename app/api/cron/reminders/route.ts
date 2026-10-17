@@ -5,10 +5,14 @@ import { nextStep, progress, shouldRemind, stepsFor } from "@/lib/onboarding-flo
 import { agreementState, welcomeLink } from "@/lib/onboarding-server";
 import { timingSafeEqual } from "node:crypto";
 import { sendWeeklyDigests } from "@/lib/digest";
+import { previousMonth, periodLabel } from "@/lib/commission-math";
+import { salesToday } from "@/lib/follow-up";
+import { draftStatements } from "@/lib/statements";
+import { repProfiles } from "@/lib/db/schema";
 import { pruneRateEvents } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
 import { formatDate, formatMoney, todayIso } from "@/lib/format";
-import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
+import { clientRecipients, ownerRecipients, portalLink, staffRecipients } from "@/lib/notify";
 
 /**
  * Daily nudges, so nothing sits waiting: unsigned documents (every 3 days)
@@ -151,5 +155,28 @@ export async function GET(request: Request) {
   // Fridays (UTC): the weekly recap. Hobby cron runs once a day, so it rides along here.
   const digests = now.getUTCDay() === 5 || new URL(request.url).searchParams.get("digest") === "force" ? await sendWeeklyDigests(now) : 0;
 
-  return Response.json({ ok: true, sent, digests });
+  // Commission statements for last month. Runs every day but only drafts what's missing,
+  // so a skipped cron on the 1st catches up the next day.
+  let statements = 0;
+  const period = previousMonth(salesToday(now));
+  const repWorkspaces = await db.selectDistinct({ ws: repProfiles.workspaceId }).from(repProfiles);
+  for (const { ws } of repWorkspaces) {
+    try {
+      const drafted = await draftStatements(ws, period);
+      statements += drafted.length;
+      if (drafted.length) {
+        await sendEmail(await ownerRecipients(ws), {
+          subject: `${drafted.length} commission statement${drafted.length === 1 ? "" : "s"} to approve`,
+          preheader: `${periodLabel(period.start)} closed.`,
+          heading: `${periodLabel(period.start)} is ready to approve`,
+          paragraphs: [`${drafted.length} sales rep statement${drafted.length === 1 ? " is" : "s are"} waiting for your approval. Check the lines, approve, pay, then mark each one paid.`],
+          cta: { label: "Review statements", href: portalLink("/admin/commissions") },
+        });
+      }
+    } catch (error) {
+      console.error("[cron] statements failed", { ws, error });
+    }
+  }
+
+  return Response.json({ ok: true, sent, digests, statements });
 }

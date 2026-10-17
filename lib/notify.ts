@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { getDb } from "@/lib/db";
 import { memberships } from "@/lib/db/schema";
 import { sendEmail, type EmailContent } from "@/lib/email";
+import { STAFF_ROLES } from "@/lib/permissions";
 
 /**
  * Who hears about what. Recipient lookups and sending run after the response
@@ -33,10 +34,19 @@ export async function staffRecipients(workspaceId: string, exceptEmail?: string)
       and(
         eq(memberships.workspaceId, workspaceId),
         isNull(memberships.clientId),
-        inArray(memberships.role, ["staff_owner", "staff"]),
+        inArray(memberships.role, [...STAFF_ROLES]),
       ),
     );
   return rows.map((r) => r.email).filter((e) => e !== exceptEmail);
+}
+
+/** The workspace owner(s): the only people who approve commission statements. */
+export async function ownerRecipients(workspaceId: string) {
+  const rows = await getDb()
+    .select({ email: memberships.email })
+    .from(memberships)
+    .where(and(eq(memberships.workspaceId, workspaceId), isNull(memberships.clientId), eq(memberships.role, "staff_owner")));
+  return rows.map((r) => r.email);
 }
 
 /** Queue an email to be sent once the response has gone out. */

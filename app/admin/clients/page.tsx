@@ -54,7 +54,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const { viewer, staff } = await requireStaff();
   const ws = staff.workspaceId;
   const db = getDb();
-  const [{ columns, lost, clientRows, dealRows, projectRows, owners }, projectTouches, dealTouches, clientMail, dealMail] = await Promise.all([
+  const [{ columns, lost, clientRows, dealRows, projectRows, owners, reps }, projectTouches, dealTouches, clientMail, dealMail] = await Promise.all([
     loadPipeline(ws),
     db
       .select({ id: events.projectId, at: sql<Date>`max(${events.createdAt})` })
@@ -88,6 +88,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const now = new Date(nowMs());
   const today = salesToday(now);
   const dealById = new Map(dealRows.map((d) => [d.id, d]));
+  const repName = new Map(reps.map((r) => [r.id, r.name]));
 
   // ---- Filters, all in the URL so a lead's panel and every save keep them ----
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).trim().slice(0, 200) : "");
@@ -140,6 +141,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       slow: PRESALE.includes(stage as ColumnKey) && days > STALL_DAYS,
       source: sourceLabel(card),
       owner: card.ownerEmail,
+      rep: deal?.repMembershipId ? repName.get(deal.repMembershipId) ?? null : null,
       followUp: working ? describeFollowUp(deal?.nextStepOn ?? null, today) : null,
       followUpState: working ? followUpState(deal?.nextStepOn ?? null, today) : "none",
       followUpOn: working ? deal?.nextStepOn ?? null : null,
@@ -172,6 +174,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       slow: false,
       source: null,
       owner: null,
+      rep: null,
       followUp: null,
       followUpState: "none",
       followUpOn: null,
@@ -294,6 +297,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             openDealId={editing?.id ?? null}
             panelOpen={panelOpen}
             owners={owners}
+            reps={reps}
             me={viewer.email}
             empty={q || owner || view !== "all" || stage ? "No matches. Try another search or view." : "No clients or leads yet. Add a deal or onboard a client."}
           />
@@ -317,6 +321,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             <DealPanel
               deal={editing}
               owners={owners}
+              reps={reps}
               me={viewer.email}
               linkedProject={linked ? { id: linked.project.id, name: linked.project.name } : null}
               nav={{

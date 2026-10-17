@@ -57,3 +57,44 @@ test("a month where refunds outweigh payments carries forward", () => {
   );
   assert.deepEqual(s, { lines: [], total: 0 });
 });
+
+// Business allocation is independent of Stripe balances and operating expenses.
+import * as math from "./commission-math.ts";
+const reiss = { id: "reiss", role: "staff_owner" };
+const josh = { id: "josh", role: "staff_owner" };
+const rep = { id: "rep", role: "rep" };
+test("a founder-owned $625 invoice credits its owner the full $625", () => {
+  assert.equal(typeof math.dealAllocations, "function");
+  assert.deepEqual(math.dealAllocations(62500, reiss, [reiss, josh]), [{ id: "reiss", rateBps: 10000, amountCents: 62500 }]);
+  assert.deepEqual(math.dealAllocations(62500, josh, [reiss, josh]), [{ id: "josh", rateBps: 10000, amountCents: 62500 }]);
+});
+test("rep-owned cash splits 20% to the rep and 40% to each founder", () => {
+  assert.equal(typeof math.dealAllocations, "function");
+  assert.deepEqual(math.dealAllocations(125000, rep, [reiss, josh]), [
+    { id: "rep", rateBps: 2000, amountCents: 25000 },
+    { id: "josh", rateBps: 4000, amountCents: 50000 },
+    { id: "reiss", rateBps: 4000, amountCents: 50000 },
+  ]);
+});
+test("odd cents are conserved and founder ordering cannot change the split", () => {
+  assert.equal(typeof math.dealAllocations, "function");
+  for (let cents = 1; cents < 100; cents++) {
+    const a = math.dealAllocations(cents, rep, [reiss, josh]);
+    assert.equal(a.reduce((sum, x) => sum + x.amountCents, 0), cents);
+    assert.deepEqual(a, math.dealAllocations(cents, rep, [josh, reiss]));
+  }
+});
+test("rep allocations fail closed if both founders are not configured", () => {
+  assert.equal(typeof math.dealAllocations, "function");
+  assert.throws(() => math.dealAllocations(100, rep, [reiss]), /two founders/);
+  assert.throws(() => math.dealAllocations(100, rep, [reiss, reiss]), /two founders/);
+});
+
+test("partial refunds reverse every allocation and final refund clears odd cents", () => {
+  assert.equal(typeof math.refundAllocations, "function");
+  const shares = math.dealAllocations(101, rep, [reiss, josh]);
+  const first = math.refundAllocations(101, shares, 0, 33);
+  const last = math.refundAllocations(101, shares, 33, 68);
+  assert.equal(first.reduce((sum, x) => sum + x.amountCents, 0), -33);
+  shares.forEach((share, i) => assert.equal(first[i].amountCents + last[i].amountCents, -share.amountCents));
+});

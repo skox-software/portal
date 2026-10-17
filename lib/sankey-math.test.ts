@@ -88,7 +88,7 @@ test("nothing to draw lays out as nothing", () => {
   assert.deepEqual(out.links, []);
 });
 
-test("money that was paid splits into fees, refunds, shares and what's kept", () => {
+test("paid gross shows earned shares and unallocated gross", () => {
   const { links, keptCents } = moneyFlow({
     pipelineCents: 2_000_000,
     wonCents: 1_500_000,
@@ -98,18 +98,17 @@ test("money that was paid splits into fees, refunds, shares and what's kept", ()
     refundsCents: 50_000,
     shares: [{ id: "r", name: "Reiss", cents: 400_000 }, { id: "x", name: "Nobody", cents: 0 }],
   });
-  assert.equal(keptCents, 1_000_000 - 29_300 - 50_000 - 400_000);
+  assert.equal(keptCents, 1_000_000 - 400_000);
   const fromPaid = links.filter((l) => l.source === "paid");
   assert.equal(fromPaid.reduce((s, l) => s + l.value, 0), 1_000_000);
   assert.equal(links.find((l) => l.source === "won")!.value, 1_200_000);
   assert.ok(!links.some((l) => l.target === "share:x"));
 });
 
-test("a split bigger than what was paid is scaled down, never negative", () => {
+test("fees and refunds are separate cash measures, not ownership bands", () => {
   const { links, keptCents } = moneyFlow({ pipelineCents: 0, wonCents: 0, invoicedCents: 0, paidCents: 1000, feesCents: 500, refundsCents: 1500, shares: [] });
-  assert.equal(keptCents, 0);
-  assert.equal(links.find((l) => l.target === "fees")!.value, 250);
-  assert.equal(links.find((l) => l.target === "refunds")!.value, 750);
+  assert.equal(keptCents, 1000);
+  assert.ok(!links.some(l => ["fees", "refunds"].includes(l.target)));
 });
 
 test("labels too close together are spread apart, in order, inside the chart", () => {
@@ -118,4 +117,9 @@ test("labels too close together are spread apart, in order, inside the chart", (
   const bottom = spreadLabels([310, 312, 315], 20, 320);
   assert.deepEqual(bottom, [270, 290, 310]);
   assert.deepEqual(spreadLabels([50, 10], 20, 320), [50, 10]);
+});
+
+test("fees and business spending do not scale down earned founder shares", () => {
+  const { links } = moneyFlow({ pipelineCents: 0, wonCents: 125000, invoicedCents: 125000, paidCents: 125000, feesCents: 30000, refundsCents: 0, shares: [{ id: "reiss", name: "Reiss", cents: 125000 }] });
+  assert.equal(links.find(l => l.target === "share:reiss")?.value, 125000);
 });

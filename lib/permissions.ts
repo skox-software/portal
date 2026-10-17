@@ -55,22 +55,18 @@ export function canApproveCommissions(role: PortalRole) {
   return role === "staff_owner";
 }
 
-/** Rates are whole basis points from 10% to 20%. */
-export const REP_RATE_MIN_BPS = 1000;
+/** Rep deals earn a fixed 20% of gross collected. */
+export const REP_RATE_MIN_BPS = 2000;
 export const REP_RATE_MAX_BPS = 2000;
 export function isValidRepRate(bps: number) {
   return Number.isInteger(bps) && bps >= REP_RATE_MIN_BPS && bps <= REP_RATE_MAX_BPS;
 }
 
-/**
- * A partner share is a commission profile on a staff membership (Reiss's 50%
- * on what he closes). It rides the same ledger as a rep, so only the cap
- * differs: staff may go from 10% up to 50%. Clients never earn.
- */
-export const PARTNER_RATE_MAX_BPS = 5000;
+/** Founders earn 100% on own deals; rep deals allocate 40% to each founder. */
+export const PARTNER_RATE_MAX_BPS = 10000;
 export function isValidRateFor(role: PortalRole, bps: number) {
   if (isRepRole(role)) return isValidRepRate(bps);
-  if (isStaffRole(role)) return Number.isInteger(bps) && bps >= REP_RATE_MIN_BPS && bps <= PARTNER_RATE_MAX_BPS;
+  if (isStaffRole(role)) return bps === PARTNER_RATE_MAX_BPS;
   return false;
 }
 

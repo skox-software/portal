@@ -29,6 +29,7 @@ export function MoneyFlow({ input, periodLabel, height: H = 340 }: { input: Mone
 
   return (
     <div className="fflow">
+      <p className="small muted">Shares are earned amounts, not payouts or bank balances. Stripe fees ({formatMoney(input.feesCents)}), refunds ({formatMoney(input.refundsCents)}) and business expenses are tracked separately. Expenses do not reduce deal ownership.</p>
       <ChartTip>
         <div className="fflow-plot" style={{ height: H }}>
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`Money flow for ${periodLabel.toLowerCase()}: ${nodes.map((n) => `${n.label} ${formatMoney(n.value)}`).join(", ")}`}>

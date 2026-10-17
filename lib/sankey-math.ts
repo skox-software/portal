@@ -118,36 +118,28 @@ export type MoneyFlowInput = {
  * went. The first three steps are different measures of the same period,
  * not one pot of money moving, so each band carries what the two stages
  * share (the smaller of the two) and each node keeps its own full height.
- * From Paid on it is a true split: fees, refunds and shares come out, and
- * whatever is left lands in the business account.
+ * From Paid on it shows earned shares and unallocated gross. Fees, refunds
+ * and operating expenses are separate cash measures, not deductions from ownership.
  */
 export function moneyFlow(v: MoneyFlowInput) {
   const shares = v.shares.filter((s) => s.cents > 0);
-  const out = v.feesCents + v.refundsCents + shares.reduce((s, x) => s + x.cents, 0);
-  // Fees and refunds can belong to money collected before the period: never let the split exceed Paid.
-  const outScale = out > v.paidCents && out > 0 ? v.paidCents / out : 1;
-  const part = (c: number) => Math.max(0, Math.round(c * outScale));
-  const fees = part(v.feesCents);
-  const refunds = part(v.refundsCents);
-  const shareParts = shares.map((s) => ({ ...s, cents: part(s.cents) }));
-  const kept = Math.max(0, v.paidCents - fees - refunds - shareParts.reduce((s, x) => s + x.cents, 0));
+  // This chart shows earned ownership, not cash movement. Fees and expenses
+  // are reported separately; scaling shares would misstate what people earned.
+  const shareParts = shares;
+  const kept = Math.max(0, v.paidCents - shares.reduce((sum, s) => sum + s.cents, 0));
 
   const nodes: SankeyNode[] = [
     { id: "pipeline", label: "Open pipeline", column: 0, value: v.pipelineCents },
     { id: "won", label: "Won", column: 1, value: v.wonCents },
     { id: "invoiced", label: "Invoiced", column: 2, value: v.invoicedCents },
     { id: "paid", label: "Paid", column: 3, value: v.paidCents },
-    { id: "fees", label: "Stripe fees", column: 4 },
-    { id: "refunds", label: "Refunds", column: 4 },
     ...shareParts.map((s) => ({ id: `share:${s.id}`, label: `${s.name} share`, column: 4 })),
-    { id: "kept", label: "Business account", column: 4 },
+    { id: "kept", label: "Unallocated gross", column: 4 },
   ];
   const links: SankeyLink[] = [
     { source: "pipeline", target: "won", value: Math.min(v.pipelineCents, v.wonCents) },
     { source: "won", target: "invoiced", value: Math.min(v.wonCents, v.invoicedCents) },
     { source: "invoiced", target: "paid", value: Math.min(v.invoicedCents, v.paidCents) },
-    { source: "paid", target: "fees", value: fees },
-    { source: "paid", target: "refunds", value: refunds },
     ...shareParts.map((s) => ({ source: "paid", target: `share:${s.id}`, value: s.cents })),
     { source: "paid", target: "kept", value: kept },
   ];

@@ -59,3 +59,43 @@ export function statementLines<T extends LedgerLine>(pending: T[], periodEnd: st
   const total = lines.reduce((sum, l) => sum + l.amountCents, 0);
   return total > 0 ? { lines, total } : { lines: [] as T[], total: 0 };
 }
+
+export type DealParticipant = { id: string; role: string };
+export type DealAllocation = { id: string; rateBps: number; amountCents: number };
+
+/** Gross invoice ownership. Operating expenses and Stripe fees never change it. */
+export function dealAllocations(baseCents: number, credited: DealParticipant, founders: DealParticipant[]): DealAllocation[] {
+  if (!Number.isSafeInteger(baseCents) || baseCents < 0) throw new Error("Invalid invoice amount");
+  if (credited.role === "staff_owner" || credited.role === "staff") {
+    return [{ id: credited.id, rateBps: 10000, amountCents: baseCents }];
+  }
+  if (credited.role !== "rep") throw new Error("Only a founder or sales rep can earn a deal share");
+  const partners = [...founders].sort((a, b) => a.id.localeCompare(b.id));
+  if (partners.length !== 2 || new Set(partners.map(p => p.id)).size !== 2 || partners.some(p => !["staff_owner", "staff"].includes(p.role) || p.id === credited.id)) {
+    throw new Error("Rep deals require exactly two founders with partner profiles");
+  }
+  const repCents = commissionCents(baseCents, 2000);
+  const remaining = baseCents - repCents;
+  return [
+    { id: credited.id, rateBps: 2000, amountCents: repCents },
+    { id: partners[0].id, rateBps: 4000, amountCents: Math.ceil(remaining / 2) },
+    { id: partners[1].id, rateBps: 4000, amountCents: Math.floor(remaining / 2) },
+  ];
+}
+
+/** Cumulative allocation avoids rounding drift across several partial refunds. */
+export function refundAllocations(baseCents: number, shares: DealAllocation[], alreadyRefunded: number, refundCents: number): DealAllocation[] {
+  if (baseCents <= 0 || alreadyRefunded < 0 || refundCents < 0 || alreadyRefunded + refundCents > baseCents) throw new Error("Invalid refund amount");
+  const at = (refunded: number) => {
+    const exact = shares.map(s => s.amountCents * refunded / baseCents);
+    const rounded = exact.map(Math.floor);
+    const target = Math.round(exact.reduce((sum, x) => sum + x, 0));
+    const order = exact.map((x, i) => ({ i, remainder: x - rounded[i] })).sort((a, b) => b.remainder - a.remainder || shares[a.i].id.localeCompare(shares[b.i].id));
+    const missing = target - rounded.reduce((sum, x) => sum + x, 0);
+    for (let i = 0; i < missing; i++) rounded[order[i].i]++;
+    return rounded;
+  };
+  const before = at(alreadyRefunded);
+  const after = at(alreadyRefunded + refundCents);
+  return shares.map((share, i) => ({ ...share, amountCents: before[i] - after[i] }));
+}

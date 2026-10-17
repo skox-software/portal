@@ -100,14 +100,14 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
                   <input type="hidden" name="membershipId" value={m.id} />
                   <div className="form-grid">
                     <div className="field"><label htmlFor={`n-${m.id}`}>Name</label><input id={`n-${m.id}`} name="displayName" defaultValue={p.displayName} required maxLength={80} /></div>
-                    <div className="field"><label htmlFor={`r-${m.id}`}>Rate (%)</label><input id={`r-${m.id}`} name="rate" inputMode="decimal" defaultValue={p.rateBps / 100} required /></div>
+                    <div className="field"><label htmlFor={`r-${m.id}`}>Rate (%)</label><input id={`r-${m.id}`} name="rate" inputMode="decimal" value={isStaffRole(m.role) ? 100 : 20} readOnly required /></div>
                     <div className="field"><label htmlFor={`s-${m.id}`}>Status</label><select id={`s-${m.id}`} name="status" defaultValue={p.status}><option value="active">Active</option><option value="paused">Paused (earns nothing new)</option></select></div>
                     <div className="field"><label htmlFor={`d-${m.id}`}>Started</label><input id={`d-${m.id}`} name="startedOn" type="date" defaultValue={p.startedOn ?? ""} /></div>
                   </div>
                   <div className="field"><label htmlFor={`p-${m.id}`}>How you pay them</label><input id={`p-${m.id}`} name="payoutNotes" defaultValue={p.payoutNotes ?? ""} maxLength={300} placeholder="Zelle to their phone, ACH via Gusto…" /><span className="hint">Shown to the rep. Never put bank or account numbers here.</span></div>
                   <label className="check"><input type="checkbox" name="agreement" defaultChecked={!!p.agreementSignedAt} /><span>Contractor agreement signed</span></label>
                   <label className="check"><input type="checkbox" name="w9" defaultChecked={!!p.w9ReceivedAt} /><span>W-9 received</span></label>
-                  <p className="small muted">A new rate applies to payments from now on. Lines already earned keep their rate.</p>
+                  <p className="small muted">Own deals: 100% to the founder. Rep deals: 20% to the rep and 40% to each founder. Expenses do not reduce these shares.</p>
                   <div><SubmitButton className="btn btn-primary btn-small" pendingLabel="Saving…">Save</SubmitButton></div>
                 </form>
               </details>
@@ -119,7 +119,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
               <div className="field"><label htmlFor="rep-new-name">Name</label><input id="rep-new-name" name="displayName" required maxLength={80} /></div>
               <div className="field"><label htmlFor="rep-new-email">Email</label><input id="rep-new-email" name="email" type="email" required /><span className="hint">Use an email that isn&apos;t already in the portal.</span></div>
               <div className="form-grid">
-                <div className="field"><label htmlFor="rep-new-rate">Rate (%)</label><input id="rep-new-rate" name="rate" inputMode="decimal" defaultValue="15" required /><span className="hint">10 to 20</span></div>
+                <div className="field"><label htmlFor="rep-new-rate">Rate (%)</label><input id="rep-new-rate" name="rate" inputMode="decimal" value="20" readOnly required /><span className="hint">20% on rep-owned deals</span></div>
                 <div className="field"><label htmlFor="rep-new-start">Start date</label><input id="rep-new-start" name="startedOn" type="date" defaultValue={todayIso()} /></div>
               </div>
               <div><SubmitButton className="btn btn-primary" pendingLabel="Inviting…">Invite and send welcome</SubmitButton></div>
@@ -134,7 +134,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
                 </div>
                 <div className="field"><label htmlFor="partner-name">Name</label><input id="partner-name" name="displayName" required maxLength={80} /></div>
                 <div className="form-grid">
-                  <div className="field"><label htmlFor="partner-rate">Share (%)</label><input id="partner-rate" name="rate" inputMode="decimal" defaultValue="50" required /><span className="hint">10 to 50</span></div>
+                  <div className="field"><label htmlFor="partner-rate">Share (%)</label><input id="partner-rate" name="rate" inputMode="decimal" value="100" readOnly required /><span className="hint">100% on own deals; 40% on rep deals</span></div>
                   <div className="field"><label htmlFor="partner-start">Start date</label><input id="partner-start" name="startedOn" type="date" defaultValue={todayIso()} /></div>
                 </div>
                 <div><SubmitButton className="btn btn-primary" pendingLabel="Adding…">Add partner share</SubmitButton></div>

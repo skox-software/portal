@@ -13,7 +13,7 @@ import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { portalLink } from "@/lib/notify";
-import { canApproveCommissions, isStaffRole, isValidRateFor, normalizeEmail, PARTNER_RATE_MAX_BPS, REP_RATE_MAX_BPS, REP_RATE_MIN_BPS, type PortalRole } from "@/lib/permissions";
+import { canApproveCommissions, isStaffRole, isValidRateFor, normalizeEmail, PARTNER_RATE_MAX_BPS, REP_RATE_MAX_BPS, type PortalRole } from "@/lib/permissions";
 
 const BACK = "/admin/reps";
 
@@ -24,14 +24,14 @@ async function requireOwner() {
   return ctx;
 }
 
-/** The rate field, checked against the cap for the person's role: reps 10–20%, staff partners 10–50%. */
+/** The rate field, checked against the cap for the person's role: reps 20%, staff partners 100%. */
 function rateFrom(formData: FormData, role: PortalRole) {
   const bps = parseRatePercent(String(formData.get("rate") ?? ""));
   return bps !== null && isValidRateFor(role, bps) ? bps : null;
 }
 
 function rateRange(role: PortalRole) {
-  return `between ${formatRate(REP_RATE_MIN_BPS)} and ${formatRate(isStaffRole(role) ? PARTNER_RATE_MAX_BPS : REP_RATE_MAX_BPS)}`;
+  return formatRate(isStaffRole(role) ? PARTNER_RATE_MAX_BPS : REP_RATE_MAX_BPS);
 }
 
 export async function inviteRep(formData: FormData) {
@@ -132,7 +132,7 @@ export async function updateRep(formData: FormData) {
 }
 
 /**
- * Gives someone on the SKOX team a share of what they close (Reiss: 50%).
+ * Gives someone on the SKOX team a share of what they close (100% on their own deals; 40% each on rep deals).
  * It's a commission profile on their existing staff membership, so earnings,
  * statements and payouts work exactly as for a rep, on the full invoice
  * amount. They keep staff access; no invite or welcome email is sent.

@@ -72,37 +72,38 @@ How the wall is enforced:
 8. **Year end.** "1099 export" on `/admin/commissions` downloads each rep's
    paid totals by month, counted by the date each statement was paid.
 
-## Partner shares (staff who close their own deals)
+## Founder ownership and rep commissions
 
-A partner is an owner of SKOX who takes a share of what they close and
-deliver. Reiss (`reiss@skoxsoftware.com`, co-owner, role `staff_owner`) gets
-50%. A partner's share is an **owner draw**, not contractor pay: it goes
-through the same ledger and monthly statements so both owners can see it,
-but it is never a 1099 amount.
+Founder-owned deals credit the assigned founder 100% of gross paid invoices.
+Rep-owned deals credit the rep 20% and each of the two founders 40%.
+Reiss uses `reiss@skoxsoftware.com`; Josh uses `founders@skoxsoftware.com`.
+Both founders have staff commission profiles. The separate “Josh Test” rep
+account is not Josh's founder account.
 
-- **Setup:** owner only, on `/admin/reps` → "Add a partner share". It adds a
-  `rep_profiles` row on their existing **staff** membership. No invite or
-  welcome email; they keep full staff access and see everything staff see.
-- **Rate:** reps are capped at 10–20%; staff partners at 10–50%
-  (`isValidRateFor` in `lib/permissions.ts`). Edits use the same role-aware
-  check.
-- **What it's paid on:** the full invoice amount, like every rep line. Stripe's
-  fee is not deducted (it is to be passed to the client separately).
-- **Ledger:** unchanged. Earnings, clawbacks, statements, approve and pay all
-  key on `rep_profiles`, not the role. The partner shows a "Partner" chip on
-  `/admin/reps` and appears in the "Sales rep" pickers. The 1099 export
-  (`app/api/commissions/export`) skips staff roles, so partners never appear
-  in it.
-- **Crediting:** a project earns for the partner when its credited rep
-  (`projects.rep_membership_id`) is the partner. Pick them as the project's
-  "Sales rep" (or on the deal before onboarding). Owning the deal
-  (`deals.owner_email`) does not credit them by itself.
-- **Statement emails:** link partners to `/admin/commissions`, since `/rep`
-  404s for staff.
-- **Past deals:** `scripts/backfill-partner.mjs` credits deals they already
-  closed. Dry run first, review the list, then `--apply`:
-  `node --env-file=.env.local scripts/backfill-partner.mjs [--apply]`.
-  It sets the credited rep only where empty and is safe to re-run.
+Explicit project credit wins, followed by the linked deal's credited rep,
+then its founder owner. Conflicting deal ownership requires an explicit
+project credit. A rep deal requires exactly two staff partner profiles;
+it fails rather than silently losing a founder's share if setup is incomplete.
+Profile rates are fixed at 100% for founders and 20% for reps. Each rep deal
+records 40% on the founders' actual ledger lines.
+
+These are earned shares, not bank balances or proof of a payout. Operating
+expenses and Stripe fees do not reduce the gross share. Actual client refunds
+reverse each recipient's allocation, with cumulative rounding so a full refund
+clears every cent. Odd cents in the 40/40 remainder go deterministically to
+the founder whose membership ID sorts first.
+
+Migration `0015_deal_ownership_shares` permits one earning per recipient per
+payment, one clawback per recipient per refund, and one reversal per earning.
+A payment's first allocation is frozen; retries cannot create new recipients
+after ownership changes. Reversals append negative lines and never edit paid
+statements. Founder shares remain owner draws and are excluded from rep exports.
+
+`scripts/correct-lorenzen-shares.mjs` is the audited, idempotent correction for
+the two $625 Lorenzen Motors invoices: both become 100% Reiss earnings, and
+the affected draft statement is recalculated. It refuses approved/paid earnings
+or statements and refunds. Run without `--apply` to inspect the plan first.
+The $300 business expense does not reduce the $1,250 earned amount.
 
 ## Permissions
 

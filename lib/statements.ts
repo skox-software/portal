@@ -5,6 +5,7 @@ import { eventInsert } from "@/lib/events";
 import { periodLabel, statementLines } from "@/lib/commission-math";
 import { formatMoney } from "@/lib/format";
 import { portalLink } from "@/lib/notify";
+import { isStaffRole } from "@/lib/permissions";
 import { sendEmail } from "@/lib/email";
 
 /**
@@ -73,7 +74,7 @@ export async function draftStatements(workspaceId: string, period: { start: stri
 
 async function statementWithRep(id: string, workspaceId: string) {
   const [row] = await getDb()
-    .select({ statement: commissionStatements, email: memberships.email, name: repProfiles.displayName })
+    .select({ statement: commissionStatements, email: memberships.email, role: memberships.role, name: repProfiles.displayName })
     .from(commissionStatements)
     .innerJoin(memberships, eq(memberships.id, commissionStatements.repMembershipId))
     .innerJoin(repProfiles, eq(repProfiles.membershipId, commissionStatements.repMembershipId))
@@ -83,6 +84,16 @@ async function statementWithRep(id: string, workspaceId: string) {
 }
 
 type Result = { ok: true; message: string } | { ok: false; message: string };
+
+/**
+ * Where the statement email points. Reps read it in their own area; a staff
+ * partner can't open /rep (it 404s for staff), so they get the ledger.
+ */
+function statementHref(found: NonNullable<Awaited<ReturnType<typeof statementWithRep>>>) {
+  return isStaffRole(found.role)
+    ? portalLink(`/admin/commissions?rep=${found.statement.repMembershipId}#ledger`)
+    : portalLink(`/rep/earnings/statements/${found.statement.id}`);
+}
 
 /** The total is re-read from its lines, so what's approved is exactly what's listed. */
 export async function approveStatement(id: string, workspaceId: string, actor: string): Promise<Result> {
@@ -103,7 +114,7 @@ export async function approveStatement(id: string, workspaceId: string, actor: s
     preheader: `${formatMoney(total)} approved. Payment follows shortly.`,
     heading: `${formatMoney(total)} approved`,
     paragraphs: [`Your commission statement for ${periodLabel(found.statement.periodStart)} has been approved. We'll send payment shortly and let you know when it's on its way.`],
-    cta: { label: "View statement", href: portalLink(`/rep/earnings/statements/${id}`) },
+    cta: { label: "View statement", href: statementHref(found) },
   });
   return { ok: true, message: `Approved ${formatMoney(total)} for ${found.name}.` };
 }
@@ -126,7 +137,7 @@ export async function markStatementPaid(id: string, workspaceId: string, actor: 
       `We've sent ${formatMoney(found.statement.totalCents)} for your ${periodLabel(found.statement.periodStart)} commission.`,
       ...(reference ? [`Reference: ${reference}`] : []),
     ],
-    cta: { label: "View statement", href: portalLink(`/rep/earnings/statements/${id}`) },
+    cta: { label: "View statement", href: statementHref(found) },
   });
   return { ok: true, message: `Marked ${formatMoney(found.statement.totalCents)} paid to ${found.name}.` };
 }

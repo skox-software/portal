@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
@@ -13,7 +13,7 @@ import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { portalLink } from "@/lib/notify";
-import { canApproveCommissions, isValidRepRate, normalizeEmail, REP_RATE_MAX_BPS, REP_RATE_MIN_BPS } from "@/lib/permissions";
+import { canApproveCommissions, isStaffRole, isValidRateFor, normalizeEmail, PARTNER_RATE_MAX_BPS, REP_RATE_MAX_BPS, REP_RATE_MIN_BPS, type PortalRole } from "@/lib/permissions";
 
 const BACK = "/admin/reps";
 
@@ -24,9 +24,14 @@ async function requireOwner() {
   return ctx;
 }
 
-function rateFrom(formData: FormData) {
+/** The rate field, checked against the cap for the person's role: reps 10–20%, staff partners 10–50%. */
+function rateFrom(formData: FormData, role: PortalRole) {
   const bps = parseRatePercent(String(formData.get("rate") ?? ""));
-  return bps !== null && isValidRepRate(bps) ? bps : null;
+  return bps !== null && isValidRateFor(role, bps) ? bps : null;
+}
+
+function rateRange(role: PortalRole) {
+  return `between ${formatRate(REP_RATE_MIN_BPS)} and ${formatRate(isStaffRole(role) ? PARTNER_RATE_MAX_BPS : REP_RATE_MAX_BPS)}`;
 }
 
 export async function inviteRep(formData: FormData) {
@@ -35,8 +40,8 @@ export async function inviteRep(formData: FormData) {
     .object({ email: z.email(), displayName: z.string().trim().min(2).max(80), startedOn: z.union([z.literal(""), z.iso.date()]) })
     .safeParse({ email: normalizeEmail(String(formData.get("email") ?? "")), displayName: String(formData.get("displayName") ?? ""), startedOn: String(formData.get("startedOn") ?? "") });
   if (!parsed.success) backWith(BACK, "error", "Enter the rep's name and a valid email.");
-  const rateBps = rateFrom(formData);
-  if (rateBps === null) backWith(BACK, "error", `The rate must be between ${formatRate(REP_RATE_MIN_BPS)} and ${formatRate(REP_RATE_MAX_BPS)}.`);
+  const rateBps = rateFrom(formData, "rep");
+  if (rateBps === null) backWith(BACK, "error", `The rate must be ${rateRange("rep")}.`);
   const { email, displayName } = parsed.data;
 
   const db = getDb();
@@ -73,10 +78,16 @@ export async function updateRep(formData: FormData) {
   const membershipId = String(formData.get("membershipId") ?? "");
   if (!z.uuid().safeParse(membershipId).success) backWith(BACK, "error", "Unknown rep.");
   const db = getDb();
-  const [profile] = await db.select().from(repProfiles).where(and(eq(repProfiles.membershipId, membershipId), eq(repProfiles.workspaceId, staff.workspaceId))).limit(1);
-  if (!profile) backWith(BACK, "error", "Unknown rep.");
-  const rateBps = rateFrom(formData);
-  if (rateBps === null) backWith(BACK, "error", `The rate must be between ${formatRate(REP_RATE_MIN_BPS)} and ${formatRate(REP_RATE_MAX_BPS)}.`);
+  const [found] = await db
+    .select({ profile: repProfiles, role: memberships.role })
+    .from(repProfiles)
+    .innerJoin(memberships, eq(memberships.id, repProfiles.membershipId))
+    .where(and(eq(repProfiles.membershipId, membershipId), eq(repProfiles.workspaceId, staff.workspaceId)))
+    .limit(1);
+  if (!found) backWith(BACK, "error", "Unknown rep.");
+  const { profile, role } = found;
+  const rateBps = rateFrom(formData, role);
+  if (rateBps === null) backWith(BACK, "error", `The rate must be ${rateRange(role)}.`);
   const parsed = z
     .object({
       displayName: z.string().trim().min(2).max(80),
@@ -118,4 +129,37 @@ export async function updateRep(formData: FormData) {
   ]);
   revalidatePath(BACK);
   backWith(BACK, "notice", `${parsed.data.displayName} saved.${rateBps !== profile.rateBps ? ` New payments earn ${formatRate(rateBps)}; past lines keep their rate.` : ""}`);
+}
+
+/**
+ * Gives someone on the SKOX team a share of what they close (Reiss: 50%).
+ * It's a commission profile on their existing staff membership, so earnings,
+ * statements and payouts work exactly as for a rep, on the full invoice
+ * amount. They keep staff access; no invite or welcome email is sent.
+ */
+export async function addPartnerShare(formData: FormData) {
+  const { viewer, staff } = await requireOwner();
+  const parsed = z
+    .object({ membershipId: z.uuid(), displayName: z.string().trim().min(2).max(80), startedOn: z.union([z.literal(""), z.iso.date()]) })
+    .safeParse({ membershipId: String(formData.get("membershipId") ?? ""), displayName: String(formData.get("displayName") ?? ""), startedOn: String(formData.get("startedOn") ?? "") });
+  if (!parsed.success) backWith(BACK, "error", "Choose a team member and enter their name.");
+  const { membershipId, displayName } = parsed.data;
+  const db = getDb();
+  const [member] = await db
+    .select({ role: memberships.role, email: memberships.email, profile: repProfiles.id })
+    .from(memberships)
+    .leftJoin(repProfiles, eq(repProfiles.membershipId, memberships.id))
+    .where(and(eq(memberships.id, membershipId), eq(memberships.workspaceId, staff.workspaceId), isNull(memberships.clientId)))
+    .limit(1);
+  if (!member || !isStaffRole(member.role)) backWith(BACK, "error", "Partner shares are for SKOX team members. Invite outside sellers as reps.");
+  if (member.profile) backWith(BACK, "error", `${member.email} already has a commission profile. Edit it below.`);
+  const rateBps = rateFrom(formData, member.role);
+  if (rateBps === null) backWith(BACK, "error", `The share must be ${rateRange(member.role)}.`);
+  await db.batch([
+    db.insert(repProfiles).values({ workspaceId: staff.workspaceId, membershipId, displayName, rateBps, startedOn: parsed.data.startedOn || todayIso() }),
+    eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "rep.partner_added", subjectType: "membership", subjectId: membershipId, payload: { email: member.email, displayName, rateBps } }),
+  ]);
+  revalidatePath(BACK);
+  revalidatePath("/admin/commissions");
+  backWith(BACK, "notice", `${displayName} now earns ${formatRate(rateBps)} on paid invoices from projects credited to them.`);
 }

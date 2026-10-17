@@ -63,3 +63,9 @@ test("donut arcs split the circumference and follow one another", () => {
 test("polyline points print to one decimal", () => {
   assert.equal(polyline([[0, 1.234], [10.05, 2]]), "0,1.2 10.1,2");
 });
+
+test("a stacked axis can be raised to fit an overlaid line", () => {
+  const { max, bars } = stackedLayout([{ key: "a", label: "A", parts: [50] }], frame, 180);
+  assert.equal(max, 200);
+  assert.equal(bars[0].segments[0].height, 25);
+});

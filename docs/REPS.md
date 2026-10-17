@@ -72,11 +72,39 @@ How the wall is enforced:
 8. **Year end.** "1099 export" on `/admin/commissions` downloads each rep's
    paid totals by month, counted by the date each statement was paid.
 
+## Partner shares (staff who close their own deals)
+
+A partner is someone on the SKOX team who earns a share of what they close
+and deliver. Reiss (`reiss@skoxsoftware.com`, role `staff`) gets 50%.
+
+- **Setup:** owner only, on `/admin/reps` → "Add a partner share". It adds a
+  `rep_profiles` row on their existing **staff** membership. No invite or
+  welcome email; they keep full staff access and see everything staff see.
+- **Rate:** reps are capped at 10–20%; staff partners at 10–50%
+  (`isValidRateFor` in `lib/permissions.ts`). Edits use the same role-aware
+  check.
+- **What it's paid on:** the full invoice amount, like every rep line. Stripe's
+  fee is not deducted (it is to be passed to the client separately).
+- **Ledger:** unchanged. Earnings, clawbacks, statements, approve and pay all
+  key on `rep_profiles`, not the role. The partner shows a "Partner" chip on
+  `/admin/reps`, appears in the "Sales rep" pickers, and is in the 1099 export
+  once they have a profile.
+- **Crediting:** a project earns for the partner when its credited rep
+  (`projects.rep_membership_id`) is the partner. Pick them as the project's
+  "Sales rep" (or on the deal before onboarding). Owning the deal
+  (`deals.owner_email`) does not credit them by itself.
+- **Statement emails:** link partners to `/admin/commissions`, since `/rep`
+  404s for staff.
+- **Past deals:** `scripts/backfill-partner.mjs` credits deals they already
+  closed. Dry run first, review the list, then `--apply`:
+  `node --env-file=.env.local scripts/backfill-partner.mjs [--apply]`.
+  It sets the credited rep only where empty and is safe to re-run.
+
 ## Permissions
 
 | Action | Owner (`staff_owner`) | Staff | Rep |
 | --- | --- | --- | --- |
-| Invite reps, change rate or status | ✓ | | |
+| Invite reps, add partner shares, change rate or status | ✓ | | |
 | Assign leads to a rep, credit a project | ✓ | ✓ | |
 | Close a month (draft statements) | ✓ | ✓ | |
 | Approve, mark paid, discard, adjust | ✓ | | |

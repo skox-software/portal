@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Notice, readMessage } from "@/components/Notice";
@@ -7,10 +7,10 @@ import { requireStaff } from "@/lib/access";
 import { EMPTY_TOTALS, repTotals, workspaceReps } from "@/lib/commissions";
 import { formatRate } from "@/lib/commission-math";
 import { getDb } from "@/lib/db";
-import { deals } from "@/lib/db/schema";
+import { deals, memberships, repProfiles } from "@/lib/db/schema";
 import { formatMoney, timeAgo, todayIso } from "@/lib/format";
-import { canApproveCommissions } from "@/lib/permissions";
-import { inviteRep, updateRep } from "./actions";
+import { canApproveCommissions, isStaffRole, STAFF_ROLES } from "@/lib/permissions";
+import { addPartnerShare, inviteRep, updateRep } from "./actions";
 import "./reps-admin.css";
 
 export const metadata: Metadata = { title: "Sales reps" };
@@ -20,7 +20,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
   const { staff } = await requireStaff();
   const owner = canApproveCommissions(staff.role);
   const ws = staff.workspaceId;
-  const [reps, totals, leadCounts] = await Promise.all([
+  const [reps, totals, leadCounts, teamWithoutShare] = await Promise.all([
     workspaceReps(ws),
     repTotals(ws),
     getDb()
@@ -35,6 +35,13 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
       .from(deals)
       .where(and(eq(deals.workspaceId, ws), isNotNull(deals.repMembershipId)))
       .groupBy(deals.repMembershipId),
+    // Staff who could be given a partner share: no commission profile yet.
+    getDb()
+      .select({ id: memberships.id, email: memberships.email })
+      .from(memberships)
+      .leftJoin(repProfiles, eq(repProfiles.membershipId, memberships.id))
+      .where(and(eq(memberships.workspaceId, ws), isNull(memberships.clientId), inArray(memberships.role, [...STAFF_ROLES]), isNull(repProfiles.id)))
+      .orderBy(memberships.email),
   ]);
   const countsBy = new Map(leadCounts.map((c) => [c.rep, c]));
 
@@ -44,7 +51,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
         <div>
           <p className="eyebrow">Sales team</p>
           <h1>Sales reps</h1>
-          <p className="muted">Outside reps work leads at /rep and earn their rate on every payment from clients they bring. They never see projects, pricing or anything about delivery.</p>
+          <p className="muted">Outside reps work leads at /rep and earn their rate on every payment from clients they bring. They never see projects, pricing or anything about delivery. Partners are SKOX team members with a share of what they close; they keep full staff access.</p>
         </div>
         <Link className="btn btn-ghost" href="/admin/commissions">Commissions →</Link>
       </div>
@@ -66,7 +73,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
                   const c = countsBy.get(m.id);
                   return (
                     <tr key={m.id}>
-                      <td data-label=""><strong>{p.displayName}</strong>{p.status === "paused" && <span className="rep-pill" data-status="lost" style={{ marginLeft: 8 }}>Paused</span>}<br /><span className="small muted">{m.email}</span></td>
+                      <td data-label=""><strong>{p.displayName}</strong>{isStaffRole(m.role) && <span className="rep-pill" data-status="booked" style={{ marginLeft: 8 }}>Partner</span>}{p.status === "paused" && <span className="rep-pill" data-status="lost" style={{ marginLeft: 8 }}>Paused</span>}<br /><span className="small muted">{m.email}</span></td>
                       <td className="num" data-label="Rate">{formatRate(p.rateBps)}</td>
                       <td className="num" data-label="Open">{c?.open ?? 0}</td>
                       <td className="num" data-label="Booked">{c?.booked ?? 0}</td>
@@ -106,7 +113,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
               </details>
             ))}
           </div>
-          <aside>
+          <aside className="stack">
             <form action={inviteRep} className="card stack">
               <div className="card-head"><h2>Invite a rep</h2></div>
               <div className="field"><label htmlFor="rep-new-name">Name</label><input id="rep-new-name" name="displayName" required maxLength={80} /></div>
@@ -117,6 +124,22 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
               </div>
               <div><SubmitButton className="btn btn-primary" pendingLabel="Inviting…">Invite and send welcome</SubmitButton></div>
             </form>
+            {teamWithoutShare.length > 0 && (
+              <form action={addPartnerShare} className="card stack">
+                <div className="card-head"><h2>Add a partner share</h2></div>
+                <p className="small muted">For someone on the SKOX team who closes and delivers their own deals. They earn their share of every paid invoice on projects credited to them, on the full invoice amount, and get monthly statements like a rep.</p>
+                <div className="field">
+                  <label htmlFor="partner-member">Team member</label>
+                  <select id="partner-member" name="membershipId" required>{teamWithoutShare.map((t) => <option key={t.id} value={t.id}>{t.email}</option>)}</select>
+                </div>
+                <div className="field"><label htmlFor="partner-name">Name</label><input id="partner-name" name="displayName" required maxLength={80} /></div>
+                <div className="form-grid">
+                  <div className="field"><label htmlFor="partner-rate">Share (%)</label><input id="partner-rate" name="rate" inputMode="decimal" defaultValue="50" required /><span className="hint">10 to 50</span></div>
+                  <div className="field"><label htmlFor="partner-start">Start date</label><input id="partner-start" name="startedOn" type="date" defaultValue={todayIso()} /></div>
+                </div>
+                <div><SubmitButton className="btn btn-primary" pendingLabel="Adding…">Add partner share</SubmitButton></div>
+              </form>
+            )}
           </aside>
         </div>
       ) : (

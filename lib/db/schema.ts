@@ -109,6 +109,9 @@ export const workspaces = pgTable("workspaces", {
   welcomeVideoUrl: text("welcome_video_url"),
   /** One line introducing the team, e.g. "Josh & Sam, co-founders". */
   teamIntro: text("team_intro"),
+  /** Revenue target (cash collected) for `revenueGoalYear`, shown as the dial on Finance. */
+  revenueGoalCents: integer("revenue_goal_cents"),
+  revenueGoalYear: integer("revenue_goal_year"),
   createdAt: createdAt(),
 });
 

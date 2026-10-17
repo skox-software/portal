@@ -8,13 +8,17 @@ import { PeriodSwitcher } from "@/components/PeriodSwitcher";
 import { ActivityFeed } from "@/components/finance/ActivityFeed";
 import { LiveProvider } from "@/components/finance/LiveProvider";
 import { LiveTicker } from "@/components/finance/LiveTicker";
+import { eq } from "drizzle-orm";
 import { requireStaff } from "@/lib/access";
+import { getDb } from "@/lib/db";
+import { workspaces } from "@/lib/db/schema";
 import { Funnel } from "@/components/finance/Funnel";
+import { GoalDial } from "@/components/finance/GoalDial";
 import { HeatMap } from "@/components/finance/HeatMap";
 import { MoneyFlow } from "@/components/finance/MoneyFlow";
 import { Race } from "@/components/finance/Race";
 import { Runway } from "@/components/finance/Runway";
-import { collectedByBucket, dailyActivity, dealsWonByOwner, funnel, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, raceStandings, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
+import { collectedByBucket, collectedSince, dailyActivity, dealsWonByOwner, funnel, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, raceStandings, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
 import { balanceSeries, projectForward } from "@/lib/forecast-math";
 import { addDays, salesToday } from "@/lib/follow-up";
 import { liveSnapshot } from "@/lib/finance-live";
@@ -46,7 +50,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const yearStart = addDays(today, -364);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues, race, funnelData] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues, race, funnelData, [workspace], ytdCents] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -66,7 +70,10 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     dailyActivity(ws, heat, yearStart, today),
     raceStandings(ws, today),
     funnel(ws, range),
+    getDb().select({ goalCents: workspaces.revenueGoalCents, goalYear: workspaces.revenueGoalYear }).from(workspaces).where(eq(workspaces.id, ws)).limit(1),
+    collectedSince(ws, `${today.slice(0, 4)}-01-01`),
   ]);
+  const goalCents = workspace?.goalYear === Number(today.slice(0, 4)) ? workspace.goalCents : null;
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
   const nextPayout = payouts.ok ? payouts.data.next : null;
@@ -186,6 +193,16 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         </div>
         <div className="finance-body">
           {runway ? <Runway {...runway} /> : <p className="small muted">{connected ? "The runway draws from Stripe's balance and activity, which aren't available right now." : "Connect Stripe to see the balance over time and where it's heading."}</p>}
+        </div>
+      </section>
+
+      <section className="admin-panel finance-section" aria-labelledby="goal-title">
+        <div className="admin-panel-head">
+          <div><h2 id="goal-title">Goal</h2><p>Cash collected this year against the revenue target.</p></div>
+          <Link href="/admin/settings#ws-goal">Target</Link>
+        </div>
+        <div className="finance-body">
+          <GoalDial ytdCents={ytdCents} goalCents={goalCents} balanceCents={live.balanceCents} balanceLabel={live.balanceSource === "payments" ? "payments balance" : "business account"} today={today} />
         </div>
       </section>
 

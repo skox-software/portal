@@ -215,3 +215,20 @@
 @keyframes ffunnel-in{from{opacity:0;transform:scaleX(.6)}}
 @media(prefers-reduced-motion:reduce){.ffunnel-shape polygon{animation:none}.ffunnel-row{transition:none}}
 @media(max-width:760px){.ffunnel-row{grid-template-columns:96px minmax(0,1fr) 88px;gap:8px}}
+
+/* Goal dial. */
+.fgoal{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.fgoal svg{display:block;flex-shrink:0}
+.fgoal-track{stroke:var(--line-soft)}
+.fgoal-arc{stroke:var(--amber);animation:fgoal-draw .4s var(--ease-out) both}
+.fgoal-arc[data-ahead]{stroke:var(--ok)}
+.fgoal-tick{stroke:var(--ink);stroke-width:2;stroke-linecap:round;opacity:.7}
+.fgoal-value{font:500 24px var(--mono);fill:var(--ink);font-variant-numeric:tabular-nums}
+.fgoal-caption{font-size:11px;fill:var(--muted)}
+.fgoal-copy{display:grid;gap:8px;min-width:0;flex:1 1 180px;font-size:13px;color:var(--muted)}
+.fgoal-share{color:var(--ink);font-size:15px}
+.fgoal-share b{font:500 28px var(--mono);font-variant-numeric:tabular-nums;margin-right:4px}
+.fgoal-pace{font:500 13px var(--mono);color:var(--amber)}
+.fgoal-pace.is-ahead{color:var(--ok)}
+@keyframes fgoal-draw{from{stroke-dasharray:0 var(--c)}}
+@media(prefers-reduced-motion:reduce){.fgoal-arc{animation:none}}

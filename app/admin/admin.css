@@ -177,3 +177,43 @@ kbd{font:600 10px var(--mono);border:1px solid var(--line);border-bottom-width:2
 @media(max-width:760px){.crm-work .crm-check,.crm-work .crm-hide-split,.crm-group-head input{display:none}.crm-groups .crm-work tr{grid-template-columns:1fr auto;gap:8px 12px;padding:12px 14px;margin:0;border-radius:0;border:0;border-bottom:1px solid var(--line-soft)}.crm-work td[data-label=Company]{grid-column:1/-1}.crm-work td[data-label=Reach]{grid-column:1/-1}.crm-work td::before{display:none}.crm-group{overflow:visible}}
 @media(max-width:760px){.crm-groups .crm-table.crm-work td.crm-check,.crm-groups .crm-table.crm-work td.crm-hide-split{display:none}.crm-groups .crm-table.crm-work td[data-label]::before{display:none}.crm-groups .crm-table.crm-work td.crm-client{font-size:15px}}
 .crm-client small.crm-rep{color:var(--amber-ink);font-weight:500}
+
+/* Call brief, one-tap outcomes and the email draft (lead panel), plus board chips. */
+.brief{display:grid;gap:12px;border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff}
+.brief-warning{margin:0;padding:10px 12px;border-radius:10px;background:var(--danger-bg);color:var(--danger);font-size:14px;line-height:1.45;border:1px solid #efc3ba}.brief-warning strong{display:inline-block;margin-right:6px;font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.brief-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.brief-tag{display:inline-flex;align-items:center;font:700 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--fog);color:var(--ink);white-space:nowrap}
+.brief-tag[data-tag="SITE DOWN"],.brief-tag[data-tag=HACKED],.brief-tag[data-tag="BAD NUMBER"]{background:#f9dcd6;color:var(--danger)}
+.brief-tag[data-tag="NO WEBSITE"]{background:#e2e8f4;color:#2c4373}
+.brief-tag[data-tag="NOT MOBILE"],.brief-tag[data-tag="BROKEN PIECES"]{background:var(--blush);color:var(--blush-ink)}
+.brief-tag[data-tag=CHECK]{background:#fff;border:1px solid #efc3ba;color:var(--danger)}
+.brief-clock{display:inline-flex;align-items:center;gap:5px;font:600 11px var(--mono);color:var(--muted);white-space:nowrap}.brief-clock::before{content:"";width:7px;height:7px;border-radius:50%;background:#c9c7bd}.brief-clock[data-callable]{color:var(--ok)}.brief-clock[data-callable]::before{background:#3d9a5b}
+.brief-ask{margin:0;font-size:17px;line-height:1.35}.brief-ask span{display:block;font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);margin-bottom:2px}.brief-ask strong{font-weight:700}
+.brief-gatekeeper{margin:0;padding:8px 10px;border-radius:8px;background:var(--fog)}
+.brief-opener{margin:0;padding:12px 14px;border-left:4px solid var(--amber);background:#fffaf0;border-radius:0 10px 10px 0;font:500 19px/1.45 var(--sans);color:var(--ink)}
+.brief-label{display:block;font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--amber-ink);margin-bottom:4px}
+.brief-points{margin:0;display:grid;gap:10px}.brief-points div{display:grid;gap:2px}.brief-points dt{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label)}.brief-points dd{margin:0;font-size:14.5px;line-height:1.5}.brief-question dd{font-weight:600}
+.brief-more{border-top:1px solid var(--line-soft);padding-top:8px}.brief-more summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}.brief-more p{margin:6px 0 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.logcall-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}.logcall-legend{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label)}
+.logcall-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.logcall-btn{position:relative;display:grid;gap:1px;justify-items:start;text-align:left;min-height:54px;padding:8px 30px 8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer;font:inherit}
+.logcall-btn span{font-size:14px;font-weight:650}.logcall-btn small{font-size:11.5px;color:var(--muted)}.logcall-btn kbd{position:absolute;top:8px;right:8px}
+.logcall-btn:hover{border-color:#d9b35a;background:#fffaf0}.logcall-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.logcall-btn[aria-expanded=true]{background:var(--ink);border-color:var(--ink);color:#fff}.logcall-btn[aria-expanded=true] small{color:#c8c9c4}
+.logcall-btn[data-tone=danger] span{color:var(--danger)}.logcall-btn[data-tone=danger]:hover{background:var(--danger-bg);border-color:#efc3ba}
+.logcall-btn[aria-busy=true]{opacity:.7}
+.logcall-more{display:grid;gap:8px;padding:12px;border-radius:10px;background:#fff;border:1px solid var(--line)}.logcall-more label{font-size:13px;font-weight:600}.logcall-more .btn{justify-self:start}
+.logcall-chips input[type=date]{width:auto;font-size:13px;padding:5px 8px}
+.logcall-addnote{justify-self:start;background:none;border:0;padding:2px 0;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.email-draft{flex:1 1 100%;display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--fog)}.email-draft textarea{font-size:14px;line-height:1.5}.email-draft-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.email-draft-actions form{display:contents}
+.pipeline-chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.pipeline-chips .brief-tag{font-size:9.5px;padding:2px 6px}.pipeline-chips .brief-clock{font-size:10.5px}
+.pipeline-callable{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 12px;border:1px solid var(--field-border);border-radius:10px;background:#fff;color:var(--ink);font:600 13px var(--sans);cursor:pointer;white-space:nowrap}.pipeline-callable i{width:8px;height:8px;border-radius:50%;background:#3d9a5b}.pipeline-callable span{font:600 12px var(--mono);color:var(--muted)}.pipeline-callable[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}.pipeline-callable[aria-pressed=true] span{color:#c8c9c4}
+@media(max-width:760px){
+  .logcall-buttons{grid-template-columns:repeat(2,minmax(0,1fr))}.logcall-btn{min-height:58px}.logcall-btn kbd{display:none}.logcall-btn{padding-right:12px}
+  .brief{padding:14px}.brief-opener{font-size:18px}
+  .lead-panel .pipeline-quick{position:sticky;top:-20px;z-index:3;background:#fff;margin:0 -16px;padding:10px 16px;border-bottom:1px solid var(--line-soft)}
+  .lead-panel .pipeline-quick>.btn,.lead-panel .pipeline-quick>a{min-height:44px;flex:1 1 auto;justify-content:center}
+  .lead-panel .pipeline-quick [data-reach=call]{flex-basis:100%}
+  .pipeline-callable{flex:1 1 auto;justify-content:center}
+  .lead-panel-head h2{font-size:22px}
+}

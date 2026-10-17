@@ -29,9 +29,9 @@ test("deal edits that didn't move stage are skipped", () => {
 });
 
 test("calls show the outcome, and a stage only when it's news", () => {
-  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "spoke" })?.text, "Call with Acme · Spoke with them");
+  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "spoke" })?.text, "Call with Acme · Talked");
   // Every first call moves a lead to Initial outreach: not worth repeating.
-  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "voicemail", from: "lead", to: "initial_outreach" })?.text, "Call with Acme · Left voicemail");
+  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "voicemail", from: "lead", to: "initial_outreach" })?.text, "Call with Acme · Voicemail");
   assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "not_interested", to: "lost" })?.text, "Call with Acme · Not interested · Lost");
 });
 

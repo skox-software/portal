@@ -10,7 +10,8 @@ import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
-import { OUTCOMES, outcomeLabel, stageAfterCall, type Outcome } from "@/lib/follow-up";
+import { parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
+import { followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
 import { dedupeLeads, parseLeadSources } from "@/lib/pipeline-import";
 import {
   columnLabel,
@@ -50,7 +51,7 @@ function backTo(formData: FormData, extra: Record<string, string> = {}) {
   const base = formData.get("base") === "/admin/clients" ? "/admin/clients" : BACK;
   const from = new URLSearchParams(String(formData.get("back") ?? "").replace(/^\?/, ""));
   const p = new URLSearchParams();
-  for (const k of ["view", "q", "owner", "stage"]) {
+  for (const k of ["view", "q", "owner", "stage", "callable"]) {
     const v = from.get(k);
     if (v) p.set(k, v.slice(0, 200));
   }
@@ -195,6 +196,7 @@ const dealFields = z.object({
   leadSource: z.string().trim().max(80),
   nextStep: z.string().trim().max(200),
   nextStepOn: z.union([z.literal(""), z.iso.date()]),
+  preview: z.union([z.literal(""), z.url({ protocol: /^https?$/ }).max(300)]).optional(),
 });
 
 function readDeal(formData: FormData) {
@@ -215,7 +217,25 @@ function readDeal(formData: FormData) {
     leadSource: get("leadSource"),
     nextStep: get("nextStep"),
     nextStepOn: get("nextStepOn"),
+    preview: formData.has("preview") ? get("preview").trim() : undefined,
   });
+}
+
+/**
+ * Brief lines typed or pasted into Notes ("ASK FOR: …") move into the brief,
+ * so Notes keeps only the seller's own words. A preview link is kept on the brief too.
+ */
+function mergeBrief(existing: unknown, notes: string, preview: string | undefined, oldNotes?: string | null) {
+  const pasted = parseBrief(notes);
+  // A lead whose brief was never moved out of its notes keeps it on the first save.
+  const base = readBrief(existing) ?? parseBrief(oldNotes).brief;
+  let brief: CallBrief | null = base || pasted.brief ? { ...base, ...pasted.brief } : null;
+  if (preview !== undefined && (brief || preview)) {
+    brief = { ...brief };
+    if (preview) brief.preview = preview;
+    else delete brief.preview;
+  }
+  return { notes: pasted.rest || null, brief };
 }
 
 function dealValues(input: z.infer<typeof dealFields>) {
@@ -253,6 +273,7 @@ export async function createDeal(formData: FormData) {
       id,
       workspaceId: staff.workspaceId,
       ...dealValues(input),
+      ...mergeBrief(null, input.notes, input.preview),
       stage: input.stage,
       ownerEmail: input.ownerEmail || viewer.email,
       ...(repField.value ? { repMembershipId: repField.value, repSource: "assigned" } : {}),
@@ -306,7 +327,7 @@ export async function saveDeal(formData: FormData) {
   }
 
   const parsed = readDeal(formData);
-  if (!parsed.success) backWith(back, "error", "Give the deal a company name. Emails and websites must be valid.");
+  if (!parsed.success) backWith(back, "error", "Give the deal a company name. Emails, websites and preview links must be valid.");
   const input = parsed.data;
   const owners = await staffEmails(staff.workspaceId);
   if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(back, "error", "The owner must be on the SKOX team.");
@@ -321,6 +342,9 @@ export async function saveDeal(formData: FormData) {
       .update(deals)
       .set({
         ...dealValues(input),
+        ...mergeBrief(deal.brief, input.notes, input.preview, deal.notes),
+        // A changed number gets a fresh chance.
+        ...(deal.badNumber && (input.phone || null) !== deal.phone ? { badNumber: false } : {}),
         ownerEmail: input.ownerEmail || null,
         ...(repChanged ? { repMembershipId: repField.value ?? null, repSource: repField.value ? "assigned" : null } : {}),
         stage,
@@ -467,9 +491,10 @@ export async function bulkAddDeals(formData: FormData) {
 }
 
 /**
- * Logs a call, voicemail or email in one step: stamps "last contacted",
- * records the outcome on the deal's history, moves a fresh lead to Initial
- * outreach (or closes it as not interested) and sets the follow-up.
+ * Logs a call or email in one step: stamps "last contacted", records the
+ * outcome on the deal's history, moves a fresh lead to Initial outreach (or
+ * closes it as not interested), flags a bad number, remembers the gatekeeper's
+ * name and sets the follow-up (the outcome's default unless one was picked).
  */
 export async function logCall(formData: FormData) {
   const { viewer, staff } = await requireStaff();
@@ -482,15 +507,17 @@ export async function logCall(formData: FormData) {
       note: z.string().trim().max(1000),
       followUp: z.union([z.literal(""), z.iso.date()]),
       nextStep: z.string().trim().max(200),
+      gatekeeper: z.string().trim().max(80),
     })
     .safeParse({
       outcome: formData.get("outcome"),
       note: String(formData.get("note") ?? ""),
       followUp: String(formData.get("followUp") ?? ""),
       nextStep: String(formData.get("nextStep") ?? ""),
+      gatekeeper: String(formData.get("gatekeeper") ?? ""),
     });
   if (!parsed.success) backWith(back, "error", "Pick what happened on the call.");
-  const { outcome, note, followUp, nextStep } = parsed.data;
+  const { outcome, note, gatekeeper } = parsed.data;
 
   const db = getDb();
   const [deal] = await db
@@ -503,14 +530,22 @@ export async function logCall(formData: FormData) {
   // Once onboarded, the project owns the stage.
   const stage = deal.projectId || deal.stage === "won" || deal.stage === "lost" ? deal.stage : stageAfterCall(deal.stage, outcome);
   const closed = stage === "lost";
+  const followUp = closed ? null : followUpAfterCall(outcome, parsed.data.followUp, salesToday());
+  // A typed next step wins, then the one already on the deal, unless a gatekeeper's name makes a better one.
+  const auto = nextStepAfterCall(outcome, gatekeeper);
+  // After a real conversation, only what was typed counts; the old "call back" step is done.
+  const nextStep = !followUp ? null : parsed.data.nextStep || (outcome === "spoke" ? null : outcome === "gatekeeper" && gatekeeper ? auto : deal.nextStep || auto);
+  const brief = readBrief(deal.brief) ?? parseBrief(deal.notes).brief;
   await db.batch([
     db
       .update(deals)
       .set({
         lastContactedAt: new Date(),
         stage,
-        nextStepOn: closed ? null : followUp || null,
-        nextStep: closed ? null : nextStep || null,
+        nextStepOn: followUp,
+        nextStep,
+        ...(outcome === "bad_number" ? { badNumber: true } : {}),
+        ...(outcome === "gatekeeper" && gatekeeper ? { brief: { ...brief, gatekeeper } } : {}),
         ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
         ...(closed && deal.stage !== "lost" ? { lostReason: note || "Not interested" } : {}),
       })
@@ -526,13 +561,14 @@ export async function logCall(formData: FormData) {
         company: deal.company,
         outcome,
         ...(note ? { note } : {}),
-        ...(followUp && !closed ? { followUp } : {}),
+        ...(gatekeeper ? { gatekeeper } : {}),
+        ...(followUp ? { followUp } : {}),
         ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}),
       },
     }),
   ]);
   refresh();
-  const message = `${outcomeLabel(outcome)} logged for ${deal.company}${stage !== deal.stage ? ` · moved to ${stage === "lost" ? "Lost" : columnLabel(stage)}` : ""}.`;
+  const message = `${outcomeLabel(outcome)} logged for ${deal.company}${stage !== deal.stage ? ` · moved to ${stage === "lost" ? "Lost" : columnLabel(stage)}` : ""}${outcome === "bad_number" ? " · number flagged" : ""}.`;
   const nextId = String(formData.get("nextId") ?? "");
   if (formData.get("intent") === "next" && z.uuid().safeParse(nextId).success) backWith(backTo(formData, { deal: nextId }), "notice", message);
   backWith(back, "notice", message);

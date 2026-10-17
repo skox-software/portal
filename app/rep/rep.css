@@ -415,3 +415,21 @@ a.rp-tile:hover { background: var(--fog); }
   .rp-chip { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; }
 }
 .rp-dial a[data-book] { border-color: rgba(228, 169, 7, 0.55); color: var(--amber); }
+
+/* One-tap call outcomes (components/LogCallForm.tsx). */
+.rp .logcall-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rp .logcall-legend { font: 400 24px/1.15 var(--serif); color: var(--ink); }
+.rp .logcall-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rp .logcall-btn { position: relative; display: grid; gap: 1px; justify-items: start; text-align: left; min-height: 56px; padding: 8px 30px 8px 14px; border: 1px solid var(--field-border); border-radius: 12px; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.rp .logcall-btn span { font-size: 14px; font-weight: 600; }
+.rp .logcall-btn small { font-size: 11.5px; color: var(--muted); }
+.rp .logcall-btn kbd { position: absolute; top: 8px; right: 8px; font: 11px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.rp .logcall-btn:hover { border-color: var(--ink); }
+.rp .logcall-btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.rp .logcall-btn[aria-expanded="true"] { background: var(--ink); color: #0b0d0e; border-color: var(--ink); }
+.rp .logcall-btn[aria-expanded="true"] small { color: #444; }
+.rp .logcall-btn[data-tone="danger"] span { color: var(--danger); }
+.rp .logcall-more { display: grid; gap: 10px; }
+.rp .logcall-more .btn { justify-self: start; }
+.rp .logcall-addnote { justify-self: start; background: none; border: 0; padding: 2px 0; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+@media (max-width: 760px) { .rp .logcall-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rp .logcall-btn kbd { display: none; } }

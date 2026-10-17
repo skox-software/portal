@@ -6,18 +6,22 @@ import { Notice, readMessage } from "@/components/Notice";
 import { PipelineBoard, type BoardCard } from "@/components/PipelineBoard";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
+import { callPriority, parseBrief, readBrief } from "@/lib/call-brief";
 import { formatMoney, nowMs, timeAgo } from "@/lib/format";
 import { describeFollowUp, followUpState, salesToday } from "@/lib/follow-up";
+import { zoneFor } from "@/lib/local-time";
 import { withBase } from "@/lib/paths";
 import { loadPipeline } from "@/lib/pipeline-data";
 import {
   boardTotals,
+  callQueue,
   cardMatches,
   COLUMNS,
   daysSince,
   dealKindLabel,
   initials,
   isStalled,
+  queueable,
   SALES_COLUMNS,
   searchText,
   viewQuery,
@@ -40,7 +44,7 @@ export default async function PipelinePage({
   const { dealRows, projectRows, billing, columns, lost, owners, reps } = await loadPipeline(ws);
   const dealById = new Map(dealRows.map((d) => [d.id, d]));
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).slice(0, 200) : "");
-  const filters: BoardView = { view: "board", q: str("q"), owner: str("owner"), stage: "" };
+  const filters: BoardView = { view: "board", q: str("q"), owner: str("owner"), stage: "", callable: sp.callable === "1" };
 
   const now = new Date(nowMs());
   const today = salesToday(now);
@@ -53,6 +57,8 @@ export default async function PipelinePage({
     const deal = card.type === "deal" ? dealById.get(card.id) : undefined;
     const stalled = isStalled(card.column, card.since, now);
     const total = card.progress?.total ?? 0;
+    const brief = deal ? readBrief(deal.brief) ?? parseBrief(deal.notes).brief : null;
+    const dueState = deal && deal.stage !== "won" ? followUpState(deal.nextStepOn, today) : "none";
     return {
       key: card.key,
       type: card.type,
@@ -78,8 +84,14 @@ export default async function PipelinePage({
       location: card.location,
       industry: card.industry,
       followUp: deal && deal.stage !== "won" ? describeFollowUp(deal.nextStepOn, today) : null,
-      followUpState: deal && deal.stage !== "won" ? followUpState(deal.nextStepOn, today) : "none",
-      search: searchText([card.company, card.contactName, card.contactEmail, deal?.phone, deal?.website, card.location, card.industry, card.leadSource, deal?.notes]),
+      followUpState: dueState,
+      tag: brief?.tag ?? null,
+      warning: !!brief?.warnings?.length,
+      badNumber: !!deal?.badNumber,
+      zone: deal ? zoneFor(deal) : null,
+      queueable: deal ? queueable(deal, today) : false,
+      priority: callPriority({ brief, followUp: dueState, contacted: !!deal?.lastContactedAt }),
+      search: searchText([card.company, card.contactName, card.contactEmail, deal?.phone, deal?.website, card.location, card.industry, card.leadSource, deal?.notes, brief?.tag, brief?.askFor, brief?.vertical]),
     };
   };
 
@@ -89,11 +101,12 @@ export default async function PipelinePage({
   const creating = sp.new === "1";
   const linkedProject = editing?.projectId ? projectRows.find((p) => p.project.id === editing.projectId) : null;
 
-  // Next and previous within the same stage, under the same filters.
+  // Next and previous: through the call queue when "Callable now" is on, else within the same stage, under the same filters.
   const editingCard = editing ? cards.find((c) => c.key === `deal:${editing.id}`) : undefined;
-  const sameStage = editingCard
-    ? cards.filter((c) => c.type === "deal" && c.column === editingCard.column && (c.key === editingCard.key || cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, filters)))
-    : [];
+  const matching = (c: BoardCard) => c.type === "deal" && (c.key === editingCard?.key || cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, filters));
+  const queue = filters.callable && editingCard ? callQueue(cards.filter(matching), now) : [];
+  const inQueue = queue.includes(editingCard!);
+  const sameStage = !editingCard ? [] : inQueue ? queue : cards.filter((c) => matching(c) && c.column === editingCard.column);
   const at = editingCard ? sameStage.indexOf(editingCard) : -1;
   const next = at >= 0 ? sameStage[at + 1] : undefined;
   const prev = at > 0 ? sameStage[at - 1] : undefined;
@@ -168,7 +181,7 @@ export default async function PipelinePage({
           </section>
         )}
 
-        <PipelineBoard columns={COLUMNS.filter((c) => SALES_COLUMNS.includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={cards} owners={owners} me={viewer.email} initial={filters} />
+        <PipelineBoard columns={COLUMNS.filter((c) => SALES_COLUMNS.includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={cards} owners={owners} me={viewer.email} initial={filters} nowMs={now.getTime()} />
 
         {lost.length > 0 && (
           <details className="card pipeline-lost">
@@ -212,12 +225,13 @@ export default async function PipelinePage({
                 nextId: next?.id ?? null,
                 nextHref: next ? leadHref(next.id) : null,
                 prevHref: prev ? leadHref(prev.id) : null,
-                position: editingCard ? `${at + 1} of ${sameStage.length} in ${COLUMNS.find((c) => c.key === editingCard.column)?.label}` : null,
+                position: editingCard ? `${at + 1} of ${sameStage.length} ${inQueue ? "callable now" : `in ${COLUMNS.find((c) => c.key === editingCard.column)?.label}`}` : null,
               }}
               today={today}
               now={now}
               notice={readMessage(sp.notice)}
               error={readMessage(sp.error)}
+              emailOpen={sp.email === "1"}
             />
           </aside>
         </>

@@ -4,6 +4,8 @@ import {
   addWorkdays,
   defaultFollowUp,
   describeFollowUp,
+  followUpAfterCall,
+  nextStepAfterCall,
   followUpState,
   salesToday,
   stageAfterCall,
@@ -47,4 +49,21 @@ test("untouched counts from the last call, or from when it entered the stage", (
   const since = new Date("2026-10-01T12:00:00Z");
   assert.equal(untouchedFor(null, since, now, 7), true);
   assert.equal(untouchedFor(new Date("2026-10-14T12:00:00Z"), since, now, 7), false);
+});
+
+test("one-tap outcomes: each sets its own follow-up; dead ends set none", () => {
+  // 2026-10-16 is a Friday.
+  assert.equal(followUpAfterCall("no_answer", "", "2026-10-16"), "2026-10-19");
+  assert.equal(followUpAfterCall("gatekeeper", "", "2026-10-16"), "2026-10-19");
+  assert.equal(followUpAfterCall("spoke", "", "2026-10-16"), "2026-10-21");
+  assert.equal(followUpAfterCall("spoke", "2026-11-02", "2026-10-16"), "2026-11-02");
+  assert.equal(followUpAfterCall("bad_number", "2026-11-02", "2026-10-16"), null);
+  assert.equal(followUpAfterCall("not_interested", "", "2026-10-16"), null);
+});
+
+test("a bad number leaves the stage alone; the gatekeeper's name goes in the next step", () => {
+  assert.equal(stageAfterCall("lead", "bad_number"), "lead");
+  assert.equal(stageAfterCall("lead", "gatekeeper"), "initial_outreach");
+  assert.equal(nextStepAfterCall("gatekeeper", "Sarah"), "Call back; Sarah answered last time");
+  assert.equal(nextStepAfterCall("spoke", ""), null);
 });

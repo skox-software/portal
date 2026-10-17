@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
-import { allowedColumns, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
+import { isCallable, localTime, zoneShort } from "@/lib/local-time";
+import { allowedColumns, callQueue, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
 
 export type { BoardView };
 
@@ -37,6 +38,17 @@ export type BoardCard = {
   followUpState: "overdue" | "today" | "upcoming" | "none";
   location: string | null;
   industry: string | null;
+  /** The brief's CALL ABOUT: "NOT MOBILE", "SITE DOWN", "NO WEBSITE"… */
+  tag: string | null;
+  /** The brief has a CHECK FIRST / WEAK LEAD / PHONE UNVERIFIED warning. */
+  warning: boolean;
+  badNumber: boolean;
+  /** The lead's IANA time zone, from its location or area code. */
+  zone: string | null;
+  /** Open, with a working number and no follow-up set for a later day. */
+  queueable: boolean;
+  /** Call-sheet order, lowest first (lib/call-brief.ts callPriority). */
+  priority: number;
   /** Lower-cased text the search box matches against. */
   search: string;
 };
@@ -57,12 +69,15 @@ export function PipelineBoard({
   owners,
   me,
   initial,
+  nowMs,
 }: {
   cards: BoardCard[];
   columns: Column[];
   owners: string[];
   me: string;
   initial: BoardView;
+  /** The server's clock, so the first render matches; it ticks on from there. */
+  nowMs: number;
 }) {
   const [optimistic, applyMove] = useOptimistic(cards, (state, move: { key: string; to: ColumnKey | "lost" }) =>
     move.to === "lost"
@@ -74,6 +89,13 @@ export function PipelineBoard({
   const [dragging, setDragging] = useState<BoardCard | null>(null);
   const [over, setOver] = useState<ColumnKey | null>(null);
   const [v, setV] = useState<BoardView>(initial);
+  const [nowAt, setNowAt] = useState(nowMs);
+  // Local times and "Callable now" move with the clock.
+  useEffect(() => {
+    const t = setInterval(() => setNowAt(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const now = useMemo(() => new Date(nowAt), [nowAt]);
   // Phones show one column at a time; the chips jump between them.
   const board = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState<ColumnKey>(columns[0].key);
@@ -81,13 +103,15 @@ export function PipelineBoard({
   // Keep the filters in the address, so opening a lead and coming back keeps them.
   useEffect(() => {
     const url = new URL(window.location.href);
-    for (const k of ["view", "q", "owner", "stage"]) url.searchParams.delete(k);
+    for (const k of ["view", "q", "owner", "stage", "callable"]) url.searchParams.delete(k);
     for (const [k, val] of new URLSearchParams(viewQuery(v))) url.searchParams.set(k, val);
     window.history.replaceState(window.history.state, "", url);
   }, [v]);
 
-  const shown = useMemo(() => optimistic.filter((c) => cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, v)), [optimistic, v]);
-  const filtering = Boolean(v.q || v.owner);
+  const matched = useMemo(() => optimistic.filter((c) => cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, v)), [optimistic, v]);
+  const callableNow = useMemo(() => callQueue(matched, now), [matched, now]);
+  const shown = v.callable ? callableNow : matched;
+  const filtering = Boolean(v.q || v.owner || v.callable);
 
   useEffect(() => {
     const el = board.current;
@@ -147,7 +171,7 @@ export function PipelineBoard({
   );
 
   const reach = (card: BoardCard) =>
-    (card.website || card.phone || card.email) && (
+    (card.website || card.phone || card.email || card.type === "deal") && (
       <span className="pipeline-reach">
         {card.website && (
           <a href={card.website} target="_blank" rel="noreferrer" title={`Website: ${card.website}`} aria-label={`${card.company} website`}>
@@ -159,10 +183,17 @@ export function PipelineBoard({
             Call
           </a>
         )}
-        {card.email && (
-          <a href={`mailto:${card.email}`} title={`Email ${card.email}`} aria-label={`Email ${card.company}`}>
+        {card.type === "deal" ? (
+          // Deals open the drafted email in the panel, written from the call brief.
+          <Link href={`/admin/pipeline${viewQuery(v, { deal: card.id, email: "1" })}`} scroll={false} title="Open the email draft" aria-label={`Email draft for ${card.company}`}>
             Email
-          </a>
+          </Link>
+        ) : (
+          card.email && (
+            <a href={`mailto:${card.email}`} title={`Email ${card.email}`} aria-label={`Email ${card.company}`}>
+              Email
+            </a>
+          )
         )}
       </span>
     );
@@ -200,8 +231,18 @@ export function PipelineBoard({
           ))}
           <option value="none">Unassigned</option>
         </select>
+        <button
+          type="button"
+          className="pipeline-callable"
+          aria-pressed={!!v.callable}
+          onClick={() => setV({ ...v, callable: !v.callable })}
+          title="Open leads where it's 8:30–5 on a weekday right now, best first"
+        >
+          <i aria-hidden="true" />
+          Callable now <span>{callableNow.length}</span>
+        </button>
         {filtering && (
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => setV({ ...v, q: "", owner: "" })}>
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setV({ ...v, q: "", owner: "", callable: false })}>
             Clear
           </button>
         )}
@@ -320,6 +361,22 @@ export function PipelineBoard({
                               <span style={{ width: `${card.progress}%` }} />
                             </div>
                           )}
+                          {(card.tag || card.zone || card.badNumber || card.warning) && (
+                            <div className="pipeline-chips">
+                              {card.badNumber && <span className="brief-tag" data-tag="BAD NUMBER">Bad number</span>}
+                              {card.tag && (
+                                <span className="brief-tag" data-tag={card.tag}>
+                                  {card.tag}
+                                </span>
+                              )}
+                              {card.warning && <span className="brief-tag" data-tag="CHECK">Check first</span>}
+                              {card.zone && (
+                                <span className="brief-clock" data-callable={isCallable(card.zone, now) ? "" : undefined} title="Their local time">
+                                  {localTime(card.zone, now)} {zoneShort(card.zone)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {reach(card)}
                           <div className="pipeline-card-meta">
                             {card.value && <strong className="pipeline-card-money">{card.value}</strong>}
@@ -344,7 +401,7 @@ export function PipelineBoard({
                       );
                     })}
                   </ul>
-                  {!inColumn.length && <p className="pipeline-empty">{dragging && canDrop ? "Drop here" : filtering ? "No matches" : "Nothing here"}</p>}
+                  {!inColumn.length && <p className="pipeline-empty">{dragging && canDrop ? "Drop here" : v.callable ? "No one to call here right now" : filtering ? "No matches" : "Nothing here"}</p>}
                 </section>
               );
             })}

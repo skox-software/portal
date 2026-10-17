@@ -9,12 +9,19 @@ import type { DealStage } from "./pipeline.ts";
 
 export const SALES_TZ = "America/New_York";
 
+/**
+ * What can happen on a cold call, in the order of the one-tap buttons.
+ * `followUpDays` are workdays until the next try; null means no follow-up.
+ * "Sent email" isn't a call outcome button: the email draft logs it.
+ */
 export const OUTCOMES = [
-  { value: "no_answer", label: "No answer", followUpDays: 2 },
-  { value: "voicemail", label: "Left voicemail", followUpDays: 2 },
-  { value: "emailed", label: "Sent email", followUpDays: 3 },
-  { value: "spoke", label: "Spoke with them", followUpDays: 3 },
-  { value: "not_interested", label: "Not interested", followUpDays: null },
+  { value: "no_answer", label: "No answer", followUpDays: 1, button: true },
+  { value: "voicemail", label: "Voicemail", followUpDays: 2, button: true },
+  { value: "gatekeeper", label: "Gatekeeper", followUpDays: 1, button: true },
+  { value: "spoke", label: "Talked", followUpDays: 3, button: true },
+  { value: "not_interested", label: "Not interested", followUpDays: null, button: true },
+  { value: "bad_number", label: "Bad number", followUpDays: null, button: true },
+  { value: "emailed", label: "Sent email", followUpDays: 3, button: false },
 ] as const;
 
 export type Outcome = (typeof OUTCOMES)[number]["value"];
@@ -63,10 +70,13 @@ export function defaultFollowUp(outcome: Outcome, today: string) {
 
 /**
  * Where a deal goes after a call. Any first attempt moves a fresh lead to
- * Initial outreach; "Not interested" closes it; otherwise the stage stays put.
+ * Initial outreach; "Not interested" closes it; a bad number leaves it where
+ * it is (flagged); otherwise the stage stays put.
  */
 export function stageAfterCall(stage: DealStage, outcome: Outcome): DealStage {
   if (outcome === "not_interested") return "lost";
+  // Nobody was reached, so it hasn't really been worked yet.
+  if (outcome === "bad_number") return stage;
   if (stage === "lead") return "initial_outreach";
   return stage;
 }
@@ -97,4 +107,18 @@ export function describeFollowUp(nextStepOn: string | null, today: string) {
 export function untouchedFor(lastContactedAt: Date | null, since: Date, now: Date, days: number) {
   const last = lastContactedAt && lastContactedAt > since ? lastContactedAt : since;
   return now.getTime() - last.getTime() >= days * DAY_MS;
+}
+
+/** The follow-up a call sets: the one picked, else the outcome's default. Never one for a closed or dead-number lead. */
+export function followUpAfterCall(outcome: Outcome, picked: string, today: string) {
+  if (outcome === "not_interested" || outcome === "bad_number") return null;
+  return picked || defaultFollowUp(outcome, today);
+}
+
+/** What the call puts in "Next step" when the seller didn't type one. */
+export function nextStepAfterCall(outcome: Outcome, gatekeeper: string) {
+  if (outcome === "gatekeeper") return gatekeeper ? `Call back; ${gatekeeper} answered last time` : "Call back; a gatekeeper answered";
+  if (outcome === "no_answer") return "Call again";
+  if (outcome === "voicemail") return "Call again after the voicemail";
+  return null;
 }

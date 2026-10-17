@@ -9,6 +9,8 @@
  * Nothing here touches the database, so the rules can be tested alone.
  */
 
+import { isCallable } from "./local-time.ts";
+
 export const COLUMNS = [
   { key: "lead", label: "Lead" },
   { key: "initial_outreach", label: "Initial outreach" },
@@ -309,7 +311,7 @@ export function searchText(parts: (string | null | undefined)[]) {
   return parts.filter(Boolean).join(" \u0001 ").toLowerCase();
 }
 
-export type BoardView = { view: "board" | "list"; q: string; owner: string; stage: string };
+export type BoardView = { view: "board" | "list"; q: string; owner: string; stage: string; /** Only leads it's business hours for now. */ callable?: boolean };
 
 /** The view's query string, minus defaults, for links that keep the filters. */
 export function viewQuery(v: BoardView, extra: Record<string, string> = {}) {
@@ -318,7 +320,22 @@ export function viewQuery(v: BoardView, extra: Record<string, string> = {}) {
   if (v.q) p.set("q", v.q);
   if (v.owner) p.set("owner", v.owner);
   if (v.view === "list" && v.stage) p.set("stage", v.stage);
+  if (v.callable) p.set("callable", "1");
   for (const [k, val] of Object.entries(extra)) p.set(k, val);
   const s = p.toString();
   return s ? `?${s}` : "";
+}
+
+/** Can this deal go in the call queue at all: open, with a working number, and no follow-up set for a later day. */
+export function queueable(deal: { stage: DealStage; phone: string | null; badNumber?: boolean; nextStepOn: string | null }, today: string) {
+  return PRESALE.includes(deal.stage as ColumnKey) && !!deal.phone && !deal.badNumber && !(deal.nextStepOn && deal.nextStepOn > today);
+}
+
+/**
+ * The "Callable now" queue: queueable leads where it's business hours right
+ * now, best first (lowest priority number). Shared by the board's filter and
+ * the panel's next/previous, so "Log & next" follows what's on screen.
+ */
+export function callQueue<T extends { queueable: boolean; zone: string | null; priority: number }>(cards: T[], now: Date) {
+  return cards.filter((c) => c.queueable && isCallable(c.zone, now)).sort((a, b) => a.priority - b.priority);
 }

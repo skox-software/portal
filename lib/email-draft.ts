@@ -67,6 +67,7 @@ export function buildEmailDraft(input: {
   brief: CallBrief | null;
 }) {
   const { company, website, brief } = input;
+  if (brief?.emailDraft) return { subject: brief.emailDraft.subject, body: brief.emailDraft.body };
   const name = greetingName(input.contactName) ?? greetingName(brief?.askFor);
   const subject = (SUBJECTS[brief?.tag ?? ""] ?? ((c: string) => `${c}'s website`))(company);
   const site = siteLabel(website);

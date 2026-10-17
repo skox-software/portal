@@ -9,7 +9,18 @@
 
 export type BriefWarning = { kind: "check_first" | "phone_unverified" | "weak_lead"; text: string };
 
+export type SavedEmailDraft = {
+  id: string;
+  fromEmail: string;
+  subject: string;
+  body: string;
+  status: "draft" | "sending" | "sent";
+  updatedAt: string;
+  sentAt?: string;
+};
+
 export type CallBrief = {
+  emailDraft?: SavedEmailDraft;
   /** "NOT MOBILE", "SITE DOWN", "NO WEBSITE", "BROKEN PIECES", "HACKED". */
   tag?: string;
   /** "Medical, dental & care". */
@@ -32,7 +43,7 @@ export type CallBrief = {
   warnings?: BriefWarning[];
 };
 
-type Field = Exclude<keyof CallBrief, "warnings" | "tag" | "vertical" | "gatekeeper">;
+type Field = Exclude<keyof CallBrief, "warnings" | "tag" | "vertical" | "gatekeeper" | "emailDraft">;
 
 /** Label → where it goes. Labels are matched case-sensitively at the start of a line, as the imports write them. */
 const LABELS: [RegExp, Field | "callAbout" | "whyNoSite" | BriefWarning["kind"] | "drop"][] = [

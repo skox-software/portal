@@ -11,8 +11,9 @@ import { LiveTicker } from "@/components/finance/LiveTicker";
 import { requireStaff } from "@/lib/access";
 import { HeatMap } from "@/components/finance/HeatMap";
 import { MoneyFlow } from "@/components/finance/MoneyFlow";
+import { Race } from "@/components/finance/Race";
 import { Runway } from "@/components/finance/Runway";
-import { collectedByBucket, dailyActivity, dealsWonByOwner, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
+import { collectedByBucket, dailyActivity, dealsWonByOwner, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, raceStandings, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
 import { balanceSeries, projectForward } from "@/lib/forecast-math";
 import { addDays, salesToday } from "@/lib/follow-up";
 import { liveSnapshot } from "@/lib/finance-live";
@@ -44,7 +45,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const yearStart = addDays(today, -364);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues, race] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -62,6 +63,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     openInvoiceDues(ws),
     unpaidStatements(ws),
     dailyActivity(ws, heat, yearStart, today),
+    raceStandings(ws, today),
   ]);
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
@@ -183,6 +185,13 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         <div className="finance-body">
           {runway ? <Runway {...runway} /> : <p className="small muted">{connected ? "The runway draws from Stripe's balance and activity, which aren't available right now." : "Connect Stripe to see the balance over time and where it's heading."}</p>}
         </div>
+      </section>
+
+      <section className="admin-panel finance-section" aria-labelledby="race-title">
+        <div className="admin-panel-head">
+          <div><h2 id="race-title">The race</h2><p>Cash collected and deals won by owner, this month and this year.</p></div>
+        </div>
+        <div className="finance-body"><Race {...race} today={today} /></div>
       </section>
 
       <section className="admin-panel finance-section" aria-labelledby="heat-title" id="heat">

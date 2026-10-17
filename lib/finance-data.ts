@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { clients, commissionEntries, commissionStatements, deals, events, invoiceRefunds, invoices, projects, repProfiles } from "@/lib/db/schema";
 import { repTotals, workspaceReps, EMPTY_TOTALS } from "@/lib/commissions";
 import { bucketKeys, STAGE_WEIGHTS, type PeriodRange } from "@/lib/finance-periods";
-import { SALES_TZ, salesToday } from "@/lib/follow-up";
+import { addDays, SALES_TZ, salesToday } from "@/lib/follow-up";
 import { describeEvent, LIVE_VERBS, type LiveEvent } from "@/lib/live-feed";
 import { normalizeEmail } from "@/lib/permissions";
 
@@ -296,4 +296,20 @@ export async function dailyActivity(ws: string, metric: HeatMetric, startIso: st
       .groupBy(key);
   }
   return new Map(rows.map((r) => [r.key, Number(r.value)]));
+}
+
+/**
+ * Month to date, year to date and last month, per owner, for the race:
+ * the same rows as the Team table, on calendar periods ending today.
+ */
+export async function raceStandings(ws: string, today: string) {
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const lastMonthEnd = addDays(monthStart, -1);
+  const span = (startIso: string, endIso: string, label: string) => ({ key: "ytd", startIso, endIso, bucket: "month", label }) as PeriodRange;
+  const [mtd, ytd, lastMonth] = await Promise.all([
+    leaderboard(ws, span(monthStart, today, "Month to date")),
+    leaderboard(ws, span(`${today.slice(0, 4)}-01-01`, today, "Year to date")),
+    leaderboard(ws, span(`${lastMonthEnd.slice(0, 7)}-01`, lastMonthEnd, "Last month")),
+  ]);
+  return { mtd, ytd, lastMonth };
 }

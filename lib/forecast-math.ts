@@ -125,3 +125,36 @@ export function paceToDate(valueSoFar: number, dayOfPeriod: number, daysInPeriod
   const day = Math.min(dayOfPeriod, daysInPeriod);
   return Math.round((valueSoFar / day) * daysInPeriod);
 }
+
+/** Day of the month and of the year for a date, with the lengths, for pace lines. */
+export function calendarProgress(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const dayOfYear = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86_400_000) + 1;
+  const daysInYear = Math.round((Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1)) / 86_400_000);
+  return { dayOfMonth: d, daysInMonth, dayOfYear, daysInYear };
+}
+
+export type Racer = { key: string; name: string; values: number[] };
+
+/**
+ * Ranks people by their values, compared left to right (cash, then wins),
+ * and says how each moved against an earlier ranking: positive is up.
+ * Someone absent before has no movement.
+ */
+export function rankChange(now: { key: string; values: number[] }[], before: { key: string; values: number[] }[]) {
+  const order = (rows: { key: string; values: number[] }[]) =>
+    [...rows]
+      .filter((r) => r.values.some((v) => v > 0))
+      .sort((a, b) => {
+        for (let i = 0; i < Math.max(a.values.length, b.values.length); i++) {
+          const d = (b.values[i] ?? 0) - (a.values[i] ?? 0);
+          if (d) return d;
+        }
+        return a.key.localeCompare(b.key);
+      })
+      .map((r) => r.key);
+  const was = order(before);
+  const is = order(now);
+  return new Map(is.map((key, i) => [key, was.includes(key) ? was.indexOf(key) - i : 0]));
+}

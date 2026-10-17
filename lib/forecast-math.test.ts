@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { balanceSeries, dailyNets, monthEnd, paceToDate, projectForward, statementPayDay } from "./forecast-math.ts";
+import { balanceSeries, calendarProgress, dailyNets, monthEnd, paceToDate, projectForward, rankChange, statementPayDay } from "./forecast-math.ts";
 
 // Noon UTC is morning in Florida, so these land on the date they say.
 const at = (iso: string) => Date.parse(`${iso}T16:00:00Z`) / 1000;
@@ -77,4 +77,23 @@ test("pace straight-lines what's done so far to the end of the period", () => {
   assert.equal(paceToDate(0, 5, 30), 0);
   assert.equal(paceToDate(500, 0, 30), 500);
   assert.equal(paceToDate(900, 40, 30), 900);
+});
+
+test("calendar progress counts days into the month and year", () => {
+  assert.deepEqual(calendarProgress("2026-10-17"), { dayOfMonth: 17, daysInMonth: 31, dayOfYear: 290, daysInYear: 365 });
+  assert.equal(calendarProgress("2028-12-31").dayOfYear, 366);
+});
+
+test("rank change is how many places someone climbed since last time", () => {
+  const moves = rankChange(
+    [{ key: "reiss", values: [500, 1] }, { key: "josh", values: [400, 3] }, { key: "new", values: [100, 0] }],
+    [{ key: "josh", values: [900, 2] }, { key: "reiss", values: [300, 1] }],
+  );
+  assert.equal(moves.get("reiss"), 1);
+  assert.equal(moves.get("josh"), -1);
+  assert.equal(moves.get("new"), 0);
+  // Ties on cash fall to wins.
+  const tie = rankChange([{ key: "a", values: [100, 1] }, { key: "b", values: [100, 2] }], [{ key: "a", values: [1, 0] }, { key: "b", values: [0, 0] }]);
+  assert.equal(tie.get("b"), 0);
+  assert.equal(tie.get("a"), -1);
 });

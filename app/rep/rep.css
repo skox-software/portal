@@ -377,3 +377,41 @@ a.rp-tile:hover { background: var(--fog); }
   .rp::before, .rp-bar, .rp .tabbar, .rp-back, .rp-no-print { display: none !important; }
   .rp-bignum { color: #000 !important; background: none; }
 }
+
+/* ---------- Book the scope call (calendar on the lead page) ---------- */
+.rp-book-panel { scroll-margin-top: 90px; padding: 28px; }
+.rp-book-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.rp-book-head h2 { font: 400 32px/1.1 var(--serif); margin: 0 0 8px; }
+.rp-book-head p { color: var(--muted); font-size: 15px; margin: 0; max-width: 60ch; }
+.rp-book { display: grid; gap: 16px; }
+.rp-book-step { display: flex; align-items: center; gap: 10px; font: 500 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.rp-book-step b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--amber); color: #0b0d0e; font: 700 11px var(--mono); letter-spacing: 0; }
+.rp-book-prep { display: grid; gap: 14px; padding-bottom: 6px; }
+.rp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rp-chip { display: inline-grid; grid-template-columns: auto auto auto; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--field-border); background: var(--canvas); color: var(--ink); cursor: pointer; font: 14px var(--sans); text-align: left; max-width: 100%; transition: border-color .15s, background .15s; }
+.rp-chip:hover { border-color: var(--amber); }
+.rp-chip span { font: 500 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.rp-chip strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.rp-chip em { font: 600 11px var(--mono); font-style: normal; color: var(--amber); }
+.rp-chip[data-copied] { border-color: var(--ok); }
+.rp-chip[data-copied] em { color: var(--ok); }
+.rp-book-send { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rp-book-send > span { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.rp-book-send .rp-btn { min-height: 38px; padding: 0 14px; font-size: 13px; }
+/* Google's booking page is light; give it a clean white sheet inside the dark desk. */
+.rp-book-frame { background: #fff; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px -40px rgba(228, 169, 7, 0.35); }
+.rp-book-frame iframe { display: block; width: 100%; height: 720px; border: 0; }
+.rp-book-fallback { font-size: 13px; }
+.rp-book-confirm { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); display: grid; gap: 14px; }
+.rp-book-confirm-row { display: grid; grid-template-columns: 170px 150px minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.rp-book-confirm-row .btn { min-height: 42px; white-space: nowrap; }
+@media (max-width: 760px) {
+  .rp-book-panel { padding: 20px; }
+  .rp-book-head h2 { font-size: 26px; }
+  .rp-book-frame { margin-inline: -8px; }
+  .rp-book-frame iframe { height: 860px; }
+  .rp-book-confirm-row { grid-template-columns: 1fr 1fr; }
+  .rp-book-note, .rp-book-confirm-row .btn { grid-column: 1 / -1; }
+  .rp-chip { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; }
+}
+.rp-dial a[data-book] { border-color: rgba(228, 169, 7, 0.55); color: var(--amber); }

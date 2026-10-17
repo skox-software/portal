@@ -24,7 +24,7 @@ export function LeadRow({ lead, today }: { lead: RepLead; today: string }) {
         </Link>
         <RepTrack status={lead.status} mini />
         <span className="rp-due" data-state={due === "Not called yet" ? "today" : state}>{due ?? ""}</span>
-        {repCanWork(lead.status) ? <Dial phone={lead.phone} email={lead.contactEmail} name={lead.company} /> : <span className="rp-dial" />}
+        {repCanWork(lead.status) ? <Dial phone={lead.phone} email={lead.contactEmail} name={lead.company} bookHref={`/rep/leads/${lead.id}#book`} /> : <span className="rp-dial" />}
       </div>
     </li>
   );

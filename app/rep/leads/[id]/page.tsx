@@ -5,7 +5,8 @@ import { z } from "zod";
 import { LogCallForm } from "@/components/LogCallForm";
 import { Notice, readMessage } from "@/components/Notice";
 import { SubmitButton } from "@/components/SubmitButton";
-import { Icon, MAIL_ICON, PHONE_ICON, telHref } from "@/components/rep/Dial";
+import { CAL_ICON, Icon, MAIL_ICON, PHONE_ICON, telHref } from "@/components/rep/Dial";
+import { BookCall } from "@/components/rep/BookCall";
 import { RepTrack } from "@/components/rep/RepTrack";
 import { logRepCall, markMeetingBooked, saveRepNotes } from "@/app/rep/actions";
 import { requireRep } from "@/lib/access";
@@ -13,7 +14,8 @@ import { getDb } from "@/lib/db";
 import { workspaces } from "@/lib/db/schema";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { outcomeLabel, salesToday } from "@/lib/follow-up";
-import { myLead, myLeadHistory, myLeads } from "@/lib/rep-data";
+import { googleBookingEmbedUrl, safeBookingUrl } from "@/lib/meetings";
+import { myLead, myLeadHistory, myLeads, myProfile } from "@/lib/rep-data";
 import { repCanWork } from "@/lib/rep-status";
 
 export const metadata = { title: "Lead" };
@@ -39,11 +41,14 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
   const { viewer, rep } = await requireRep();
   const lead = await myLead(rep, id);
   if (!lead) notFound();
-  const [history, all, [ws]] = await Promise.all([
+  const [history, all, [ws], profile] = await Promise.all([
     myLeadHistory(rep, viewer.userId, id),
     myLeads(rep),
     getDb().select({ schedulingUrl: workspaces.schedulingUrl }).from(workspaces).where(eq(workspaces.id, rep.workspaceId)).limit(1),
+    myProfile(rep),
   ]);
+  const bookingUrl = safeBookingUrl(ws?.schedulingUrl);
+  const embedUrl = googleBookingEmbedUrl(ws?.schedulingUrl);
   const today = salesToday();
   const workable = all.filter((l) => repCanWork(l.status));
   const at = workable.findIndex((l) => l.id === id);
@@ -65,10 +70,51 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
           <div className="rp-actions">
             {lead.phone && <a className="rp-btn" data-primary href={telHref(lead.phone)}><Icon d={PHONE_ICON} />Call {lead.contactName?.split(" ")[0] ?? "now"}</a>}
             {lead.contactEmail && <a className="rp-btn" href={`mailto:${lead.contactEmail}`}><Icon d={MAIL_ICON} />Email</a>}
+            {bookingUrl && <a className="rp-btn" href="#book"><Icon d={CAL_ICON} />Book the call</a>}
           </div>
         )}
       </header>
       <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
+
+      {canWork && (
+        <section className="rp-section rp-panel rp-book-panel" id="book" aria-labelledby="book-title" style={{ marginTop: 36 }}>
+          <div className="rp-book-head">
+            <div>
+              <h2 id="book-title">{lead.status === "booked" ? "Call booked. Need to move it?" : "Book the scope call"}</h2>
+              <p>Lock in 30 minutes with SKOX while you have them. SKOX runs the call and handles all pricing.</p>
+            </div>
+            {lead.status === "booked" && <span className="rp-stamp" data-status="approved">Booked</span>}
+          </div>
+          {bookingUrl ? <BookCall
+            embedUrl={embedUrl}
+            openUrl={bookingUrl}
+            company={lead.company}
+            contactName={lead.contactName}
+            contactEmail={lead.contactEmail}
+            phone={lead.phone}
+            repName={profile?.displayName ?? "your SKOX rep"}
+          /> : <p className="rp-note">SKOX&apos;s calendar link isn&apos;t set yet. Agree a time with them, then record it below.</p>}
+          <form action={markMeetingBooked} className="rp-book-confirm">
+            <p className="rp-book-step"><b>3</b> Booked it? Tell SKOX</p>
+            <input type="hidden" name="dealId" value={lead.id} />
+            <div className="rp-book-confirm-row">
+              <div className="field">
+                <label htmlFor="meet-day">Day</label>
+                <input id="meet-day" name="day" type="date" min={today} required />
+              </div>
+              <div className="field">
+                <label htmlFor="meet-time">Time (Eastern)</label>
+                <input id="meet-time" name="time" maxLength={40} placeholder="2:30pm" />
+              </div>
+              <div className="field rp-book-note">
+                <label htmlFor="meet-note">Note for SKOX</label>
+                <input id="meet-note" name="note" maxLength={1000} placeholder="What they want, who'll join" />
+              </div>
+              <SubmitButton className="btn btn-primary" pendingLabel="Saving…">Mark booked</SubmitButton>
+            </div>
+          </form>
+        </section>
+      )}
 
       <div className="rp-section rp-split" style={{ marginTop: 36 }}>
         <div>
@@ -80,35 +126,6 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
           {canWork && (
             <div className="rp-panel">
               <LogCallForm action={logRepCall} dealId={lead.id} today={today} base="/rep/leads" back="" nextId={nextId} nextStep={lead.nextStep} />
-            </div>
-          )}
-          {canWork && (
-            <div className="rp-panel" data-accent>
-              <h2>{lead.status === "booked" ? "Call booked" : "Book the scope call"}</h2>
-              <p>
-                {lead.status === "booked"
-                  ? "If the time changed, book it again with the new time."
-                  : "This is the win. When they agree to talk, pick a time on SKOX's calendar, then record it here. SKOX runs the call and handles all pricing."}
-                {ws?.schedulingUrl && <> <a href={ws.schedulingUrl} target="_blank" rel="noreferrer" style={{ color: "var(--amber)" }}>Open SKOX&apos;s calendar ↗</a></>}
-              </p>
-              <form action={markMeetingBooked} className="rp-form">
-                <input type="hidden" name="dealId" value={lead.id} />
-                <div className="rp-grid2">
-                  <div className="field">
-                    <label htmlFor="meet-day">Day of the call</label>
-                    <input id="meet-day" name="day" type="date" min={today} required />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="meet-time">Time (Eastern)</label>
-                    <input id="meet-time" name="time" maxLength={40} placeholder="2:30pm" />
-                  </div>
-                </div>
-                <div className="field">
-                  <label htmlFor="meet-note">Anything SKOX should know</label>
-                  <textarea id="meet-note" name="note" rows={2} maxLength={1000} placeholder="What they want, who'll be on the call" />
-                </div>
-                <div><SubmitButton className="btn btn-primary" pendingLabel="Saving…">Mark call booked</SubmitButton></div>
-              </form>
             </div>
           )}
           <div className="rp-panel">

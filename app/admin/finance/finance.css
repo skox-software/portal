@@ -154,3 +154,23 @@
 .frunway-legend-dash{background:repeating-linear-gradient(90deg,var(--amber) 0 3px,transparent 3px 6px)!important}
 .frunway-legend-hatch{background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--amber) 45%,transparent) 0 2px,transparent 2px 5px)}
 @media(max-width:760px){.frunway-figures{grid-template-columns:1fr}.frunway-chart{grid-template-rows:180px auto}.frunway-x span[data-minor]{display:none}}
+
+/* Heat map: a year of days. */
+.fheat{display:grid;gap:16px}
+.fheat-top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.fheat-summary{font-size:13px;color:var(--muted)}
+.fheat-summary b{font:500 13px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.fheat-scroll{overflow-x:auto;direction:rtl;scrollbar-width:thin}
+.fheat-grid{direction:ltr;display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;gap:8px 8px;min-width:640px}
+.fheat-months{grid-column:2;display:grid;grid-template-columns:repeat(var(--weeks),minmax(0,1fr));gap:3px;font-size:11px;color:var(--muted);height:16px}
+.fheat-months span{white-space:nowrap;overflow:visible}
+.fheat-days{grid-column:1;grid-row:2;display:grid;grid-template-rows:repeat(7,minmax(0,1fr));gap:3px;font-size:10px;color:var(--muted);align-items:center}
+.fheat-cells{grid-column:2;grid-row:2;display:grid;grid-template-columns:repeat(var(--weeks),minmax(0,1fr));grid-template-rows:repeat(7,auto);grid-auto-flow:column;gap:3px}
+.fheat-cells i,.fheat-legend i{display:block;aspect-ratio:1;border-radius:3px;background:var(--fog)}
+.fheat-cells i.fheat-blank{background:transparent}
+.fheat-cells i[data-level]:hover{outline:1px solid var(--ink);outline-offset:1px}
+.fheat [data-level="1"]{--heat:25%}.fheat [data-level="2"]{--heat:48%}.fheat [data-level="3"]{--heat:72%}.fheat [data-level="4"]{--heat:100%}
+.fheat-cells i[data-level]:not([data-level="0"]),.fheat-legend i:not([data-level="0"]){background:color-mix(in srgb,var(--amber) var(--heat),var(--fog))}
+.fheat-legend{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--muted)}
+.fheat-legend i{width:12px;height:12px}
+.fheat-legend span{margin:0 4px}

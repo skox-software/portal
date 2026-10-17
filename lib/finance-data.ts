@@ -260,3 +260,40 @@ export async function unpaidStatements(ws: string) {
     .where(and(eq(commissionStatements.workspaceId, ws), inArray(commissionStatements.status, ["draft", "approved"])));
   return rows.map((r) => ({ periodEnd: r.periodEnd, totalCents: Number(r.totalCents) })).filter((r) => r.totalCents > 0);
 }
+
+export const HEAT_METRICS = ["cash", "won", "calls"] as const;
+export type HeatMetric = (typeof HEAT_METRICS)[number];
+
+/**
+ * One number per sales-time-zone day for the heat map: cash collected (cents),
+ * deals won (count, by `won_at`) or calls logged (count, from the audit trail).
+ */
+export async function dailyActivity(ws: string, metric: HeatMetric, startIso: string, endIso: string) {
+  const db = getDb();
+  const range = { startIso, endIso, bucket: "day" } as PeriodRange;
+  const day = (column: unknown) => sql<string>`to_char((${column} at time zone ${TZ})::date, 'YYYY-MM-DD')`;
+  let rows: { key: string; value: number }[];
+  if (metric === "cash") {
+    const key = day(invoices.paidAt);
+    rows = await db
+      .select({ key, value: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int` })
+      .from(invoices)
+      .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "paid"), isNotNull(invoices.paidAt), inPeriod(invoices.paidAt, range)))
+      .groupBy(key);
+  } else if (metric === "won") {
+    const key = day(deals.wonAt);
+    rows = await db
+      .select({ key, value: sql<number>`count(*)::int` })
+      .from(deals)
+      .where(and(eq(deals.workspaceId, ws), isWon, isNotNull(deals.wonAt), inPeriod(deals.wonAt, range)))
+      .groupBy(key);
+  } else {
+    const key = day(events.createdAt);
+    rows = await db
+      .select({ key, value: sql<number>`count(*)::int` })
+      .from(events)
+      .where(and(eq(events.workspaceId, ws), eq(events.verb, "deal.call_logged"), inPeriod(events.createdAt, range)))
+      .groupBy(key);
+  }
+  return new Map(rows.map((r) => [r.key, Number(r.value)]));
+}

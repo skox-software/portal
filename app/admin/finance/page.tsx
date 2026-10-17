@@ -9,11 +9,12 @@ import { ActivityFeed } from "@/components/finance/ActivityFeed";
 import { LiveProvider } from "@/components/finance/LiveProvider";
 import { LiveTicker } from "@/components/finance/LiveTicker";
 import { requireStaff } from "@/lib/access";
+import { HeatMap } from "@/components/finance/HeatMap";
 import { MoneyFlow } from "@/components/finance/MoneyFlow";
 import { Runway } from "@/components/finance/Runway";
-import { collectedByBucket, dealsWonByOwner, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
+import { collectedByBucket, dailyActivity, dealsWonByOwner, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
 import { balanceSeries, projectForward } from "@/lib/forecast-math";
-import { salesToday } from "@/lib/follow-up";
+import { addDays, salesToday } from "@/lib/follow-up";
 import { liveSnapshot } from "@/lib/finance-live";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
 import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, stripeTreasury, type StripeRead } from "@/lib/finance-stripe";
@@ -38,9 +39,12 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const period = parsePeriod(typeof sp.period === "string" ? sp.period : undefined);
   const fresh = sp.fresh === "1";
   const range = periodRange(period);
+  const heat: HeatMetric = HEAT_METRICS.includes(sp.heat as HeatMetric) ? (sp.heat as HeatMetric) : "cash";
+  const today = salesToday();
+  const yearStart = addDays(today, -364);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -57,6 +61,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     sharesByOwner(ws, range),
     openInvoiceDues(ws),
     unpaidStatements(ws),
+    dailyActivity(ws, heat, yearStart, today),
   ]);
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
@@ -112,7 +117,6 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   };
 
   // Runway: walk the balance back through the period from today's figure, then project 60 days on.
-  const today = salesToday();
   const runwayBalance = hasTreasury ? treasury.data.cash : balance.ok ? balance.data.available + balance.data.pending : null;
   const runway =
     runwayBalance !== null && activity.ok
@@ -134,7 +138,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
           <p className="muted">Stripe balance and payouts, cash collected, money owed, deals won and commission. {range.label}, in Florida time.</p>
         </div>
         <div className="finance-head-actions">
-          <PeriodSwitcher path="/admin/finance" current={period} />
+          <PeriodSwitcher path="/admin/finance" current={period} params={heat === "cash" ? {} : { heat }} />
           {connected && <Link className="btn btn-ghost btn-small" href={`/admin/finance?period=${period}&fresh=1`}>Refresh Stripe</Link>}
         </div>
       </div>
@@ -178,6 +182,15 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         </div>
         <div className="finance-body">
           {runway ? <Runway {...runway} /> : <p className="small muted">{connected ? "The runway draws from Stripe's balance and activity, which aren't available right now." : "Connect Stripe to see the balance over time and where it's heading."}</p>}
+        </div>
+      </section>
+
+      <section className="admin-panel finance-section" aria-labelledby="heat-title" id="heat">
+        <div className="admin-panel-head">
+          <div><h2 id="heat-title">The year, day by day</h2><p>The last 12 months in Florida time, whatever the period above. Hover a day for its number.</p></div>
+        </div>
+        <div className="finance-body">
+          <HeatMap metric={heat} values={heatValues} startIso={yearStart} endIso={today} hrefFor={(m) => `/admin/finance?${new URLSearchParams({ period, ...(m === "cash" ? {} : { heat: m }) })}#heat`} />
         </div>
       </section>
 

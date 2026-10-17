@@ -123,3 +123,49 @@ function round(n: number) {
 export function polyline(points: [number, number][]) {
   return points.map(([x, y]) => `${round(x)},${round(y)}`).join(" ");
 }
+
+/**
+ * Five shades for a heat map: 0 for nothing, then 1–4 by quartile of the
+ * days that had something, so one huge day doesn't wash the rest out.
+ */
+export function heatScale(values: number[]) {
+  const sorted = values.filter((v) => v > 0).sort((a, b) => a - b);
+  const q = (f: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * f))] : 0);
+  const thresholds = [q(0.25), q(0.5), q(0.75)];
+  const level = (v: number) => (v <= 0 ? 0 : v <= thresholds[0] ? 1 : v <= thresholds[1] ? 2 : v <= thresholds[2] ? 3 : 4);
+  return { thresholds, level, max: sorted.at(-1) ?? 0 };
+}
+
+export type CalendarCell = { date: string | null; week: number; dow: number };
+
+const DAY_MS = 86_400_000;
+const isoPlus = (iso: string, days: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * A GitHub-style calendar: one column per week, Sunday at the top, covering
+ * `startIso`..`endIso` (calendar dates, already in the sales time zone).
+ * Cells before the start or after the end have no date. A year is at most
+ * 53 columns. `months` gives the column where each month's first day falls.
+ */
+export function calendarGrid(startIso: string, endIso: string) {
+  const startDow = new Date(`${startIso}T12:00:00Z`).getUTCDay();
+  const first = isoPlus(startIso, -startDow);
+  const span = Math.round((Date.parse(`${endIso}T12:00:00Z`) - Date.parse(`${first}T12:00:00Z`)) / DAY_MS) + 1;
+  const weeks = Math.max(1, Math.ceil(span / 7));
+  const cells: CalendarCell[] = [];
+  const months: { week: number; label: string; key: string }[] = [];
+  for (let week = 0; week < weeks; week++) {
+    for (let dow = 0; dow < 7; dow++) {
+      const iso = isoPlus(first, week * 7 + dow);
+      const inside = iso >= startIso && iso <= endIso;
+      cells.push({ date: inside ? iso : null, week, dow });
+      if (inside && (iso.endsWith("-01") || iso === startIso)) {
+        const label = new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short" });
+        months.push({ week, label, key: iso.slice(0, 7) });
+      }
+    }
+  }
+  // A partial first month shares its column with the next: keep only the real month start.
+  const clean = months.filter((m, i) => !(i === 0 && months[1] && months[1].week - m.week < 2 && !startIso.endsWith("-01")));
+  return { weeks, cells, months: clean };
+}

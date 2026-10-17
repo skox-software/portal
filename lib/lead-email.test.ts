@@ -21,3 +21,9 @@ test("signature links to SKOX while user content stays escaped", () => {
   assert.doesNotMatch(mail.html, /<script>/);
   assert.match(mail.text, /SKOX Software \(https:\/\/www.skoxsoftware.com\)/);
 });
+
+ test("standalone preview links are clickable and HTML escaped", () => {
+ const mail = leadEmailPayload("lead@example.com", "Preview", 'https://example.com/preview/?a=1&b="x"\njavascript:alert(1)');
+ assert.ok(mail.html.includes('<a href="https://example.com/preview/?a=1&amp;b=&quot;x&quot;">'));
+ assert.ok(!mail.html.includes('href="javascript:'));
+ });

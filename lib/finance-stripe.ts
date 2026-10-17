@@ -11,7 +11,8 @@ import { sumBalanceTransactions } from "@/lib/fee-math";
  * The portal's own numbers never wait on these.
  *
  * Read permissions the key needs: Balance (includes balance transactions),
- * Payouts, Charges and PaymentIntents. See docs/FINANCE.md.
+ * Payouts, Charges, PaymentIntents and, for the business account, Treasury
+ * financial accounts. See docs/FINANCE.md.
  */
 
 export type StripeRead<T> = { ok: true; data: T } | { ok: false; reason: string };
@@ -56,6 +57,30 @@ export function stripeBalance(fresh = false) {
   return cached("balance", BALANCE_TTL_MS, fresh, async () => {
     const b = await stripeClient().balance.retrieve({}, REQUEST);
     return { available: usd(b.available), pending: usd(b.pending) };
+  });
+}
+
+export type TreasuryAccount = { id: string; last4: string | null; cash: number; inboundPending: number; outboundPending: number };
+
+/**
+ * SKOX's money sits in a Stripe Treasury business account, not the payments
+ * balance: "Earnings auto-transfer" sweeps each payment there, so the
+ * payments balance reads $0 and no payouts to a bank exist. This is the
+ * balance Josh and Reiss mean when they say "the account".
+ */
+export function stripeTreasury(fresh = false) {
+  return cached("treasury", BALANCE_TTL_MS, fresh, async () => {
+    const list = await stripeClient().treasury.financialAccounts.list({ limit: 5 }, REQUEST);
+    const accounts: TreasuryAccount[] = list.data
+      .filter((fa) => fa.status === "open")
+      .map((fa) => ({
+        id: fa.id,
+        last4: fa.financial_addresses?.find((a) => a.aba?.account_number_last4)?.aba?.account_number_last4 ?? null,
+        cash: fa.balance.cash.usd ?? 0,
+        inboundPending: fa.balance.inbound_pending.usd ?? 0,
+        outboundPending: fa.balance.outbound_pending.usd ?? 0,
+      }));
+    return { accounts, cash: accounts.reduce((s, a) => s + a.cash, 0), inboundPending: accounts.reduce((s, a) => s + a.inboundPending, 0) };
   });
 }
 

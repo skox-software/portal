@@ -11,7 +11,7 @@ const items = [
   ["/admin/projects", "Projects", "▦"],
   ["/admin/billing", "Billing", "$"],
   ["/admin/finance", "Finance", "◔"],
-  ["/admin/reps", "Sales reps", "☍"],
+  ["/admin/reps", "Team", "☍"],
   ["/admin/commissions", "Commissions", "%"],
   ["/admin/requests", "Requests", "↗"],
   ["/admin/activity", "Activity", "◷"],

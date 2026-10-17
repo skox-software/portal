@@ -13,7 +13,7 @@ import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { portalLink } from "@/lib/notify";
-import { canApproveCommissions, isStaffRole, isValidRateFor, normalizeEmail, PARTNER_RATE_MAX_BPS, REP_RATE_MAX_BPS, REP_RATE_MIN_BPS, type PortalRole } from "@/lib/permissions";
+import { canApproveCommissions, isStaffRole, isValidRateFor, normalizeEmail, FOUNDER_RATE_BPS, REP_RATE_MAX_BPS, type PortalRole } from "@/lib/permissions";
 
 const BACK = "/admin/reps";
 
@@ -24,14 +24,14 @@ async function requireOwner() {
   return ctx;
 }
 
-/** The rate field, checked against the cap for the person's role: reps 10–20%, staff partners 10–50%. */
+/** The rate field, checked against the cap for the person's role: reps 20%, founders 100%. */
 function rateFrom(formData: FormData, role: PortalRole) {
   const bps = parseRatePercent(String(formData.get("rate") ?? ""));
   return bps !== null && isValidRateFor(role, bps) ? bps : null;
 }
 
 function rateRange(role: PortalRole) {
-  return `between ${formatRate(REP_RATE_MIN_BPS)} and ${formatRate(isStaffRole(role) ? PARTNER_RATE_MAX_BPS : REP_RATE_MAX_BPS)}`;
+  return formatRate(isStaffRole(role) ? FOUNDER_RATE_BPS : REP_RATE_MAX_BPS);
 }
 
 export async function inviteRep(formData: FormData) {
@@ -59,11 +59,11 @@ export async function inviteRep(formData: FormData) {
     eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "rep.invited", subjectType: "membership", subjectId: membershipId, payload: { email, displayName, rateBps } }),
   ]);
   await sendEmail([email], {
-    subject: "Your SKOX partner account is ready",
+    subject: "Your SKOX sales rep account is ready",
     preheader: `You earn ${formatRate(rateBps)} of every payment from clients you bring.`,
     heading: `Welcome, ${displayName.split(" ")[0]}`,
     paragraphs: [
-      "Your SKOX sales partner account is set up. It's where you'll find the leads we assign you, submit your own, book scope calls, and track every dollar you earn.",
+      "Your SKOX sales rep account is set up. It's where you'll find the leads we assign you, submit your own, book scope calls, and track every dollar you earn.",
       `You earn ${formatRate(rateBps)} of every payment SKOX collects from clients you bring in, for as long as they stay a client.`,
       "Sign in with this email address. We'll send you a 6-digit code; there's no password.",
     ],
@@ -132,12 +132,12 @@ export async function updateRep(formData: FormData) {
 }
 
 /**
- * Gives someone on the SKOX team a share of what they close (Reiss: 50%).
+ * Gives someone on the SKOX team a share of what they close (100% on their own deals; 40% each on rep deals).
  * It's a commission profile on their existing staff membership, so earnings,
  * statements and payouts work exactly as for a rep, on the full invoice
  * amount. They keep staff access; no invite or welcome email is sent.
  */
-export async function addPartnerShare(formData: FormData) {
+export async function addFounderShare(formData: FormData) {
   const { viewer, staff } = await requireOwner();
   const parsed = z
     .object({ membershipId: z.uuid(), displayName: z.string().trim().min(2).max(80), startedOn: z.union([z.literal(""), z.iso.date()]) })
@@ -151,7 +151,7 @@ export async function addPartnerShare(formData: FormData) {
     .leftJoin(repProfiles, eq(repProfiles.membershipId, memberships.id))
     .where(and(eq(memberships.id, membershipId), eq(memberships.workspaceId, staff.workspaceId), isNull(memberships.clientId)))
     .limit(1);
-  if (!member || !isStaffRole(member.role)) backWith(BACK, "error", "Partner shares are for SKOX team members. Invite outside sellers as reps.");
+  if (!member || !isStaffRole(member.role)) backWith(BACK, "error", "Founder earnings are for existing SKOX founder accounts. Invite sales reps separately.");
   if (member.profile) backWith(BACK, "error", `${member.email} already has a commission profile. Edit it below.`);
   const rateBps = rateFrom(formData, member.role);
   if (rateBps === null) backWith(BACK, "error", `The share must be ${rateRange(member.role)}.`);

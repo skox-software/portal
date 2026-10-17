@@ -9,7 +9,7 @@ import { canApproveCommissions, STAFF_ROLES, staffMembershipIn } from "@/lib/per
  * their 1099-NEC. Counts statements by the day they were marked paid,
  * because a 1099 reports money paid in the year. Workspace owner only.
  *
- * Only outside reps: a staff partner's share is an owner draw, not
+ * Only outside reps: a founder's share is an owner draw, not
  * contractor pay, so it never belongs on a 1099.
  */
 export async function GET(request: Request) {

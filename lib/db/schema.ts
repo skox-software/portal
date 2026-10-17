@@ -865,8 +865,8 @@ export const commissionEntries = pgTable(
       .references(() => memberships.id, { onDelete: "restrict" }),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+    reversalOf: uuid("reversal_of").unique(),
     refundId: uuid("refund_id")
-      .unique()
       .references(() => invoiceRefunds.id, { onDelete: "set null" }),
     kind: commissionKind("kind").notNull(),
     /** What the rate applied to: the invoice paid, or the refund. Zero for adjustments. */
@@ -887,8 +887,9 @@ export const commissionEntries = pgTable(
   (t) => [
     // One earning per payment: a webhook retry carries the same paid-at time and is ignored.
     uniqueIndex("commission_entries_earned_payment_key")
-      .on(t.invoiceId, t.earnedAt)
+      .on(t.invoiceId, t.earnedAt, t.repMembershipId)
       .where(sql`kind = 'earned'`),
+    unique("commission_entries_refund_rep_key").on(t.refundId, t.repMembershipId),
     index("commission_entries_rep_idx").on(t.repMembershipId, t.earnedAt),
     index("commission_entries_statement_idx").on(t.statementId),
   ],

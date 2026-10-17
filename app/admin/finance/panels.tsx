@@ -30,7 +30,7 @@ function Panel({ id, title, intro, action, children, className }: { id: string; 
 
 export function FlowPanel({ m, wall }: PanelProps) {
   return (
-    <Panel id="flow" title="Money flow" intro={`Open pipeline (weighted), won, invoiced and paid in ${m.range.label.toLowerCase()}, then where the paid money went.${wall ? "" : " Hover a band for the amount."}`} className="fpanel-hero">
+    <Panel id="flow" title="Money flow" intro={`Open pipeline (weighted), won, invoiced and paid in ${m.range.label.toLowerCase()}, then earned shares before business expenses.${wall ? "" : " Hover a band for the amount."}`} className="fpanel-hero">
       <MoneyFlow input={m.flow} periodLabel={m.range.label} height={wall ? 480 : 340} />
     </Panel>
   );

@@ -16,15 +16,11 @@ stays light. Top to bottom:
    last poll; "reconnecting" means the last poll failed and it will try
    again; "paused, sign in again" means the session lapsed.
 2. **Metric strip** (below), then **Money flow**: a Sankey from the open
-   pipeline (weighted) to won, invoiced and paid in the period, then where
-   the paid money went: Stripe fees, refunds, each person's commission share
-   (Reiss's partner share and any rep) and what stayed in the business
-   account. Pipeline, won and invoiced are different measures of the same
-   period rather than one pot of money, so each band carries what the two
-   stages share (the smaller); from Paid on it is a true split, scaled down
-   if fees and refunds from earlier payments would exceed it. Fees and
-   refunds come from Stripe when it answers (refunds fall back to the
-   portal's). Hover a band for its amount and share of the previous stage.
+   pipeline (weighted) to won, invoiced and paid in the period, then earned
+   shares and unallocated gross. These are ownership amounts, not cash paid
+   out. Fees, refunds and business expenses are separate cash measures and
+   never scale down the displayed earned shares. The unallocated figure is
+   not the current business account balance.
 3. **Runway**: the balance through the period, walked back day by day from
    today's balance using Stripe's balance transactions, then 60 days ahead
    assuming every open invoice is paid on its due date (overdue ones
@@ -170,9 +166,13 @@ Treasury one.
 The dashboard shows it first as **Business account**; the payments balance is
 the second card; "Next payout" appears only when a payout exists.
 
-## Partner share
+## Deal ownership
 
-Reiss earns 50% of every paid invoice on projects credited to him, on the full
-invoice amount. It is a commission profile on his staff membership; see
-"Partner shares" in `docs/REPS.md`. His owed commission appears in the Team
-table here and on `/admin/commissions`.
+Reiss earns 100% on his own deals, Josh earns 100% on his own deals, and
+rep-owned deals split 20% to the rep and 40% to each founder. Shares apply to
+gross paid invoice amounts before Stripe fees or business expenses. Actual
+client refunds reverse the corresponding earnings. See `docs/REPS.md`.
+
+Lorenzen Motors has two paid $625 invoices credited to Reiss: $1,250 earned.
+The separately incurred $300 business expense changes available cash, not
+that ownership amount. Commission owed and the business balance are distinct.

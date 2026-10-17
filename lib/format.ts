@@ -172,8 +172,8 @@ export const RESOURCE_KIND_LABEL = {
 } as const;
 
 export const ROLE_LABEL = {
-  staff_owner: "SKOX owner",
-  staff: "SKOX team",
+  staff_owner: "Founder",
+  staff: "Founder",
   client_approver: "Approver",
   client_member: "Team member",
   rep: "Sales rep",

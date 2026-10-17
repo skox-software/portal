@@ -11,7 +11,7 @@ import { repProfiles } from "@/lib/db/schema";
 import "./rep.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: { default: "Partner Desk", template: "%s · SKOX Partner Desk" } };
+export const metadata: Metadata = { title: { default: "Sales Rep Desk", template: "%s · SKOX Sales Rep Desk" } };
 
 /**
  * The sales rep's desk. A world of its own: separate from /admin and from
@@ -30,9 +30,9 @@ export default async function RepLayout({ children }: { children: React.ReactNod
     <div className="rp">
       <a className="rp-skip" href="#rp-main">Skip to content</a>
       <header className="rp-bar">
-        <Link className="rp-brand" href="/rep" aria-label="SKOX Partner Desk home">
+        <Link className="rp-brand" href="/rep" aria-label="SKOX Sales Rep Desk home">
           <SkoxLogo />
-          <span>PARTNER</span>
+          <span>SALES REP</span>
         </Link>
         <RepNav />
         {profile?.status === "paused" && <span className="rp-paused">Paused</span>}

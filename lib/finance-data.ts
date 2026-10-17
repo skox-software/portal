@@ -230,7 +230,7 @@ export async function invoicedInPeriod(ws: string, range: PeriodRange) {
 }
 
 /**
- * Commission earned in the period per person: Reiss's partner share and any
+ * Commission earned in the period per person: Reiss's founder share and any
  * rep's, net of clawbacks, voided lines left out. Dated by when the money
  * moved (`earned_at`), like the statements.
  */

@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients, documents, documentSigners, invoices, onboardings, projects } from "@/lib/db/schema";
 import { nextStep, progress, shouldRemind, stepsFor } from "@/lib/onboarding-flow";
@@ -6,7 +6,11 @@ import { agreementState, welcomeLink } from "@/lib/onboarding-server";
 import { timingSafeEqual } from "node:crypto";
 import { sendWeeklyDigests } from "@/lib/digest";
 import { previousMonth, periodLabel } from "@/lib/commission-math";
-import { salesToday } from "@/lib/follow-up";
+import { describeFollowUp, remindersByPerson, salesToday } from "@/lib/follow-up";
+import { dueFollowUps } from "@/lib/follow-up-data";
+import { staffOf } from "@/lib/staff-filter";
+import { eventInsert } from "@/lib/events";
+import { events, memberships, workspaces } from "@/lib/db/schema";
 import { draftStatements } from "@/lib/statements";
 import { repProfiles } from "@/lib/db/schema";
 import { pruneRateEvents } from "@/lib/rate-limit";
@@ -178,5 +182,57 @@ export async function GET(request: Request) {
     }
   }
 
-  return Response.json({ ok: true, sent, digests, statements });
+  // Follow-ups due today or overdue: one email per person, once a day.
+  let followUps = 0;
+  try {
+    followUps = await sendFollowUpReminders(now);
+  } catch (error) {
+    console.error("[cron] follow-up reminders failed", error);
+  }
+
+  return Response.json({ ok: true, sent, digests, statements, followUps });
+}
+
+/**
+ * The morning reminder: each person gets one email listing the leads and
+ * clients they said they'd get back to, due today or overdue. Unowned ones go
+ * to the whole team. A `follow_up.reminded` event per person per day stops a
+ * second email if the cron runs twice.
+ */
+async function sendFollowUpReminders(now: Date) {
+  const db = getDb();
+  const today = salesToday(now);
+  let sent = 0;
+  for (const { id: ws } of await db.select({ id: workspaces.id }).from(workspaces)) {
+    const due = await dueFollowUps(ws, today);
+    if (!due.length) continue;
+    const team = (await db.select({ email: memberships.email }).from(memberships).where(staffOf(ws))).map((m) => m.email.toLowerCase());
+    const already = new Set(
+      (
+        await db
+          .select({ who: events.subjectId })
+          .from(events)
+          .where(and(eq(events.workspaceId, ws), eq(events.verb, "follow_up.reminded"), sql`${events.payload}->>'date' = ${today}`))
+      ).map((e) => e.who),
+    );
+    for (const [email, items] of remindersByPerson(due, team)) {
+      if (already.has(email)) continue;
+      const overdue = items.filter((i) => i.dueOn < today).length;
+      const shown = items.slice(0, 25);
+      await sendEmail(email, {
+        subject: `${items.length} follow-up${items.length === 1 ? "" : "s"} today${overdue ? ` (${overdue} overdue)` : ""}`,
+        preheader: shown.slice(0, 3).map((i) => i.name).join(", ") + (items.length > 3 ? "…" : ""),
+        heading: items.length === 1 ? `Reach back out to ${items[0].name}` : `${items.length} people to reach back out to`,
+        paragraphs: [
+          "These are the leads and clients you set a reminder for. Open one to call or email, then mark it done or move it to another day.",
+          ...(items.length > shown.length ? [`Showing the first ${shown.length}; the rest are on the Clients page under Due today.`] : []),
+        ],
+        details: shown.map((i) => ({ label: i.name, value: [describeFollowUp(i.dueOn, today), i.note].filter(Boolean).join(" · ") })),
+        cta: { label: "Open today's follow-ups", href: portalLink("/admin/clients?view=due") },
+      });
+      await eventInsert({ workspaceId: ws, actorId: "system", verb: "follow_up.reminded", subjectType: "membership", subjectId: email, payload: { date: today, count: items.length } });
+      sent++;
+    }
+  }
+  return sent;
 }

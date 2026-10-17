@@ -81,6 +81,54 @@ export function stageAfterCall(stage: DealStage, outcome: Outcome): DealStage {
   return stage;
 }
 
+/** A Saturday or Sunday reminder moves to Monday: nobody works the list at the weekend. */
+export function onWorkday(iso: string) {
+  const dow = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return dow === 6 ? addDays(iso, 2) : dow === 0 ? addDays(iso, 1) : iso;
+}
+
+/** Adds calendar months, clamped to the month's last day (Jan 31 + 1 month = Feb 28). */
+export function addMonths(iso: string, months: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d, last));
+  return target.toISOString().slice(0, 10);
+}
+
+/** "Remind me in…" picks, from today. Each lands on a workday. */
+export const REMIND_IN = [
+  { key: "1d", label: "Tomorrow" },
+  { key: "3d", label: "3 days" },
+  { key: "1w", label: "1 week" },
+  { key: "2w", label: "2 weeks" },
+  { key: "1m", label: "1 month" },
+  { key: "3m", label: "3 months" },
+] as const;
+export type RemindInKey = (typeof REMIND_IN)[number]["key"];
+
+export function remindIn(key: RemindInKey, today: string) {
+  switch (key) {
+    case "1d":
+      return addWorkdays(today, 1);
+    case "3d":
+      return onWorkday(addDays(today, 3));
+    case "1w":
+      return onWorkday(addDays(today, 7));
+    case "2w":
+      return onWorkday(addDays(today, 14));
+    case "1m":
+      return onWorkday(addMonths(today, 1));
+    case "3m":
+      return onWorkday(addMonths(today, 3));
+  }
+}
+
+/** A follow-up is due once its day arrives, and stays due until someone acts. */
+export function isDue(nextStepOn: string | null, today: string) {
+  return !!nextStepOn && nextStepOn <= today;
+}
+
 export type FollowUpState = "overdue" | "today" | "upcoming" | "none";
 
 export function followUpState(nextStepOn: string | null, today: string): FollowUpState {
@@ -121,4 +169,31 @@ export function nextStepAfterCall(outcome: Outcome, gatekeeper: string) {
   if (outcome === "no_answer") return "Call again";
   if (outcome === "voicemail") return "Call again after the voicemail";
   return null;
+}
+
+/** A follow-up whose day has come, from a lead or a client account. */
+export type DueFollowUp = {
+  kind: "deal" | "client";
+  id: string;
+  name: string;
+  dueOn: string;
+  note: string | null;
+  /** Who should be reminded: the lead's owner or the client's reminder owner. Null means nobody in particular. */
+  owner: string | null;
+  /** Where to open it, under the portal's base path. */
+  href: string;
+};
+
+/**
+ * Groups due follow-ups by the person to remind. Items with no owner, or an
+ * owner who isn't on the team any more, go to everyone on the team.
+ */
+export function remindersByPerson(items: DueFollowUp[], team: string[]) {
+  const people = new Map(team.map((email) => [email.toLowerCase(), [] as DueFollowUp[]]));
+  for (const item of items) {
+    const owner = item.owner && people.has(item.owner) ? item.owner : null;
+    if (owner) people.get(owner)!.push(item);
+    else for (const list of people.values()) list.push(item);
+  }
+  return [...people].filter(([, list]) => list.length > 0);
 }

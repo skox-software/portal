@@ -2,6 +2,8 @@ import { and, count, eq, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
+import { salesToday } from "@/lib/follow-up";
+import { dueFollowUps } from "@/lib/follow-up-data";
 import { emailThreads } from "@/lib/db/schema";
 import { signOut } from "@/app/actions";
 import { AdminNav } from "@/components/AdminNav";
@@ -19,11 +21,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .select({ n: count() })
     .from(emailThreads)
     .where(and(eq(emailThreads.workspaceId, staff.workspaceId), isNull(emailThreads.clientId), isNull(emailThreads.dealId), isNull(emailThreads.archivedAt)));
+  // Leads and clients whose follow-up day has come.
+  const dueCount = (await dueFollowUps(staff.workspaceId, salesToday())).length;
   return <div className="admin-workspace">
     <a className="admin-skip" href="#admin-content">Skip to content</a>
     <aside className="admin-sidebar" id="admin-sidebar">
       <Link className="admin-brand" href="/admin" aria-label="SKOX admin home"><SkoxLogo /><span>WORKSPACE</span></Link>
-      <p className="admin-nav-label">Manage your business</p><AdminNav inboxCount={inboxCount} />
+      <p className="admin-nav-label">Manage your business</p><AdminNav inboxCount={inboxCount} dueCount={dueCount} />
       <div className="admin-sidebar-bottom"><div className="admin-team-mark" aria-hidden="true" title={viewer.email}>S</div><div><strong>SKOX team</strong><Link href="/settings">{viewer.email}</Link></div></div>
       <div className="admin-sidebar-foot"><form action={signOut}><button className="admin-signout" title="Sign out">Sign out ↗</button></form><SidebarToggle /></div>
     </aside>
@@ -33,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       tabs={[
         { href: "/admin", label: "Overview", icon: "home", exact: true },
         { href: "/admin/pipeline", label: "Pipeline", icon: "pipeline" },
-        { href: "/admin/clients", label: "Clients", icon: "clients" },
+        { href: "/admin/clients", label: "Clients", icon: "clients", count: dueCount },
         { href: "/admin/inbox", label: "Inbox", icon: "mail", count: inboxCount },
       ]}
       more={[

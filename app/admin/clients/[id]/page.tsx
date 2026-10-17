@@ -2,9 +2,12 @@ import { and, asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FollowUpControl } from "@/components/FollowUpControl";
 import { Notice, readMessage } from "@/components/Notice";
 import { TopBar } from "@/components/TopBar";
 import { requireStaff } from "@/lib/access";
+import { salesToday } from "@/lib/follow-up";
+import { staffOf } from "@/lib/staff-filter";
 import { getDb } from "@/lib/db";
 import { clients, memberships, projects } from "@/lib/db/schema";
 import { formatDate, formatDateTime, kindLabel, PROJECT_KINDS, ROLE_LABEL, STATUS_LABEL, timeAgo, todayIso } from "@/lib/format";
@@ -33,10 +36,12 @@ export default async function ClientAdmin({
     : [];
   if (!client) notFound();
 
-  const [people, list] = await Promise.all([
+  const [people, list, team] = await Promise.all([
     db.select().from(memberships).where(eq(memberships.clientId, client.id)).orderBy(asc(memberships.createdAt)),
     db.select().from(projects).where(eq(projects.clientId, client.id)).orderBy(asc(projects.deliveryDate)),
+    db.select({ email: memberships.email }).from(memberships).where(staffOf(staff.workspaceId)).orderBy(asc(memberships.createdAt)),
   ]);
+  const today = salesToday();
 
   return (
     <>
@@ -133,6 +138,24 @@ export default async function ClientAdmin({
           </div>
 
           <aside>
+            <section className="card" aria-labelledby="followup-title">
+              <div className="card-head">
+                <h2 id="followup-title">Follow-up</h2>
+              </div>
+              <p className="muted small">When to reach back out to {client.name}, and what about. It shows on the Clients list and in the morning reminder email.</p>
+              <FollowUpControl
+                kind="client"
+                id={client.id}
+                name={client.name}
+                dueOn={client.nextStepOn}
+                note={client.nextStep}
+                owner={client.nextStepOwner}
+                owners={team.map((t) => t.email)}
+                me={viewer.email}
+                today={today}
+                mode="full"
+              />
+            </section>
             <section className="card" aria-labelledby="people-title">
               <div className="card-head">
                 <h2 id="people-title">Contacts & invoice recipients</h2>

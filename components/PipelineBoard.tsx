@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FollowUpControl } from "@/components/FollowUpControl";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
 import { isCallable, localTime, zoneShort } from "@/lib/local-time";
@@ -36,6 +37,9 @@ export type BoardCard = {
   /** "Due today", "Overdue 2d"… for deals with a follow-up set. */
   followUp: string | null;
   followUpState: "overdue" | "today" | "upcoming" | "none";
+  /** The follow-up's date and what it's for, so the card can change it in place. */
+  followUpOn: string | null;
+  nextStep: string | null;
   location: string | null;
   industry: string | null;
   /** The brief's CALL ABOUT: "NOT MOBILE", "SITE DOWN", "NO WEBSITE"… */
@@ -68,6 +72,7 @@ export function PipelineBoard({
   columns,
   owners,
   me,
+  today,
   initial,
   nowMs,
 }: {
@@ -75,6 +80,8 @@ export function PipelineBoard({
   columns: Column[];
   owners: string[];
   me: string;
+  /** Today in the sales time zone, from the server. */
+  today: string;
   initial: BoardView;
   /** The server's clock, so the first render matches; it ticks on from there. */
   nowMs: number;
@@ -380,10 +387,14 @@ export function PipelineBoard({
                           {reach(card)}
                           <div className="pipeline-card-meta">
                             {card.value && <strong className="pipeline-card-money">{card.value}</strong>}
-                            {card.followUp && (
-                              <span className="lead-due" data-state={card.followUpState}>
-                                {card.followUp}
-                              </span>
+                            {card.type === "deal" ? (
+                              <FollowUpControl kind="deal" id={card.id} name={card.company} dueOn={card.followUpOn} note={card.nextStep} today={today} />
+                            ) : (
+                              card.followUp && (
+                                <span className="lead-due" data-state={card.followUpState}>
+                                  {card.followUp}
+                                </span>
+                              )
                             )}
                             <span className={card.stalled ? "pipeline-stalled" : undefined}>
                               {card.meta}

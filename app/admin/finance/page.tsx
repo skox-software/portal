@@ -9,11 +9,12 @@ import { ActivityFeed } from "@/components/finance/ActivityFeed";
 import { LiveProvider } from "@/components/finance/LiveProvider";
 import { LiveTicker } from "@/components/finance/LiveTicker";
 import { requireStaff } from "@/lib/access";
+import { Funnel } from "@/components/finance/Funnel";
 import { HeatMap } from "@/components/finance/HeatMap";
 import { MoneyFlow } from "@/components/finance/MoneyFlow";
 import { Race } from "@/components/finance/Race";
 import { Runway } from "@/components/finance/Runway";
-import { collectedByBucket, dailyActivity, dealsWonByOwner, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, raceStandings, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
+import { collectedByBucket, dailyActivity, dealsWonByOwner, funnel, HEAT_METRICS, type HeatMetric, invoicedInPeriod, invoicesByPaymentIntent, leaderboard, openInvoiceDues, outstanding, raceStandings, refundsByBucket, sharesByOwner, unpaidStatements, weightedPipeline } from "@/lib/finance-data";
 import { balanceSeries, projectForward } from "@/lib/forecast-math";
 import { addDays, salesToday } from "@/lib/follow-up";
 import { liveSnapshot } from "@/lib/finance-live";
@@ -45,7 +46,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const yearStart = addDays(today, -364);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues, race] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live, invoiced, shares, dues, statementsDue, heatValues, race, funnelData] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -64,6 +65,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     unpaidStatements(ws),
     dailyActivity(ws, heat, yearStart, today),
     raceStandings(ws, today),
+    funnel(ws, range),
   ]);
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
@@ -201,6 +203,13 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
         <div className="finance-body">
           <HeatMap metric={heat} values={heatValues} startIso={yearStart} endIso={today} hrefFor={(m) => `/admin/finance?${new URLSearchParams({ period, ...(m === "cash" ? {} : { heat: m }) })}#heat`} />
         </div>
+      </section>
+
+      <section className="admin-panel finance-section" aria-labelledby="funnel-title">
+        <div className="admin-panel-head">
+          <div><h2 id="funnel-title">Funnel</h2><p>How many deals reached each stage in {range.label.toLowerCase()}, and how many went on. Click a stage to see those clients.</p></div>
+        </div>
+        <div className="finance-body"><Funnel {...funnelData} periodLabel={range.label} /></div>
       </section>
 
       <section className="admin-panel finance-section" aria-labelledby="revenue-title">

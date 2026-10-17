@@ -62,6 +62,18 @@ export function isValidRepRate(bps: number) {
   return Number.isInteger(bps) && bps >= REP_RATE_MIN_BPS && bps <= REP_RATE_MAX_BPS;
 }
 
+/**
+ * A partner share is a commission profile on a staff membership (Reiss's 50%
+ * on what he closes). It rides the same ledger as a rep, so only the cap
+ * differs: staff may go from 10% up to 50%. Clients never earn.
+ */
+export const PARTNER_RATE_MAX_BPS = 5000;
+export function isValidRateFor(role: PortalRole, bps: number) {
+  if (isRepRole(role)) return isValidRepRate(bps);
+  if (isStaffRole(role)) return Number.isInteger(bps) && bps >= REP_RATE_MIN_BPS && bps <= PARTNER_RATE_MAX_BPS;
+  return false;
+}
+
 export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }

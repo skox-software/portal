@@ -6,6 +6,7 @@ import {
   canInviteRole,
   canSign,
   canApproveCommissions,
+  isValidRateFor,
   isValidRepRate,
   normalizeEmail,
   repMembershipIn,
@@ -131,4 +132,14 @@ test("rep rates are whole basis points between 10% and 20%", () => {
   assert.equal(isValidRepRate(999), false);
   assert.equal(isValidRepRate(2001), false);
   assert.equal(isValidRepRate(12.5), false);
+});
+
+test("partner shares on staff go up to 50%, reps stay capped at 20%", () => {
+  assert.equal(isValidRateFor("staff", 5000), true);
+  assert.equal(isValidRateFor("staff_owner", 2500), true);
+  assert.equal(isValidRateFor("staff", 5001), false);
+  assert.equal(isValidRateFor("staff", 999), false);
+  assert.equal(isValidRateFor("rep", 5000), false);
+  assert.equal(isValidRateFor("rep", 1500), true);
+  assert.equal(isValidRateFor("client_approver", 1500), false);
 });

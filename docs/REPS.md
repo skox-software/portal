@@ -74,8 +74,11 @@ How the wall is enforced:
 
 ## Partner shares (staff who close their own deals)
 
-A partner is someone on the SKOX team who earns a share of what they close
-and deliver. Reiss (`reiss@skoxsoftware.com`, role `staff`) gets 50%.
+A partner is an owner of SKOX who takes a share of what they close and
+deliver. Reiss (`reiss@skoxsoftware.com`, co-owner, role `staff_owner`) gets
+50%. A partner's share is an **owner draw**, not contractor pay: it goes
+through the same ledger and monthly statements so both owners can see it,
+but it is never a 1099 amount.
 
 - **Setup:** owner only, on `/admin/reps` → "Add a partner share". It adds a
   `rep_profiles` row on their existing **staff** membership. No invite or
@@ -87,8 +90,9 @@ and deliver. Reiss (`reiss@skoxsoftware.com`, role `staff`) gets 50%.
   fee is not deducted (it is to be passed to the client separately).
 - **Ledger:** unchanged. Earnings, clawbacks, statements, approve and pay all
   key on `rep_profiles`, not the role. The partner shows a "Partner" chip on
-  `/admin/reps`, appears in the "Sales rep" pickers, and is in the 1099 export
-  once they have a profile.
+  `/admin/reps` and appears in the "Sales rep" pickers. The 1099 export
+  (`app/api/commissions/export`) skips staff roles, so partners never appear
+  in it.
 - **Crediting:** a project earns for the partner when its credited rep
   (`projects.rep_membership_id`) is the partner. Pick them as the project's
   "Sales rep" (or on the deal before onboarding). Owning the deal

@@ -51,7 +51,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
         <div>
           <p className="eyebrow">Sales team</p>
           <h1>Sales reps</h1>
-          <p className="muted">Outside reps work leads at /rep and earn their rate on every payment from clients they bring. They never see projects, pricing or anything about delivery. Partners are SKOX team members with a share of what they close; they keep full staff access.</p>
+          <p className="muted">Outside reps work leads at /rep and earn their rate on every payment from clients they bring. They never see projects, pricing or anything about delivery. Partners are SKOX owners taking a share of what they close: an owner draw tracked here so both of you can see it, never a 1099 amount.</p>
         </div>
         <Link className="btn btn-ghost" href="/admin/commissions">Commissions →</Link>
       </div>
@@ -127,7 +127,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
             {teamWithoutShare.length > 0 && (
               <form action={addPartnerShare} className="card stack">
                 <div className="card-head"><h2>Add a partner share</h2></div>
-                <p className="small muted">For someone on the SKOX team who closes and delivers their own deals. They earn their share of every paid invoice on projects credited to them, on the full invoice amount, and get monthly statements like a rep.</p>
+                <p className="small muted">For an owner who closes and delivers their own deals. Their share of every paid invoice on projects credited to them, on the full invoice amount, is tracked as an owner draw with monthly statements like a rep. It stays out of the 1099 export.</p>
                 <div className="field">
                   <label htmlFor="partner-member">Team member</label>
                   <select id="partner-member" name="membershipId" required>{teamWithoutShare.map((t) => <option key={t.id} value={t.id}>{t.email}</option>)}</select>

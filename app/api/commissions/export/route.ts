@@ -1,13 +1,16 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { getViewer } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { commissionStatements, memberships, repProfiles } from "@/lib/db/schema";
-import { canApproveCommissions, staffMembershipIn } from "@/lib/permissions";
+import { canApproveCommissions, STAFF_ROLES, staffMembershipIn } from "@/lib/permissions";
 
 /**
  * What each rep was paid, by month, for one calendar year: the numbers for
  * their 1099-NEC. Counts statements by the day they were marked paid,
  * because a 1099 reports money paid in the year. Workspace owner only.
+ *
+ * Only outside reps: a staff partner's share is an owner draw, not
+ * contractor pay, so it never belongs on a 1099.
  */
 export async function GET(request: Request) {
   const viewer = await getViewer();
@@ -32,6 +35,7 @@ export async function GET(request: Request) {
       and(
         eq(commissionStatements.workspaceId, staff.workspaceId),
         eq(commissionStatements.status, "paid"),
+        notInArray(memberships.role, [...STAFF_ROLES]),
         sql`extract(year from ${commissionStatements.paidAt} at time zone 'America/New_York') = ${year}`,
       ),
     )

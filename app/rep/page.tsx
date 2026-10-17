@@ -13,7 +13,7 @@ import { followUpState, salesToday } from "@/lib/follow-up";
 import { myEntries, myLeads, myProfile } from "@/lib/rep-data";
 import { REP_STATUSES, repCanWork } from "@/lib/rep-status";
 
-export const metadata = { title: { absolute: "Desk · SKOX Partner Desk" } };
+export const metadata = { title: { absolute: "Desk · SKOX Sales Rep Desk" } };
 
 function greeting(now = new Date()) {
   const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(now));

@@ -87,7 +87,7 @@ type Result = { ok: true; message: string } | { ok: false; message: string };
 
 /**
  * Where the statement email points. Reps read it in their own area; a staff
- * partner can't open /rep (it 404s for staff), so they get the ledger.
+ * founder can't open /rep (it 404s for staff), so they get the ledger.
  */
 function statementHref(found: NonNullable<Awaited<ReturnType<typeof statementWithRep>>>) {
   return isStaffRole(found.role)

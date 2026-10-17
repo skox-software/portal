@@ -77,12 +77,12 @@ How the wall is enforced:
 Founder-owned deals credit the assigned founder 100% of gross paid invoices.
 Rep-owned deals credit the rep 20% and each of the two founders 40%.
 Reiss uses `reiss@skoxsoftware.com`; Josh uses `founders@skoxsoftware.com`.
-Both founders have staff commission profiles. The separate “Josh Test” rep
+Both founders have founder earnings profiles. The separate “Josh Test” rep
 account is not Josh's founder account.
 
 Explicit project credit wins, followed by the linked deal's credited rep,
 then its founder owner. Conflicting deal ownership requires an explicit
-project credit. A rep deal requires exactly two staff partner profiles;
+project credit. A rep deal requires exactly two founder profiles;
 it fails rather than silently losing a founder's share if setup is incomplete.
 Profile rates are fixed at 100% for founders and 20% for reps. Each rep deal
 records 40% on the founders' actual ledger lines.
@@ -132,3 +132,7 @@ The $300 business expense does not reduce the $1,250 earned amount.
   brought. Keep them active if they should keep earning after they stop selling.
 - **Invoices voided after a Stripe payment** claw back as if refunded. Record a
   real refund instead when money actually went back.
+
+Team roles are displayed as **Founder** and **Sales rep**. The team page,
+account role labels, sales-rep desk and invitation emails use those names.
+Internal staff permission keys remain unchanged.

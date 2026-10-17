@@ -10,10 +10,10 @@ import { getDb } from "@/lib/db";
 import { deals, memberships, repProfiles } from "@/lib/db/schema";
 import { formatMoney, timeAgo, todayIso } from "@/lib/format";
 import { canApproveCommissions, isStaffRole, STAFF_ROLES } from "@/lib/permissions";
-import { addPartnerShare, inviteRep, updateRep } from "./actions";
+import { addFounderShare, inviteRep, updateRep } from "./actions";
 import "./reps-admin.css";
 
-export const metadata: Metadata = { title: "Sales reps" };
+export const metadata: Metadata = { title: "Team" };
 
 export default async function AdminReps({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
@@ -35,7 +35,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
       .from(deals)
       .where(and(eq(deals.workspaceId, ws), isNotNull(deals.repMembershipId)))
       .groupBy(deals.repMembershipId),
-    // Staff who could be given a partner share: no commission profile yet.
+    // Staff who could be given a founder earnings profile: no commission profile yet.
     getDb()
       .select({ id: memberships.id, email: memberships.email })
       .from(memberships)
@@ -49,9 +49,9 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
     <main className="shell page">
       <div className="page-head">
         <div>
-          <p className="eyebrow">Sales team</p>
-          <h1>Sales reps</h1>
-          <p className="muted">Outside reps work leads at /rep and earn their rate on every payment from clients they bring. They never see projects, pricing or anything about delivery. Partners are SKOX owners taking a share of what they close: an owner draw tracked here so both of you can see it, never a 1099 amount.</p>
+          <p className="eyebrow">SKOX</p>
+          <h1>Team</h1>
+          <p className="muted">Founders earn 100% on their own deals. Sales reps earn 20% on deals they close, with 40% going to each founder. Business expenses do not reduce these shares.</p>
         </div>
         <Link className="btn btn-ghost" href="/admin/commissions">Commissions →</Link>
       </div>
@@ -60,12 +60,12 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
       <section className="admin-panel" aria-labelledby="reps-title" style={{ marginBottom: 22 }}>
         <div className="admin-panel-head"><h2 id="reps-title">Team</h2><span className="muted small">{reps.length}</span></div>
         {reps.length === 0 ? (
-          <p className="rep-empty">No reps yet. Invite the first one below.</p>
+          <p className="rep-empty">No team members yet. Add a founder or invite a sales rep below.</p>
         ) : (
           <div className="table-wrap">
             <table className="rep-table">
               <thead>
-                <tr><th>Rep</th><th className="num">Rate</th><th className="num">Open leads</th><th className="num">Booked</th><th className="num">Won</th><th className="num">Owed</th><th className="num">Paid this year</th><th>Last seen</th></tr>
+                <tr><th>Name</th><th className="num">Rate</th><th className="num">Open leads</th><th className="num">Booked</th><th className="num">Won</th><th className="num">Owed</th><th className="num">Paid this year</th><th>Last seen</th></tr>
               </thead>
               <tbody>
                 {reps.map(({ membership: m, profile: p }) => {
@@ -73,7 +73,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
                   const c = countsBy.get(m.id);
                   return (
                     <tr key={m.id}>
-                      <td data-label=""><strong>{p.displayName}</strong>{isStaffRole(m.role) && <span className="rep-pill" data-status="booked" style={{ marginLeft: 8 }}>Partner</span>}{p.status === "paused" && <span className="rep-pill" data-status="lost" style={{ marginLeft: 8 }}>Paused</span>}<br /><span className="small muted">{m.email}</span></td>
+                      <td data-label=""><strong>{p.displayName}</strong><span className="rep-pill" data-status="booked" style={{ marginLeft: 8 }}>{isStaffRole(m.role) ? "Founder" : "Sales rep"}</span>{p.status === "paused" && <span className="rep-pill" data-status="lost" style={{ marginLeft: 8 }}>Paused</span>}<br /><span className="small muted">{m.email}</span></td>
                       <td className="num" data-label="Rate">{formatRate(p.rateBps)}</td>
                       <td className="num" data-label="Open">{c?.open ?? 0}</td>
                       <td className="num" data-label="Booked">{c?.booked ?? 0}</td>
@@ -104,7 +104,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
                     <div className="field"><label htmlFor={`s-${m.id}`}>Status</label><select id={`s-${m.id}`} name="status" defaultValue={p.status}><option value="active">Active</option><option value="paused">Paused (earns nothing new)</option></select></div>
                     <div className="field"><label htmlFor={`d-${m.id}`}>Started</label><input id={`d-${m.id}`} name="startedOn" type="date" defaultValue={p.startedOn ?? ""} /></div>
                   </div>
-                  <div className="field"><label htmlFor={`p-${m.id}`}>How you pay them</label><input id={`p-${m.id}`} name="payoutNotes" defaultValue={p.payoutNotes ?? ""} maxLength={300} placeholder="Zelle to their phone, ACH via Gusto…" /><span className="hint">Shown to the rep. Never put bank or account numbers here.</span></div>
+                  <div className="field"><label htmlFor={`p-${m.id}`}>How you pay them</label><input id={`p-${m.id}`} name="payoutNotes" defaultValue={p.payoutNotes ?? ""} maxLength={300} placeholder="Zelle to their phone, ACH via Gusto…" /><span className="hint">Shown to the team member. Never put bank or account numbers here.</span></div>
                   <label className="check"><input type="checkbox" name="agreement" defaultChecked={!!p.agreementSignedAt} /><span>Contractor agreement signed</span></label>
                   <label className="check"><input type="checkbox" name="w9" defaultChecked={!!p.w9ReceivedAt} /><span>W-9 received</span></label>
                   <p className="small muted">Own deals: 100% to the founder. Rep deals: 20% to the rep and 40% to each founder. Expenses do not reduce these shares.</p>
@@ -115,7 +115,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
           </div>
           <aside className="stack">
             <form action={inviteRep} className="card stack">
-              <div className="card-head"><h2>Invite a rep</h2></div>
+              <div className="card-head"><h2>Invite a sales rep</h2></div>
               <div className="field"><label htmlFor="rep-new-name">Name</label><input id="rep-new-name" name="displayName" required maxLength={80} /></div>
               <div className="field"><label htmlFor="rep-new-email">Email</label><input id="rep-new-email" name="email" type="email" required /><span className="hint">Use an email that isn&apos;t already in the portal.</span></div>
               <div className="form-grid">
@@ -125,19 +125,19 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
               <div><SubmitButton className="btn btn-primary" pendingLabel="Inviting…">Invite and send welcome</SubmitButton></div>
             </form>
             {teamWithoutShare.length > 0 && (
-              <form action={addPartnerShare} className="card stack">
-                <div className="card-head"><h2>Add a partner share</h2></div>
-                <p className="small muted">For an owner who closes and delivers their own deals. Their share of every paid invoice on projects credited to them, on the full invoice amount, is tracked as an owner draw with monthly statements like a rep. It stays out of the 1099 export.</p>
+              <form action={addFounderShare} className="card stack">
+                <div className="card-head"><h2>Add a founder</h2></div>
+                <p className="small muted">Set up earnings for an existing founder account: 100% on their own deals and 40% on sales-rep deals. Founder earnings are tracked as owner draws and stay out of the sales-rep 1099 export.</p>
                 <div className="field">
-                  <label htmlFor="partner-member">Team member</label>
-                  <select id="partner-member" name="membershipId" required>{teamWithoutShare.map((t) => <option key={t.id} value={t.id}>{t.email}</option>)}</select>
+                  <label htmlFor="founder-member">Team member</label>
+                  <select id="founder-member" name="membershipId" required>{teamWithoutShare.map((t) => <option key={t.id} value={t.id}>{t.email}</option>)}</select>
                 </div>
-                <div className="field"><label htmlFor="partner-name">Name</label><input id="partner-name" name="displayName" required maxLength={80} /></div>
+                <div className="field"><label htmlFor="founder-name">Name</label><input id="founder-name" name="displayName" required maxLength={80} /></div>
                 <div className="form-grid">
-                  <div className="field"><label htmlFor="partner-rate">Share (%)</label><input id="partner-rate" name="rate" inputMode="decimal" value="100" readOnly required /><span className="hint">100% on own deals; 40% on rep deals</span></div>
-                  <div className="field"><label htmlFor="partner-start">Start date</label><input id="partner-start" name="startedOn" type="date" defaultValue={todayIso()} /></div>
+                  <div className="field"><label htmlFor="founder-rate">Share (%)</label><input id="founder-rate" name="rate" inputMode="decimal" value="100" readOnly required /><span className="hint">100% on own deals; 40% on rep deals</span></div>
+                  <div className="field"><label htmlFor="founder-start">Start date</label><input id="founder-start" name="startedOn" type="date" defaultValue={todayIso()} /></div>
                 </div>
-                <div><SubmitButton className="btn btn-primary" pendingLabel="Adding…">Add partner share</SubmitButton></div>
+                <div><SubmitButton className="btn btn-primary" pendingLabel="Adding…">Add founder</SubmitButton></div>
               </form>
             )}
           </aside>

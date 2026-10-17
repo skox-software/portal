@@ -109,7 +109,7 @@ export type MoneyFlowInput = {
   paidCents: number;
   feesCents: number;
   refundsCents: number;
-  /** Commission earned in the period, per person (Reiss's partner share, reps). */
+  /** Commission earned in the period, per person (Reiss's founder share, reps). */
   shares: { id: string; name: string; cents: number }[];
 };
 

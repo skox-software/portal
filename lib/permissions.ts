@@ -63,10 +63,10 @@ export function isValidRepRate(bps: number) {
 }
 
 /** Founders earn 100% on own deals; rep deals allocate 40% to each founder. */
-export const PARTNER_RATE_MAX_BPS = 10000;
+export const FOUNDER_RATE_BPS = 10000;
 export function isValidRateFor(role: PortalRole, bps: number) {
   if (isRepRole(role)) return isValidRepRate(bps);
-  if (isStaffRole(role)) return bps === PARTNER_RATE_MAX_BPS;
+  if (isStaffRole(role)) return bps === FOUNDER_RATE_BPS;
   return false;
 }
 

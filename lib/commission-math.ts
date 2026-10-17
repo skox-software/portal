@@ -70,16 +70,16 @@ export function dealAllocations(baseCents: number, credited: DealParticipant, fo
     return [{ id: credited.id, rateBps: 10000, amountCents: baseCents }];
   }
   if (credited.role !== "rep") throw new Error("Only a founder or sales rep can earn a deal share");
-  const partners = [...founders].sort((a, b) => a.id.localeCompare(b.id));
-  if (partners.length !== 2 || new Set(partners.map(p => p.id)).size !== 2 || partners.some(p => !["staff_owner", "staff"].includes(p.role) || p.id === credited.id)) {
-    throw new Error("Rep deals require exactly two founders with partner profiles");
+  const founderProfiles = [...founders].sort((a, b) => a.id.localeCompare(b.id));
+  if (founderProfiles.length !== 2 || new Set(founderProfiles.map(p => p.id)).size !== 2 || founderProfiles.some(p => !["staff_owner", "staff"].includes(p.role) || p.id === credited.id)) {
+    throw new Error("Rep deals require exactly two founders with founder profiles");
   }
   const repCents = commissionCents(baseCents, 2000);
   const remaining = baseCents - repCents;
   return [
     { id: credited.id, rateBps: 2000, amountCents: repCents },
-    { id: partners[0].id, rateBps: 4000, amountCents: Math.ceil(remaining / 2) },
-    { id: partners[1].id, rateBps: 4000, amountCents: Math.floor(remaining / 2) },
+    { id: founderProfiles[0].id, rateBps: 4000, amountCents: Math.ceil(remaining / 2) },
+    { id: founderProfiles[1].id, rateBps: 4000, amountCents: Math.floor(remaining / 2) },
   ];
 }
 

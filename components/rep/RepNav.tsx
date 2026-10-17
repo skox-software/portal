@@ -19,7 +19,7 @@ function active(href: string, path: string) {
 export function RepNav() {
   const path = usePathname();
   return (
-    <nav className="rp-nav" aria-label="Partner desk">
+    <nav className="rp-nav" aria-label="Sales rep desk">
       {ITEMS.map((i) => (
         <Link key={i.href} href={i.href} aria-current={active(i.href, path) ? "page" : undefined}>
           {i.label}

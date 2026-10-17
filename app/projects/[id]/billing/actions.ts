@@ -17,7 +17,7 @@ import { clientRecipients, notifyLater, portalLink } from "@/lib/notify";
 import { invoiceLocked } from "@/lib/onboarding";
 import { projectForAction } from "@/lib/project-access";
 import { stripeEnabled, stripeSandbox } from "@/lib/stripe";
-import { flagCommissionAttention, recordEarning, recordRefund, reverseEarning } from "@/lib/commissions";
+import { flagCommissionAttention, recordEarning, recordRefund, refundedCents, reverseEarning } from "@/lib/commissions";
 
 export async function createInvoice(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
@@ -260,8 +260,13 @@ export async function recordInvoiceRefund(formData: FormData) {
     .limit(1);
   if (!invoice || invoice.status !== "paid") backWith(back, "error", "Only paid invoices can be refunded.");
   if (invoice.stripePaymentIntentId) backWith(back, "error", "This was paid through Stripe. Refund it in Stripe and it records itself here.");
+  const amountCents = Math.round(Number(parsed.data.amount) * 100);
+  if (amountCents <= 0) backWith(back, "error", "Enter the amount refunded.");
+  // recordRefund works from the cumulative total, the same way Stripe reports it.
+  const already = await refundedCents(invoice.id);
+  if (already + amountCents > invoice.amountCents) backWith(back, "error", "That's more than was paid on this invoice.");
   const result = await recordRefund(invoice, {
-    amountCents: Math.round(Number(parsed.data.amount) * 100),
+    targetRefundedCents: already + amountCents,
     reason: parsed.data.reason || null,
     actor: viewer.userId,
   });

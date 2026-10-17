@@ -56,6 +56,10 @@ How the wall is enforced:
    - **Stripe:** refunds arrive as `charge.refunded` and record themselves.
    - **Outside Stripe:** use "Record a refund" on the invoice.
    - Each refund adds a negative `clawback` line at the original rate.
+   - Refunds are recorded against a cumulative target (Stripe's
+     `amount_refunded`; a manual refund is "already refunded + this amount").
+     The new refund is the difference, computed under the invoice lock, so
+     two refunds arriving together can't double-count or record a stale amount.
    - If an invoice is reopened or voided after payment, a pending earning is
      voided. An approved or paid earning gets a clawback instead.
 7. **Statements.**
@@ -105,8 +109,10 @@ records 40% on the founders' actual ledger lines.
 
 These are earned shares, not bank balances or proof of a payout. Operating
 expenses and Stripe fees do not reduce the gross share. Actual client refunds
-reverse each recipient's allocation, with cumulative rounding so a full refund
-clears every cent. Odd cents in the 40/40 remainder go deterministically to
+reverse each recipient's allocation, with cumulative rounding measured against
+what each recipient has actually been clawed back, so a full refund clears
+every cent. A clawback line is never 0¢ and never positive: when rounding puts
+a recipient ahead of their target, that cent carries to the next line. Odd cents in the 40/40 remainder go deterministically to
 the founder whose membership ID sorts first.
 
 Migration `0015_deal_ownership_shares` permits one earning per recipient per

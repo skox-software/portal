@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { clients, invoices, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
-import { flagCommissionAttention, recordEarning, recordRefund, refundedCents } from "@/lib/commissions";
+import { flagCommissionAttention, recordEarning, recordRefund } from "@/lib/commissions";
 import { eventInsert } from "@/lib/events";
 import { afterInvoicePaid } from "@/lib/kickoff";
 import { clientRecipients, portalLink, staffRecipients } from "@/lib/notify";
@@ -166,9 +166,10 @@ async function reportFailedPayment(invoiceId: string, session: Stripe.Checkout.S
 }
 
 /**
- * A refund issued in Stripe. `amount_refunded` is cumulative, so the new
- * refund is the difference from what's already recorded; keying it on the
- * charge and that total makes a retried event a no-op.
+ * A refund issued in Stripe. `amount_refunded` is cumulative, so it is passed
+ * as the target total and the ledger records the difference under the
+ * invoice lock; keying it on the charge and that total makes a retried event
+ * a no-op.
  */
 async function settleRefund(charge: Stripe.Charge) {
   const intent = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
@@ -176,22 +177,24 @@ async function settleRefund(charge: Stripe.Charge) {
   const db = getDb();
   const [invoice] = await db.select().from(invoices).where(eq(invoices.stripePaymentIntentId, intent)).limit(1);
   if (!invoice) return;
-  const delta = charge.amount_refunded - (await refundedCents(invoice.id));
-  if (delta <= 0) return;
   const result = await recordRefund(invoice, {
-    amountCents: delta,
+    targetRefundedCents: charge.amount_refunded,
     reason: "Refunded in Stripe",
     actor: "stripe",
     stripeRefundId: `${charge.id}:${charge.amount_refunded}`,
   });
+  if (result.ok && result.recordedCents <= 0) return;
   const [project] = await db.select().from(projects).where(eq(projects.id, invoice.projectId)).limit(1);
   if (!project) return;
+  const amount = formatMoney(result.ok ? result.recordedCents : charge.amount_refunded, invoice.currency);
   await sendEmail(await staffRecipients(project.workspaceId), {
     subject: `Refund recorded: invoice ${invoice.number}`,
-    preheader: `${formatMoney(delta, invoice.currency)} refunded in Stripe.`,
-    heading: "Refund recorded",
+    preheader: result.ok ? `${amount} refunded in Stripe.` : `Stripe reports ${amount} refunded in total.`,
+    heading: result.ok ? "Refund recorded" : "Refund needs attention",
     paragraphs: [
-      `Stripe refunded ${formatMoney(delta, invoice.currency)} on invoice ${invoice.number} (${invoice.title}) for ${project.name}.`,
+      result.ok
+        ? `Stripe refunded ${amount} on invoice ${invoice.number} (${invoice.title}) for ${project.name}.`
+        : `Stripe reports ${amount} refunded in total on invoice ${invoice.number} (${invoice.title}) for ${project.name}.`,
       result.ok
         ? "If a sales rep earned commission on this invoice, a matching clawback is on their next statement."
         : `The refund could not be recorded: ${result.message} Check it in the portal.`,

@@ -11,7 +11,7 @@ import {
   repProfiles,
 } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
-import { planDealShares, refundAllocations } from "@/lib/commission-math";
+import { planDealShares, refundClawbackLines } from "@/lib/commission-math";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
 import { ownerRecipients, portalLink, staffRecipients } from "@/lib/notify";
@@ -162,50 +162,68 @@ export async function refundedCents(invoiceId: string) {
   return Number(row?.total ?? 0);
 }
 
+/** Refund clawbacks already written against the latest earnings, per recipient (positive cents). */
+async function clawedSoFar(invoiceId: string, earnings: Awaited<ReturnType<typeof liveEarnings>>) {
+  if (!earnings.length) return [];
+  const rows = await getDb().select({ rep: commissionEntries.repMembershipId, amountCents: commissionEntries.amountCents }).from(commissionEntries).where(and(
+    eq(commissionEntries.invoiceId, invoiceId), eq(commissionEntries.kind, "clawback"), ne(commissionEntries.status, "void"),
+    sql`${commissionEntries.refundId} is not null`, sql`${commissionEntries.earnedAt} >= ${earnings[0].earnedAt}`,
+  ));
+  return earnings.map(e => -rows.filter(r => r.rep === e.repMembershipId).reduce((sum, r) => sum + r.amountCents, 0));
+}
+
 /**
- * Records a refund and claws back the rep's share at the rate they earned.
- * `stripeRefundId` makes Stripe retries a no-op.
+ * Records a refund and claws back each recipient's share at the rate they
+ * earned. The caller says what the invoice's cumulative refunded total should
+ * now be (Stripe's `amount_refunded`); the new refund is the difference from
+ * what's recorded, computed under the invoice lock, so concurrent refunds
+ * never double-count. `stripeRefundId` makes Stripe retries a no-op.
+ * `recordedCents` is what this call added (0 when there was nothing new).
  */
 export async function recordRefund(
   invoice: Invoice,
-  input: { amountCents: number; reason: string | null; actor: string; stripeRefundId?: string | null },
-  attempt = 0,
-): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) return { ok: false, message: "Enter the amount refunded." };
+  input: { targetRefundedCents: number; reason: string | null; actor: string; stripeRefundId?: string | null },
+): Promise<{ ok: true; recordedCents: number } | { ok: false; message: string }> {
+  const target = input.targetRefundedCents;
+  if (!Number.isInteger(target) || target <= 0) return { ok: false, message: "Enter the amount refunded." };
+  if (target > invoice.amountCents) return { ok: false, message: "That's more than was paid on this invoice." };
   const db = getDb();
   const existingRefund = async () => input.stripeRefundId ? (await db.select({ id: invoiceRefunds.id }).from(invoiceRefunds).where(eq(invoiceRefunds.stripeRefundId, input.stripeRefundId)).limit(1))[0] : undefined;
-  if (await existingRefund()) return { ok: true };
-  const already = await refundedCents(invoice.id);
-  if (already + input.amountCents > invoice.amountCents) return { ok: false, message: "That's more than was paid on this invoice." };
-  const earnings = await liveEarnings(invoice.id);
-  const allocations = refundAllocations(invoice.amountCents, earnings.map(e => ({ id: e.repMembershipId, rateBps: e.rateBps, amountCents: e.amountCents })), already, input.amountCents);
-  const refundId = crypto.randomUUID();
-  const now = new Date();
-  const entries = allocations.map((share, i) => ({
-    id: crypto.randomUUID(), workspaceId: invoice.workspaceId, repMembershipId: share.id,
-    projectId: invoice.projectId, invoiceId: invoice.id, refundId, kind: "clawback" as const,
-    baseCents: input.amountCents, rateBps: share.rateBps, amountCents: share.amountCents,
-    earnedAt: now, clientName: earnings[i].clientName, note: `Refund on invoice ${invoice.number}`, createdBy: input.actor,
-  }));
-  try {
-    // Refund and every recipient's clawback commit together, including their audit events.
-    await db.batch([
-      db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
-      // If another refund committed after our read, roll back and recalculate.
-      db.execute(sql`select 1 / case when coalesce(sum(amount_cents),0) = ${already} then 1 else 0 end from invoice_refunds where invoice_id=${invoice.id}::uuid`),
-      db.insert(invoiceRefunds).values({ id: refundId, workspaceId: invoice.workspaceId, invoiceId: invoice.id, amountCents: input.amountCents, reason: input.reason, stripeRefundId: input.stripeRefundId ?? null, createdBy: input.actor, createdAt: now }),
-      eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "invoice.refunded", subjectType: "invoice", subjectId: invoice.id, payload: { number: invoice.number, amountCents: input.amountCents, reason: input.reason } }),
-      ...(entries.length ? [db.insert(commissionEntries).values(entries)] : []),
-      ...entries.map(entry => eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "commission.clawback", subjectType: "commission", subjectId: entry.id, payload: { invoice: invoice.number, amountCents: entry.amountCents } })),
-    ]);
-  } catch (error) {
-    // A concurrent Stripe retry may have committed the same refund first.
-    if (await existingRefund()) return { ok: true };
-    const code = (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code;
-    if (code === "22012" && attempt < 3) return recordRefund(invoice, input, attempt + 1);
-    throw error;
+  if (await existingRefund()) return { ok: true, recordedCents: 0 };
+  for (let attempt = 0; ; attempt++) {
+    const already = await refundedCents(invoice.id);
+    const amountCents = target - already;
+    if (amountCents <= 0) return { ok: true, recordedCents: 0 };
+    const earnings = await liveEarnings(invoice.id);
+    const lines = refundClawbackLines(invoice.amountCents, earnings.map(e => ({ id: e.repMembershipId, rateBps: e.rateBps, amountCents: e.amountCents })), await clawedSoFar(invoice.id, earnings), target);
+    const refundId = crypto.randomUUID();
+    const now = new Date();
+    const entries = lines.map(line => ({
+      id: crypto.randomUUID(), workspaceId: invoice.workspaceId, repMembershipId: line.id,
+      projectId: invoice.projectId, invoiceId: invoice.id, refundId, kind: "clawback" as const,
+      baseCents: amountCents, rateBps: line.rateBps, amountCents: line.amountCents,
+      earnedAt: now, clientName: earnings[line.index].clientName, note: `Refund on invoice ${invoice.number}`, createdBy: input.actor,
+    }));
+    try {
+      // Refund and every recipient's clawback commit together, including their audit events.
+      await db.batch([
+        db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${invoice.id}, 0))`),
+        // If another refund committed after our read, roll back and recalculate from the target.
+        db.execute(sql`select 1 / case when coalesce(sum(amount_cents),0) = ${already} then 1 else 0 end from invoice_refunds where invoice_id=${invoice.id}::uuid`),
+        db.insert(invoiceRefunds).values({ id: refundId, workspaceId: invoice.workspaceId, invoiceId: invoice.id, amountCents, reason: input.reason, stripeRefundId: input.stripeRefundId ?? null, createdBy: input.actor, createdAt: now }),
+        eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "invoice.refunded", subjectType: "invoice", subjectId: invoice.id, payload: { number: invoice.number, amountCents, reason: input.reason } }),
+        ...(entries.length ? [db.insert(commissionEntries).values(entries)] : []),
+        ...entries.map(entry => eventInsert({ workspaceId: invoice.workspaceId, projectId: invoice.projectId, actorId: input.actor, verb: "commission.clawback", subjectType: "commission", subjectId: entry.id, payload: { invoice: invoice.number, amountCents: entry.amountCents } })),
+      ]);
+      return { ok: true, recordedCents: amountCents };
+    } catch (error) {
+      // A concurrent Stripe retry may have committed the same refund first.
+      if (await existingRefund()) return { ok: true, recordedCents: 0 };
+      const code = (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code;
+      if (code === "22012" && attempt < 2) continue;
+      throw error;
+    }
   }
-  return { ok: true };
 }
 
 export type RepTotals = { pending: number; approved: number; paidThisYear: number; paidLifetime: number };

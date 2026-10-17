@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clients, deals, invoiceRefunds, invoices, projects } from "@/lib/db/schema";
+import { clients, deals, events, invoiceRefunds, invoices, projects } from "@/lib/db/schema";
 import { repTotals, workspaceReps, EMPTY_TOTALS } from "@/lib/commissions";
 import { bucketKeys, STAGE_WEIGHTS, type PeriodRange } from "@/lib/finance-periods";
 import { SALES_TZ, salesToday } from "@/lib/follow-up";
+import { describeEvent, LIVE_VERBS, type LiveEvent } from "@/lib/live-feed";
 import { normalizeEmail } from "@/lib/permissions";
 
 /**
@@ -177,4 +178,43 @@ export async function invoicesByPaymentIntent(ws: string, intents: string[]) {
     .innerJoin(clients, eq(clients.id, projects.clientId))
     .where(and(eq(invoices.workspaceId, ws), inArray(invoices.stripePaymentIntentId, intents)));
   return new Map(rows.map((r) => [r.intent!, { id: r.id, number: r.number, projectId: r.projectId, clientName: r.clientName }]));
+}
+
+/** Cash collected on paid invoices from a sales-time-zone date (YYYY-MM-DD) to now. */
+export async function collectedSince(ws: string, iso: string) {
+  const [row] = await getDb()
+    .select({ cents: sql<number>`coalesce(sum(${invoices.amountCents}), 0)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "paid"), isNotNull(invoices.paidAt), sql`(${invoices.paidAt} at time zone ${TZ})::date >= ${iso}::date`));
+  return Number(row?.cents ?? 0);
+}
+
+/** Open invoices whose due date is `today` (sales time zone). */
+export async function dueTodayCount(ws: string, today: string) {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.workspaceId, ws), eq(invoices.status, "open"), eq(invoices.dueOn, today)));
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * The latest money-moving events, worded for the feed. Deal edits that
+ * didn't change stage are left out in SQL, so a burst of edits can't push
+ * real news off the list. The client's name comes from the event's project.
+ */
+export async function liveEvents(ws: string, limit = 25): Promise<LiveEvent[]> {
+  const rows = await getDb()
+    .select({ id: events.id, verb: events.verb, payload: events.payload, at: events.createdAt, client: clients.name })
+    .from(events)
+    .leftJoin(projects, eq(projects.id, events.projectId))
+    .leftJoin(clients, eq(clients.id, projects.clientId))
+    .where(and(eq(events.workspaceId, ws), inArray(events.verb, [...LIVE_VERBS]), or(ne(events.verb, "deal.updated"), sql`${events.payload} ? 'to'`)))
+    .orderBy(desc(events.createdAt))
+    .limit(limit);
+  return rows.flatMap((r) => {
+    const payload = { ...(r.payload as Record<string, unknown>), ...(r.client ? { client: r.client } : {}) };
+    const line = describeEvent(r.verb, payload);
+    return line ? [{ ...line, id: r.id, verb: r.verb, at: r.at.toISOString() }] : [];
+  });
 }

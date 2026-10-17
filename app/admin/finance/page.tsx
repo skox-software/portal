@@ -5,8 +5,12 @@ import { Donut } from "@/components/charts/Donut";
 import { StackedBars } from "@/components/charts/StackedBars";
 import { axisCount } from "@/components/charts/Axis";
 import { PeriodSwitcher } from "@/components/PeriodSwitcher";
+import { ActivityFeed } from "@/components/finance/ActivityFeed";
+import { LiveProvider } from "@/components/finance/LiveProvider";
+import { LiveTicker } from "@/components/finance/LiveTicker";
 import { requireStaff } from "@/lib/access";
 import { collectedByBucket, dealsWonByOwner, invoicesByPaymentIntent, leaderboard, outstanding, refundsByBucket, weightedPipeline } from "@/lib/finance-data";
+import { liveSnapshot } from "@/lib/finance-live";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
 import { stripeActivity, stripeBalance, stripeCharges, stripePayouts, stripeTreasury, type StripeRead } from "@/lib/finance-stripe";
 import { firstName, formatDate, formatMoney } from "@/lib/format";
@@ -32,7 +36,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const range = periodRange(period);
   const connected = stripeEnabled();
 
-  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury] = await Promise.all([
+  const [collected, refunds, owed, won, pipeline, leaders, balance, payouts, activity, charges, treasury, live] = await Promise.all([
     collectedByBucket(ws, range),
     refundsByBucket(ws, range),
     outstanding(ws),
@@ -44,6 +48,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
     stripeActivity(range, fresh),
     stripeCharges(range, fresh),
     stripeTreasury(fresh),
+    liveSnapshot(ws),
   ]);
   // No Treasury account at all is a fact, not a failure; a permission error is.
   const hasTreasury = treasury.ok && treasury.data.accounts.length > 0;
@@ -89,7 +94,9 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
   const notDue = owed.openCents - owed.overdueCents;
 
   return (
+    <LiveProvider initial={live}>
     <main className="shell page">
+      <LiveTicker />
       <div className="page-head">
         <div>
           <p className="eyebrow">Mission control</p>
@@ -275,7 +282,10 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
           </div>
         )}
       </section>
+
+      <div className="finance-section"><ActivityFeed /></div>
     </main>
+    </LiveProvider>
   );
 }
 

@@ -50,3 +50,49 @@
 
 @media(max-width:1100px){.finance-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.finance-grid{grid-template-columns:1fr}}
 @media(max-width:760px){.finance-metrics{grid-template-columns:1fr 1fr}.finance-metrics .admin-metric strong{font-size:22px}.finance-body{padding:16px}.finance-figures{grid-template-columns:1fr 1fr}.fchart{grid-template-columns:44px minmax(0,1fr);grid-template-rows:180px auto}.finance-table th:first-child,.finance-table td:first-child{padding-left:16px}.finance-table th:last-child,.finance-table td:last-child{padding-right:16px}.finance-subhead{margin-inline:16px}}
+
+/* Live layer: ticker, rolling digits, activity feed, confetti. */
+.fticker{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px 32px;flex-wrap:wrap;padding:16px 24px;margin-bottom:24px;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;font-variant-numeric:tabular-nums}
+.fticker-flash{position:absolute;inset:0;pointer-events:none;background:var(--amber);opacity:0;animation:fticker-flash .9s var(--ease-out)}
+@keyframes fticker-flash{from{opacity:.16}to{opacity:0}}
+.fticker-items{display:flex;gap:16px 40px;flex-wrap:wrap;margin:0;min-width:0}
+.fticker-items>div{display:grid;gap:4px;min-width:0}
+.fticker-items dt{font:500 11px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);white-space:nowrap}
+.fticker-items dd{margin:0;font:500 22px/1.2 var(--mono);color:var(--ink);white-space:nowrap}
+.fticker-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.fticker-state{display:inline-flex;align-items:center;gap:8px;font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.fticker-state i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 var(--ok);animation:fticker-pulse 2.4s var(--ease-out) infinite}
+.fticker[data-status=reconnecting] .fticker-state i{background:var(--amber);animation:none}
+.fticker[data-status=signed-out] .fticker-state i{background:var(--muted);animation:none}
+@keyframes fticker-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}70%,100%{box-shadow:0 0 0 8px transparent}}
+.fsound{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:500 12px var(--sans);cursor:pointer;transition:color .15s,border-color .15s}
+.fsound:hover{color:var(--ink);border-color:var(--ink)}
+.fsound[aria-pressed=true]{color:var(--ink);border-color:var(--amber)}
+.fsound[aria-pressed=true] svg{color:var(--amber)}
+
+.odo{display:inline-flex;line-height:1.2em;height:1.2em;vertical-align:top}
+.odo-col,.odo-char{display:inline-block;height:1.2em;overflow:hidden}
+.odo-strip{display:flex;flex-direction:column;transition:transform .4s var(--ease-out);will-change:transform}
+.odo-strip span{display:block;height:1.2em;text-align:center}
+
+.ffeed{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.ffeed-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:16px 24px;border-bottom:1px solid var(--line)}
+.ffeed-head h2{font-size:20px}
+.ffeed-head span{font:12px var(--mono);color:var(--muted)}
+.ffeed-empty{padding:24px;color:var(--muted);font-size:13px}
+.ffeed-list{list-style:none;margin:0;padding:8px 0;max-height:min(720px,70vh);overflow-y:auto}
+.ffeed-list li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;grid-template-areas:"icon text amount" "icon time amount";column-gap:12px;row-gap:2px;padding:8px 24px;align-items:center}
+.ffeed-icon{grid-area:icon;align-self:start;display:grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--fog);color:var(--muted)}
+.ffeed-list li[data-icon=paid] .ffeed-icon,.ffeed-list li[data-icon=won] .ffeed-icon{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.ffeed-list li[data-icon=commission] .ffeed-icon,.ffeed-list li[data-icon=statement] .ffeed-icon{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.ffeed-text{grid-area:text;font-size:13px;line-height:1.4;color:var(--ink);overflow-wrap:anywhere}
+.ffeed-list time{grid-area:time;font:11px var(--mono);color:var(--muted)}
+.ffeed-amount{grid-area:amount;font:500 13px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ffeed-list li[data-icon=paid] .ffeed-amount{color:var(--ok)}
+.ffeed-list li.is-new{animation:ffeed-in .36s var(--ease-out) both}
+@keyframes ffeed-in{from{opacity:0;transform:translateY(-8px)}}
+
+.fconfetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:90}
+
+@media(prefers-reduced-motion:reduce){.fticker-flash,.fticker-state i,.ffeed-list li.is-new{animation:none}.odo-strip{transition:none}.fticker-flash{display:none}}
+@media(max-width:760px){.fticker{padding:16px;gap:16px}.fticker-items{gap:16px 24px}.fticker-items dd{font-size:18px}.ffeed-head,.ffeed-list li{padding-inline:16px}}

@@ -15,7 +15,7 @@ console.log('Verified 0014 baseline. 0015 adds per-recipient payment/refund uniq
 if(!process.argv.includes('--apply')){console.log('Dry run; pass --apply to migrate.');process.exit(0);}
 await sql.transaction([
  sql`select pg_advisory_xact_lock(hashtextextended('skox:deal-share-migration',0))`,
- sql`select 1 / case when hash=${previousHash} then 1 else 0 end from drizzle.__drizzle_migrations order by created_at desc limit 1`,
+ sql`select 1 / case when (select hash from drizzle.__drizzle_migrations order by created_at desc limit 1)=${previousHash} then 1 else 0 end`,
  ...source.split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean).map(s=>sql.query(s)),
  sql`insert into drizzle.__drizzle_migrations(hash,created_at) values (${hash},${migration.when})`,
 ]);

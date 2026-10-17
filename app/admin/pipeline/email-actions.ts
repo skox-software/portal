@@ -22,6 +22,7 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   const [deal] = await db.select().from(deals).where(where).limit(1);
   if (!deal || deal.contactEmail !== parsed.data.to) return { error: "The contact changed. Reload this lead before continuing." };
   const previous = readBrief(deal.brief)?.emailDraft;
+  if (previous?.status === "scheduled" || previous?.status === "scheduling") return { error: "This email is scheduled. Cancel it with the email provider before changing or sending it." };
   if (previous?.status === "sent") return { error: "This draft has already been sent. Open its conversation in the Inbox." };
   if (previous?.status === "sending") return { error: "This email is being processed. Check the Inbox before trying again." };
   const draft: SavedEmailDraft = { id: crypto.randomUUID(), fromEmail: LEAD_SENDER_EMAIL, subject: parsed.data.subject, body: parsed.data.body, status: "draft", updatedAt: new Date().toISOString() };

@@ -14,9 +14,11 @@ export type SavedEmailDraft = {
   fromEmail: string;
   subject: string;
   body: string;
-  status: "draft" | "sending" | "sent";
+  status: "draft" | "sending" | "sent" | "scheduling" | "scheduled";
   updatedAt: string;
   sentAt?: string;
+  scheduledAt?: string;
+  providerId?: string;
 };
 
 export type CallBrief = {

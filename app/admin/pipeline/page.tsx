@@ -84,6 +84,8 @@ export default async function PipelinePage({
       location: card.location,
       industry: card.industry,
       followUp: deal && deal.stage !== "won" ? describeFollowUp(deal.nextStepOn, today) : null,
+      followUpOn: deal?.nextStepOn ?? null,
+      nextStep: deal?.nextStep ?? null,
       followUpState: dueState,
       tag: brief?.tag ?? null,
       warning: !!brief?.warnings?.length,
@@ -181,7 +183,7 @@ export default async function PipelinePage({
           </section>
         )}
 
-        <PipelineBoard columns={COLUMNS.filter((c) => SALES_COLUMNS.includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={cards} owners={owners} me={viewer.email} initial={filters} nowMs={now.getTime()} />
+        <PipelineBoard columns={COLUMNS.filter((c) => SALES_COLUMNS.includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={cards} owners={owners} me={viewer.email} today={today} initial={filters} nowMs={now.getTime()} />
 
         {lost.length > 0 && (
           <details className="card pipeline-lost">

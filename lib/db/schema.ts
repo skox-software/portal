@@ -121,9 +121,13 @@ export const clients = pgTable(
     id: id(),
     workspaceId: workspaceId(),
     name: text("name").notNull(),
+    /** The next time someone should reach out, what for, and who gets reminded. Like a deal's follow-up. */
+    nextStepOn: date("next_step_on", { mode: "string" }),
+    nextStep: text("next_step"),
+    nextStepOwner: text("next_step_owner"),
     createdAt: createdAt(),
   },
-  (t) => [index("clients_workspace_idx").on(t.workspaceId)],
+  (t) => [index("clients_workspace_idx").on(t.workspaceId), index("clients_next_step_idx").on(t.workspaceId, t.nextStepOn)],
 );
 
 /**

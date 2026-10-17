@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FollowUpControl } from "@/components/FollowUpControl";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { bulkUpdateDeals } from "@/app/admin/pipeline/actions";
-import { followUpChoices, salesToday } from "@/lib/follow-up";
+import { followUpChoices } from "@/lib/follow-up";
 import { initials } from "@/lib/pipeline";
 
 export type ClientRow = {
@@ -30,6 +31,10 @@ export type ClientRow = {
   followUpState: "overdue" | "today" | "upcoming" | "none";
   followUpOn: string | null;
   nextStep: string | null;
+  /** Where the row's reminder lives: a lead's on its deal, a client's on the client. */
+  followUpKind: "deal" | "client" | null;
+  followUpId: string | null;
+  followUpOwner: string | null;
   /** ISO time. */
   lastTouch: string | null;
   contacted: boolean;
@@ -79,6 +84,7 @@ export function ClientsList({
   owners,
   reps = [],
   me,
+  today,
   empty,
 }: {
   groups: ClientGroup[];
@@ -87,6 +93,8 @@ export function ClientsList({
   owners: string[];
   reps?: { id: string; name: string; active: boolean }[];
   me: string;
+  /** Today in the sales time zone, from the server, so reminders agree with it. */
+  today: string;
   empty: string;
 }) {
   const router = useRouter();
@@ -173,7 +181,6 @@ export function ClientsList({
   }
 
   if (!groups.length) return <p className="admin-empty crm-table-card">{empty}</p>;
-  const today = salesToday();
 
   return (
     <div className="crm-groups" ref={list}>
@@ -376,12 +383,18 @@ export function ClientsList({
                           )}
                         </td>
                         <td data-label="Follow-up">
-                          {r.followUp ? (
-                            <span className="lead-due" data-state={r.followUpState} title={r.nextStep ?? undefined}>
-                              {r.followUp}
-                            </span>
-                          ) : r.dealId && r.stage !== "won" && r.stage !== "lost" ? (
-                            <span className="muted small">{r.contacted ? "None set" : "Not contacted"}</span>
+                          {r.followUpKind && r.followUpId ? (
+                            <FollowUpControl
+                              kind={r.followUpKind}
+                              id={r.followUpId}
+                              name={r.name}
+                              dueOn={r.followUpOn}
+                              note={r.nextStep}
+                              owner={r.followUpOwner}
+                              owners={owners}
+                              me={me}
+                              today={today}
+                            />
                           ) : (
                             <span className="muted">—</span>
                           )}

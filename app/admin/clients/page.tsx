@@ -88,6 +88,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const now = new Date(nowMs());
   const today = salesToday(now);
   const dealById = new Map(dealRows.map((d) => [d.id, d]));
+  const clientById = new Map(clientRows.map((c) => [c.id, c]));
   const repName = new Map(reps.map((r) => [r.id, r.name]));
 
   // ---- Filters, all in the URL so a lead's panel and every save keep them ----
@@ -125,6 +126,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       card.since,
     );
     const working = isDeal && stage !== "won" && stage !== "lost";
+    // A lead's reminder lives on the deal (lost ones too: "try again in 3 months"); a client's on the client.
+    const client = !isDeal && card.clientId ? clientById.get(card.clientId) : undefined;
+    const fuOn = isDeal ? deal?.nextStepOn ?? null : client?.nextStepOn ?? null;
     return {
       key: card.key,
       dealId: isDeal ? card.id : null,
@@ -142,10 +146,13 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       source: sourceLabel(card),
       owner: card.ownerEmail,
       rep: deal?.repMembershipId ? repName.get(deal.repMembershipId) ?? null : null,
-      followUp: working ? describeFollowUp(deal?.nextStepOn ?? null, today) : null,
-      followUpState: working ? followUpState(deal?.nextStepOn ?? null, today) : "none",
-      followUpOn: working ? deal?.nextStepOn ?? null : null,
-      nextStep: working ? deal?.nextStep ?? null : null,
+      followUp: describeFollowUp(fuOn, today),
+      followUpState: followUpState(fuOn, today),
+      followUpOn: fuOn,
+      nextStep: isDeal ? deal?.nextStep ?? null : client?.nextStep ?? null,
+      followUpKind: isDeal ? "deal" : client ? "client" : null,
+      followUpId: isDeal ? card.id : client?.id ?? null,
+      followUpOwner: isDeal ? card.ownerEmail : client?.nextStepOwner ?? null,
       lastTouch: lastTouch?.toISOString() ?? null,
       contacted: !!deal?.lastContactedAt,
       untouched: working && PRESALE.includes(stage as ColumnKey) && untouchedFor(deal?.lastContactedAt ?? null, card.since, now, 7),
@@ -175,10 +182,13 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       source: null,
       owner: null,
       rep: null,
-      followUp: null,
-      followUpState: "none",
-      followUpOn: null,
-      nextStep: null,
+      followUp: describeFollowUp(c.nextStepOn, today),
+      followUpState: followUpState(c.nextStepOn, today),
+      followUpOn: c.nextStepOn,
+      nextStep: c.nextStep,
+      followUpKind: "client",
+      followUpId: c.id,
+      followUpOwner: c.nextStepOwner,
       lastTouch: latest(clientMailAt.get(c.id), c.createdAt)?.toISOString() ?? null,
       contacted: false,
       untouched: false,
@@ -299,7 +309,14 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             owners={owners}
             reps={reps}
             me={viewer.email}
-            empty={q || owner || view !== "all" || stage ? "No matches. Try another search or view." : "No clients or leads yet. Add a deal or onboard a client."}
+            today={today}
+            empty={
+              view === "due" && !q && !owner && !stage
+                ? "Nothing due. Set a reminder on any lead or client with + Remind and it shows up here on its day."
+                : q || owner || view !== "all" || stage
+                  ? "No matches. Try another search or view."
+                  : "No clients or leads yet. Add a deal or onboard a client."
+            }
           />
 
           <details className="card admin-section-space" id="add-client">

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createDeal, saveDeal } from "@/app/admin/pipeline/actions";
 import { CallBriefCard } from "@/components/CallBriefCard";
 import { EmailDraft } from "@/components/EmailDraft";
+import { FollowUpControl } from "@/components/FollowUpControl";
 import { LogCallForm } from "@/components/LogCallForm";
 import { Notice } from "@/components/Notice";
 import { PanelKeys } from "@/components/PanelKeys";
@@ -12,7 +13,7 @@ import { events, type Deal } from "@/lib/db/schema";
 import { briefIsEmpty, parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
 import { buildEmailDraft } from "@/lib/email-draft";
 import { formatDate, timeAgo } from "@/lib/format";
-import { describeFollowUp, followUpState, outcomeLabel } from "@/lib/follow-up";
+import { describeFollowUp, outcomeLabel } from "@/lib/follow-up";
 import { leadClock } from "@/lib/local-time";
 import { COLUMNS, DEAL_KINDS } from "@/lib/pipeline";
 
@@ -112,12 +113,8 @@ export async function DealPanel({
             <i aria-hidden="true" />
             {stageName(deal.stage)}
           </span>
-          {due && (
-            <span className="lead-due" data-state={followUpState(deal.nextStepOn, today)}>
-              {due}
-              {deal.nextStep ? ` · ${deal.nextStep}` : ""}
-            </span>
-          )}
+          <FollowUpControl key={`fu-${deal.id}`} kind="deal" id={deal.id} name={deal.company} dueOn={deal.nextStepOn} note={deal.nextStep} today={today} />
+          {due && deal.nextStep && <span className="muted small">{deal.nextStep}</span>}
           {clock && (
             <span className="brief-clock" data-callable={clock.callable ? "" : undefined}>
               {clock.label} their time
@@ -173,8 +170,14 @@ export async function DealPanel({
               const what =
                 e.verb === "deal.call_logged"
                   ? outcomeLabel(p.outcome)
-                  : e.verb === "deal.created"
-                    ? "Added"
+                  : e.verb === "follow_up.set"
+                    ? `Reminder set for ${formatDate(p.dueOn).replace(/, \d{4}$/, "")}`
+                    : e.verb === "follow_up.done"
+                      ? "Reminder done"
+                      : e.verb === "follow_up.cleared"
+                        ? "Reminder removed"
+                        : e.verb === "deal.created"
+                          ? "Added"
                     : e.verb === "deal.stage_changed" || (e.verb === "deal.updated" && p.to)
                       ? `Moved to ${stageName(p.to)}`
                       : "Details edited";

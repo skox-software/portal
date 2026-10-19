@@ -22,6 +22,8 @@ export type SavedEmailDraft = {
 };
 
 export type CallBrief = {
+  /** Manually qualified for outreach; independent of registry verification. */
+  qualified?: boolean;
   emailDraft?: SavedEmailDraft;
   /** "NOT MOBILE", "SITE DOWN", "NO WEBSITE", "BROKEN PIECES", "HACKED". */
   tag?: string;
@@ -45,7 +47,7 @@ export type CallBrief = {
   warnings?: BriefWarning[];
 };
 
-type Field = Exclude<keyof CallBrief, "warnings" | "tag" | "vertical" | "gatekeeper" | "emailDraft">;
+type Field = Exclude<keyof CallBrief, "warnings" | "tag" | "vertical" | "gatekeeper" | "emailDraft" | "qualified">;
 
 /** Label → where it goes. Labels are matched case-sensitively at the start of a line, as the imports write them. */
 const LABELS: [RegExp, Field | "callAbout" | "whyNoSite" | BriefWarning["kind"] | "drop"][] = [

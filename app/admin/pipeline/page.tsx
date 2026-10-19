@@ -65,6 +65,7 @@ export default async function PipelinePage({
       id: card.id,
       column: card.column,
       company: card.company,
+      qualified: brief?.qualified === true,
       contact: card.contact,
       value: card.valueCents ? formatMoney(card.valueCents) : null,
       valueCents: card.valueCents,

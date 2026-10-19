@@ -11,6 +11,7 @@ import {
   repProfiles,
 } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
+import { isStaffRole } from "@/lib/permissions";
 import { planDealShares, refundClawbackLines } from "@/lib/commission-math";
 import { sendEmail } from "@/lib/email";
 import { formatMoney } from "@/lib/format";
@@ -24,6 +25,12 @@ import { ownerRecipients, portalLink, staffRecipients } from "@/lib/notify";
 
 type Invoice = typeof invoices.$inferSelect;
 
+/**
+ * Leads no founder added by hand (imports, the lead scanner, website enquiries)
+ * are Josh's: he sources them. Closing one earns the closer 60% and Josh 40%.
+ */
+const DEFAULT_LEAD_SOURCE_EMAIL = process.env.LEAD_SOURCE_DEFAULT_EMAIL || "founders@skoxsoftware.com";
+
 /** Explicit project/deal credit wins; a founder deal owner is the fallback. Never throws on setup problems. */
 async function allocationsForProject(projectId: string, workspaceId: string, baseCents: number) {
   const db = getDb();
@@ -32,11 +39,12 @@ async function allocationsForProject(projectId: string, workspaceId: string, bas
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))).limit(1);
   if (!project) return null;
   const people = await workspaceReps(workspaceId);
-  const sources = project.repId ? [] : await db.select({ repId: deals.repMembershipId, ownerEmail: deals.ownerEmail }).from(deals)
+  // Always read the deals: they say who's credited (when the project doesn't) and who sourced the lead.
+  const sources = await db.select({ repId: deals.repMembershipId, ownerEmail: deals.ownerEmail, createdBy: deals.createdBy }).from(deals)
     .where(and(eq(deals.projectId, projectId), eq(deals.workspaceId, workspaceId)));
   const plan = planDealShares({
-    baseCents, projectRepId: project.repId, deals: sources,
-    people: people.map(p => ({ id: p.membership.id, role: p.membership.role, email: p.membership.email, status: p.profile.status, name: p.profile.displayName })),
+    baseCents, projectRepId: project.repId, deals: sources, defaultSourceEmail: DEFAULT_LEAD_SOURCE_EMAIL,
+    people: people.map(p => ({ id: p.membership.id, role: p.membership.role, email: p.membership.email, status: p.profile.status, name: p.profile.displayName, userId: p.membership.userId })),
   });
   if (!plan || "attention" in plan) return plan;
   return { clientName: project.clientName, allocations: plan.allocations, notes: plan.notes, people };
@@ -301,4 +309,17 @@ export async function workspaceReps(workspaceId: string) {
     .innerJoin(memberships, eq(memberships.id, repProfiles.membershipId))
     .where(eq(repProfiles.workspaceId, workspaceId))
     .orderBy(repProfiles.displayName);
+}
+
+/**
+ * The founder credited with sourcing a lead: whoever added it, or the default
+ * source founder for leads no founder added by hand. Null when neither has a
+ * founder profile. Shown on the lead so the 60/40 split is never a surprise.
+ */
+export async function leadSourcer(workspaceId: string, createdBy: string | null) {
+  const founders = (await workspaceReps(workspaceId)).filter((p) => isStaffRole(p.membership.role));
+  const found =
+    founders.find((p) => p.membership.userId && p.membership.userId === createdBy) ??
+    founders.find((p) => p.membership.email.toLowerCase() === DEFAULT_LEAD_SOURCE_EMAIL.toLowerCase());
+  return found ? { membershipId: found.membership.id, name: found.profile.displayName, email: found.membership.email } : null;
 }

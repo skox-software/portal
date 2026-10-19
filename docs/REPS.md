@@ -84,7 +84,19 @@ How the wall is enforced:
 
 ## Founder ownership and rep commissions
 
-Founder-owned deals credit the assigned founder 100% of gross paid invoices.
+Founder-owned deals credit the assigned founder 100% of gross paid invoices
+**when the founder sourced the lead themselves**. When a founder closes a lead
+the other founder sourced, the closer keeps **60%** and the sourcer gets
+**40%** (agreed by Josh and Reiss, 2026-10-19).
+
+- **Who sourced a lead:** the founder who added it (`deals.created_by`). Leads
+  no founder added by hand (CSV imports, the lead scanner, website enquiries)
+  count as Josh's (`LEAD_SOURCE_DEFAULT_EMAIL`, default founders@skoxsoftware.com).
+- The lead panel shows "Sourced by …" so the split is visible before closing.
+- A project built from leads added by different founders is flagged for
+  attention instead of guessing.
+- Applies to payments recorded from 2026-10-19 on. Earlier ledger lines are
+  not recalculated.
 Rep-owned deals credit the rep 20% and each of the two founders 40%.
 Reiss uses `reiss@skoxsoftware.com`; Josh uses `founders@skoxsoftware.com`.
 Both founders have founder earnings profiles. The separate “Josh Test” rep

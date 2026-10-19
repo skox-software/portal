@@ -63,11 +63,28 @@ export function statementLines<T extends LedgerLine>(pending: T[], periodEnd: st
 export type DealParticipant = { id: string; role: string };
 export type DealAllocation = { id: string; rateBps: number; amountCents: number };
 
-/** Gross invoice ownership. Operating expenses and Stripe fees never change it. */
-export function dealAllocations(baseCents: number, credited: DealParticipant, founders: DealParticipant[]): DealAllocation[] {
+/** A founder closing a lead another founder sourced keeps 60%; the sourcer gets 40%. */
+export const CLOSER_RATE_BPS = 6000;
+export const SOURCER_RATE_BPS = 4000;
+
+/**
+ * Gross invoice ownership. Operating expenses and Stripe fees never change it.
+ *
+ * - A founder closing a lead they added: 100% to them.
+ * - A founder closing a lead the other founder sourced (`sourcer`): 60% closer, 40% sourcer.
+ * - A sales rep's deal: 20% rep, 40% to each founder.
+ */
+export function dealAllocations(baseCents: number, credited: DealParticipant, founders: DealParticipant[], sourcer?: DealParticipant | null): DealAllocation[] {
   if (!Number.isSafeInteger(baseCents) || baseCents < 0) throw new Error("Invalid invoice amount");
   if (credited.role === "staff_owner" || credited.role === "staff") {
-    return [{ id: credited.id, rateBps: 10000, amountCents: baseCents }];
+    if (!sourcer || sourcer.id === credited.id) return [{ id: credited.id, rateBps: 10000, amountCents: baseCents }];
+    if (!["staff_owner", "staff"].includes(sourcer.role)) throw new Error("Only a founder can be credited for sourcing a lead");
+    // The sourcer's 40% rounds half up, like every share; the closer gets exactly the rest.
+    const sourcerCents = commissionCents(baseCents, SOURCER_RATE_BPS);
+    return [
+      { id: credited.id, rateBps: CLOSER_RATE_BPS, amountCents: baseCents - sourcerCents },
+      { id: sourcer.id, rateBps: SOURCER_RATE_BPS, amountCents: sourcerCents },
+    ];
   }
   if (credited.role !== "rep") throw new Error("Only a founder or sales rep can earn a deal share");
   const founderProfiles = [...founders].sort((a, b) => a.id.localeCompare(b.id));
@@ -101,7 +118,7 @@ export function refundAllocations(baseCents: number, shares: DealAllocation[], a
 }
 
 /** Someone who can be credited on a deal: their membership, role and commission profile. */
-export type ShareCandidate = { id: string; role: string; email: string; status: string; name: string };
+export type ShareCandidate = { id: string; role: string; email: string; status: string; name: string; userId?: string | null };
 
 /**
  * Who shares in one paid invoice, decided without throwing.
@@ -115,8 +132,11 @@ export type ShareCandidate = { id: string; role: string; email: string; status: 
 export function planDealShares(input: {
   baseCents: number;
   projectRepId: string | null;
-  deals: { repId: string | null; ownerEmail: string | null }[];
+  /** Every deal behind the project: who's credited, and who added it (an auth user id, or a marker like "website"). */
+  deals: { repId: string | null; ownerEmail: string | null; createdBy?: string | null }[];
   people: ShareCandidate[];
+  /** The founder who sources every lead no founder added by hand: imports, the lead scanner, website enquiries. */
+  defaultSourceEmail?: string | null;
 }): { attention: string } | { allocations: DealAllocation[]; notes: string[] } | null {
   const { people } = input;
   const isFounder = (p: ShareCandidate) => p.role === "staff_owner" || p.role === "staff";
@@ -147,14 +167,32 @@ export function planDealShares(input: {
     else return { attention: `Rep deals need exactly two active founder profiles; found ${active.length}.` };
   }
 
+  // Who sourced the lead: the founder who added it, else the default source founder.
+  let sourcer: ShareCandidate | undefined;
+  if (isFounder(credited) && input.deals.length) {
+    const fallback = people.find((p) => isFounder(p) && p.email.toLowerCase() === input.defaultSourceEmail?.toLowerCase());
+    const ids = new Set(
+      input.deals
+        .map((d) => (people.find((p) => isFounder(p) && p.userId && p.userId === d.createdBy) ?? fallback)?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    if (ids.size > 1) return { attention: "This project's leads were added by different founders, so the 60/40 split is ambiguous. Credit the deal by hand." };
+    sourcer = people.find((p) => ids.has(p.id));
+  }
+
   let allocations: DealAllocation[];
   try {
-    allocations = dealAllocations(input.baseCents, { id: credited.id, role: credited.role }, founders.map((p) => ({ id: p.id, role: p.role })));
+    allocations = dealAllocations(
+      input.baseCents,
+      { id: credited.id, role: credited.role },
+      founders.map((p) => ({ id: p.id, role: p.role })),
+      sourcer ? { id: sourcer.id, role: sourcer.role } : null,
+    );
   } catch (error) {
     return { attention: (error as Error).message };
   }
   const notes: string[] = [];
-  const paused = new Set([credited, ...founders].filter((p) => p.status !== "active").map((p) => p.id));
+  const paused = new Set([credited, ...founders, ...(sourcer ? [sourcer] : [])].filter((p) => p.status !== "active").map((p) => p.id));
   for (const share of allocations) {
     if (!paused.has(share.id)) continue;
     const who = people.find((p) => p.id === share.id);

@@ -9,6 +9,7 @@ import { LogCallForm } from "@/components/LogCallForm";
 import { Notice } from "@/components/Notice";
 import { PanelKeys } from "@/components/PanelKeys";
 import { SubmitButton } from "@/components/SubmitButton";
+import { leadSourcer } from "@/lib/commissions";
 import { getDb } from "@/lib/db";
 import { events, type Deal } from "@/lib/db/schema";
 import { briefIsEmpty, parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
@@ -64,6 +65,7 @@ export async function DealPanel({
   notice?: string;
   error?: string;
 }) {
+  const sourcer = deal ? await leadSourcer(deal.workspaceId, deal.createdBy) : null;
   const history = deal
     ? await getDb()
         .select()
@@ -124,6 +126,11 @@ export async function DealPanel({
             </span>
           )}
           <span className="muted small">{deal.lastContactedAt ? `Last contact ${timeAgo(deal.lastContactedAt, now)}` : "Not contacted yet"}</span>
+          {sourcer && (
+            <span className="muted small" title="Whoever sourced a lead gets 40% when the other founder closes it; closing your own lead is 100%.">
+              Sourced by {sourcer.email.toLowerCase() === me.toLowerCase() ? "you" : sourcer.name}
+            </span>
+          )}
         </div>
       )}
 

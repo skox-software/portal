@@ -30,3 +30,7 @@ Production setup: set `OUTREACH_REPLY_COPY_ADDRESS=optouts@ontoinarer.resend.app
 ## Website concepts
 
 Emails contain the hosted website preview URL, on its own clickable line. Do not embed or attach website screenshots. Existing sent examples cannot be edited.
+
+## Receiving connection rollout — October 19, 2026
+
+PR #22 passed CI lint, tests, and build. The production receiving key and `OUTREACH_REPLY_COPY_ADDRESS` are configured. The existing webhook subscribes to all events, including `email.received`. Gmail forwarding verification and filter activation must finish in both work accounts before this is considered operational. Personal Gmail accounts must not be connected to SKOX or used for testing.

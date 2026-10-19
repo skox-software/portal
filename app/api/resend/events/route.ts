@@ -2,14 +2,15 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { deals, events } from "@/lib/db/schema";
 import { blocksEmail, readStatusEvent } from "@/lib/resend-events";
+import { suppressOutreach } from "@/lib/cold-outreach";
 import { verifySvix } from "@/lib/svix";
 
 /**
  * Resend's delivery reports for the email we send: delivered, delayed,
  * opened, clicked, bounced, marked as spam. Each one is matched to the lead
  * whose `deal.email_sent` event carries the same Resend id and recorded as a
- * `deal.email_status` event. A bounce or spam complaint also marks the lead
- * do-not-email. Mail that isn't lead outreach (portal notices) is ignored.
+ * `deal.email_status` event. A bounce or spam complaint also suppresses the
+ * address for all outreach (`suppressOutreach`). Mail that isn't lead outreach (portal notices) is ignored.
  *
  * Signed with RESEND_EVENTS_SECRET; anything unsigned is refused. Resend
  * retries with the same Svix message id, which is recorded so a retry is a
@@ -38,21 +39,22 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const [sent] = await db
-    .select({ workspaceId: events.workspaceId, dealId: events.subjectId })
+    .select({ workspaceId: events.workspaceId, dealId: events.subjectId, to: sql<string | null>`${events.payload}->>'to'` })
     .from(events)
     .where(and(inArray(events.verb, ["deal.email_sent", "deal.email_scheduled"]), eq(events.subjectType, "deal"), sql`${events.payload}->>'providerId' = ${report.emailId}`))
     .limit(1);
   if (!sent?.dealId) return Response.json({ ignored: "not lead outreach" });
 
-  // Mark first: it is safe to repeat, so a failure before the event is written leaves nothing half-done for the retry.
+  // Suppress first: it is safe to repeat, so a failure before the event is written leaves nothing half-done for the retry.
+  // A bounce or spam report blocks the address everywhere (every lead with it, and any lead added later), not just this one.
   let markedDoNotEmail = false;
   if (blocksEmail(report.status)) {
-    const marked = await db
-      .update(deals)
-      .set({ doNotEmail: true })
-      .where(and(eq(deals.id, sent.dealId), eq(deals.workspaceId, sent.workspaceId), eq(deals.doNotEmail, false)))
-      .returning({ id: deals.id });
-    markedDoNotEmail = marked.length > 0;
+    const [deal] = await db.select({ email: deals.contactEmail }).from(deals).where(and(eq(deals.id, sent.dealId), eq(deals.workspaceId, sent.workspaceId))).limit(1);
+    const address = sent.to ?? deal?.email;
+    if (address) {
+      await suppressOutreach(address);
+      markedDoNotEmail = true;
+    }
   }
 
   const eventPayload = {

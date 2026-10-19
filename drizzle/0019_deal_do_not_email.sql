@@ -1,0 +1,1 @@
+ALTER TABLE "deals" ADD COLUMN "do_not_email" boolean DEFAULT false NOT NULL;

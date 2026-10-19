@@ -1,5 +1,7 @@
 "use server";
 
+import { suppressOutreach } from "@/lib/cold-outreach";
+
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -639,4 +641,23 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
   }
   refresh();
   return { ok: true, count: rows.length };
+}
+
+/** A "no thanks" reply, recorded by hand: the same opt-out the unsubscribe link sets. One-way on purpose. */
+export async function markDoNotEmail(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!z.uuid().safeParse(dealId).success) backWith(BACK, "error", "Unknown deal.");
+  const back = backTo(formData, { deal: dealId });
+  const db = getDb();
+  const where = and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId), eq(deals.doNotEmail, false));
+  const [deal] = await db.select({ id: deals.id, projectId: deals.projectId, contactEmail: deals.contactEmail }).from(deals).where(where).limit(1);
+  if (!deal) backWith(back, "notice", "Already marked do not email.");
+  if (deal.contactEmail) await suppressOutreach(deal.contactEmail);
+  await db.batch([
+    db.update(deals).set({ doNotEmail: true }).where(where),
+    eventInsert({ workspaceId: staff.workspaceId, projectId: deal.projectId, actorId: viewer.userId, verb: "deal.unsubscribed", subjectType: "deal", subjectId: deal.id, payload: { via: "staff" } }),
+  ]);
+  revalidatePath(BACK);
+  backWith(back, "notice", "Marked do not email. No email can be sent to this contact.");
 }

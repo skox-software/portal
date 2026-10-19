@@ -664,6 +664,8 @@ export const deals = pgTable(
     brief: jsonb("brief"),
     /** Set when a call found the number dead or wrong; cleared when the phone is changed. */
     badNumber: boolean("bad_number").notNull().default(false),
+    /** The contact opted out of email (unsubscribe link or a "no thanks" reply). Never cleared by sending code. */
+    doNotEmail: boolean("do_not_email").notNull().default(false),
     /** e.g. "Dental clinics", shown under the company on the Clients list. */
     industry: text("industry"),
     /** e.g. "Tampa, FL". */
@@ -925,3 +927,11 @@ export const withdrawalExpenses = pgTable("withdrawal_expenses", {
   amountCents: integer("amount_cents").notNull(),
   createdAt: createdAt(),
 }, t => [unique("withdrawal_expenses_workspace_reference").on(t.workspaceId, t.reference)]);
+
+/** Stable marketing recipients: deliberately no deal FK or cascading deletion. */
+export const outreachRecipients = pgTable("outreach_recipients", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  suppressed: boolean("suppressed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

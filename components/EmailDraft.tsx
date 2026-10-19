@@ -5,7 +5,7 @@ import { logCall } from "@/app/admin/pipeline/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateLeadEmail } from "@/app/admin/pipeline/email-actions";
 import type { SavedEmailDraft } from "@/lib/call-brief";
-import { LEAD_SENDER_EMAIL, SKOX_WEBSITE } from "@/lib/lead-email";
+import { LEAD_SENDER_EMAIL, OUTREACH_SENDER_EMAIL, SKOX_WEBSITE } from "@/lib/lead-email";
 
 /**
  * The first email, drafted from the brief. Edit it here, then open it in the
@@ -21,7 +21,12 @@ export function EmailDraft({
   initiallyOpen = false,
   saved,
   canSend,
+  doNotEmail = false,
+  outreachBlocked,
 }: {
+  /** The contact opted out: nothing can be sent. */
+  doNotEmail?: boolean;
+  outreachBlocked?: string;
   initiallyOpen?: boolean;
   saved?: SavedEmailDraft;
   canSend: boolean;
@@ -74,7 +79,7 @@ export function EmailDraft({
           <div className="email-draft-to small">
             To: {to ? <strong>{to}</strong> : <span className="muted">no email on file; add it in the mail app or Details</span>}
           </div>
-          <p className="small">From: <strong>{LEAD_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "scheduled" ? `Scheduled for ${saved?.scheduledAt ? new Date(saved.scheduledAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : "later"}` : status === "sending" || status === "scheduling" ? "Processing" : "Draft — not sent"}</p>
+          <p className="small">From: <strong>{status === "draft" ? OUTREACH_SENDER_EMAIL : saved?.fromEmail ?? OUTREACH_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "scheduled" ? `Scheduled for ${saved?.scheduledAt ? new Date(saved.scheduledAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : "later"}` : status === "sending" || status === "scheduling" ? "Processing" : "Draft — not sent"}</p>
           <label className="sr-only" htmlFor={`email-subject-${dealId}`}>
             Subject
           </label>
@@ -83,9 +88,9 @@ export function EmailDraft({
             Body
           </label>
           <textarea id={`email-body-${dealId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={12} disabled={pending || status !== "draft"} />
-          <p className="small muted">Signature: <a href={SKOX_WEBSITE} target="_blank" rel="noreferrer">SKOX Software</a> links to our website in the email.</p>
+          <p className="small muted">Signature: <a href={SKOX_WEBSITE} target="_blank" rel="noreferrer">SKOX Software</a> links to our website in the email. Our postal address and an unsubscribe link are added below it when sent.</p>
           <div className="email-draft-actions">
-            <button type="button" className="btn btn-primary btn-small" onClick={() => persist("send")} disabled={!canSend || !to || pending || status !== "draft"}>
+            <button type="button" className="btn btn-primary btn-small" onClick={() => persist("send")} disabled={!!outreachBlocked || doNotEmail || !canSend || !to || pending || status !== "draft"}>
               {pending ? "Working…" : "Send email"}
             </button>
             <button type="button" className="btn btn-ghost btn-small" onClick={() => persist("save")} disabled={!to || pending || status !== "draft"}>Save draft</button>
@@ -105,6 +110,8 @@ export function EmailDraft({
               </SubmitButton>
             </form>}
           </div>
+          {outreachBlocked && <p className="small"><strong>Sending blocked.</strong> {outreachBlocked}</p>}
+          {doNotEmail && <p className="small"><strong>Do not email.</strong> This contact opted out, so sending is blocked.</p>}
           {message && <p role="status" className="small">{message}</p>}
           {!canSend && <p className="small muted">Sign in as {LEAD_SENDER_EMAIL} to send.</p>}
           {copied === "failed" && <p className="small muted">Couldn&apos;t reach the clipboard. Select the text and copy it.</p>}

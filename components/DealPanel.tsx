@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
-import { createDeal, saveDeal } from "@/app/admin/pipeline/actions";
+import { createDeal, markDoNotEmail, saveDeal } from "@/app/admin/pipeline/actions";
 import { CallBriefCard } from "@/components/CallBriefCard";
 import { EmailDraft } from "@/components/EmailDraft";
 import { FollowUpControl } from "@/components/FollowUpControl";
@@ -130,6 +130,12 @@ export async function DealPanel({
         </p>
       )}
 
+      {deal?.doNotEmail && (
+        <p className="brief-warning" role="note">
+          <strong>Do not email</strong> {deal.contactEmail ?? "This contact"} opted out. Sending is blocked; call only if they asked you to.
+        </p>
+      )}
+
       {deal && (
         <div className="pipeline-quick">
           {tel && (
@@ -137,7 +143,17 @@ export async function DealPanel({
               Call {deal.phone}
             </a>
           )}
-          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} />}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} doNotEmail={deal.doNotEmail} />}
+          {deal.contactEmail && !deal.doNotEmail && (
+            <form action={markDoNotEmail}>
+              <input type="hidden" name="dealId" value={deal.id} />
+              <input type="hidden" name="base" value={nav.base} />
+              <input type="hidden" name="back" value={nav.back} />
+              <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…" title="They replied 'no thanks' or asked not to be emailed">
+                Do not email
+              </SubmitButton>
+            </form>
+          )}
           {deal.website && (
             <a className="btn btn-ghost btn-small" href={deal.website} target="_blank" rel="noreferrer" data-reach="site" title="Website (W)">
               Website ↗
@@ -178,6 +194,10 @@ export async function DealPanel({
                         ? "Reminder removed"
                         : e.verb === "deal.created"
                           ? "Added"
+                        : e.verb === "deal.unsubscribed"
+                          ? p.via === "staff" ? "Marked do not email" : "Unsubscribed from email"
+                        : e.verb === "deal.email_sent"
+                          ? "Emailed"
                     : e.verb === "deal.stage_changed" || (e.verb === "deal.updated" && p.to)
                       ? `Moved to ${stageName(p.to)}`
                       : "Details edited";

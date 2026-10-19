@@ -664,6 +664,8 @@ export const deals = pgTable(
     brief: jsonb("brief"),
     /** Set when a call found the number dead or wrong; cleared when the phone is changed. */
     badNumber: boolean("bad_number").notNull().default(false),
+    /** The contact opted out of email (unsubscribe link or a "no thanks" reply). Never cleared by sending code. */
+    doNotEmail: boolean("do_not_email").notNull().default(false),
     /** e.g. "Dental clinics", shown under the company on the Clients list. */
     industry: text("industry"),
     /** e.g. "Tampa, FL". */

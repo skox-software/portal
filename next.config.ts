@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
       "/admin/:path*",
       "/s/:path*",
       "/r/:path*",
+      "/u/:path*",
       // Welcome guides and file links in emails already sent.
       "/api/:path*",
     ];

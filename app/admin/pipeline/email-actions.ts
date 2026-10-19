@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 import { deals, emailMessages, emailThreads } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { LEAD_SENDER_EMAIL, leadEmailPayload } from "@/lib/lead-email";
+import { unsubscribeUrl } from "@/lib/unsubscribe";
 
 const fields = z.object({ dealId: z.uuid(), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20000), to: z.email() });
 
@@ -39,6 +40,18 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   // Only Reiss can send using his identity, regardless of submitted form values.
   if (viewer.email.toLowerCase() !== LEAD_SENDER_EMAIL) return { error: `Sign in as ${LEAD_SENDER_EMAIL} to send this email.` };
   if (process.env.NODE_ENV !== "production" || !process.env.RESEND_API_KEY) return { error: "Sending is available only in production with email configured. Your draft is still unsent." };
+  // An opt-out on any lead at this address counts: they asked us to stop, not one card.
+  const optedOut = deal.doNotEmail || (await db.select({ id: deals.id }).from(deals).where(and(eq(deals.workspaceId, staff.workspaceId), sql`lower(${deals.contactEmail}) = ${parsed.data.to.toLowerCase()}`, eq(deals.doNotEmail, true))).limit(1)).length > 0;
+  if (optedOut) return { error: "This contact asked not to be emailed. Nothing was sent." };
+  const postalAddress = process.env.SKOX_POSTAL_ADDRESS?.trim();
+  const secret = process.env.UNSUBSCRIBE_SECRET;
+  if (!postalAddress || !secret) return { error: "Cold email needs SKOX_POSTAL_ADDRESS and UNSUBSCRIBE_SECRET set in Vercel. Nothing was sent; your draft is unchanged." };
+  let payload;
+  try {
+    payload = leadEmailPayload(parsed.data.to, draft.subject, draft.body, { postalAddress, unsubscribeUrl: unsubscribeUrl(process.env.PORTAL_URL ?? "https://www.skoxsoftware.com/portal", deal.id, parsed.data.to, secret) });
+  } catch (e) {
+    return { error: `${e instanceof Error ? e.message : "The email could not be built."} Nothing was sent.` };
+  }
   const sending = { ...draft, status: "sending" as const };
   // One caller wins the claim. Retries cannot send a second message, even if
   // the provider accepted it but the subsequent database write failed.
@@ -47,7 +60,7 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   const resend = new Resend(process.env.RESEND_API_KEY);
   let accepted;
   try {
-    accepted = await resend.emails.send(leadEmailPayload(parsed.data.to, draft.subject, draft.body), { idempotencyKey: `lead-draft/${draft.id}` });
+    accepted = await resend.emails.send(payload, { idempotencyKey: `lead-draft/${draft.id}` });
   } catch {
     return { error: "Delivery could not be confirmed. Check the Inbox or email provider before retrying; this draft is locked to prevent a duplicate." };
   }

@@ -14,6 +14,7 @@ import { getDb } from "@/lib/db";
 import { events, type Deal } from "@/lib/db/schema";
 import { briefIsEmpty, parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
 import { buildEmailDraft } from "@/lib/email-draft";
+import { outreachSender, senderLine, signedByOther } from "@/lib/lead-email";
 import { formatDate, timeAgo } from "@/lib/format";
 import { loadEmailStatuses } from "@/lib/email-status-data";
 import { describeFollowUp, outcomeLabel } from "@/lib/follow-up";
@@ -85,7 +86,9 @@ export async function DealPanel({
   const clock = deal ? leadClock(deal, now) : null;
   let outreachBlocked: string | undefined;
   try { outreachConfig(); } catch { outreachBlocked = "Cold outreach is disabled until the business mailing address and email safeguards are configured and verified."; }
-  const draft = deal ? buildEmailDraft({ company: deal.company, contactName: deal.contactName, website: deal.website, brief }) : null;
+  // Drafts are written and signed as whoever is signed in; they send from that person's outreach address.
+  const sender = outreachSender(me);
+  const draft = deal ? buildEmailDraft({ company: deal.company, contactName: deal.contactName, website: deal.website, brief, author: sender }) : null;
 
   return (
     <div className="lead-panel" data-lead-panel>
@@ -162,7 +165,7 @@ export async function DealPanel({
               Call {deal.phone}
             </a>
           )}
-          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} delivery={emailStatus && { ...emailStatus, when: new Date(emailStatus.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) }} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} delivery={emailStatus && { ...emailStatus, when: new Date(emailStatus.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) }} canSend fromLine={senderLine(sender)} signedBy={draft ? signedByOther(draft.body, sender) : null} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />}
           {deal.contactEmail && !deal.doNotEmail && (
             <form action={markDoNotEmail}>
               <input type="hidden" name="dealId" value={deal.id} />

@@ -1,4 +1,5 @@
 import { sendColdOutreach } from "@/lib/cold-outreach";
+import { outreachSender } from "@/lib/lead-email";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { getDb } from "@/lib/db";
@@ -284,7 +285,7 @@ export async function sendThreadReply({
   let providerId: string | null = null;
   if (thread.dealId || !thread.clientId) {
     try {
-      const result = await sendColdOutreach({ to: thread.counterpartEmail, subject: finalSubject, body, idempotencyKey: `outreach-reply/${messageId}` });
+      const result = await sendColdOutreach({ to: thread.counterpartEmail, subject: finalSubject, body, idempotencyKey: `outreach-reply/${messageId}`, sender: outreachSender(sender.email) });
       if (result.error || !result.data?.id) return { ok: false as const, error: "Outreach was not accepted by the provider." };
       providerId = `sent:${result.data.id}`;
     } catch (error) {

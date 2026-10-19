@@ -5,7 +5,7 @@ import { logCall } from "@/app/admin/pipeline/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateLeadEmail } from "@/app/admin/pipeline/email-actions";
 import type { SavedEmailDraft } from "@/lib/call-brief";
-import { LEAD_SENDER_EMAIL, OUTREACH_SENDER_EMAIL, SKOX_WEBSITE } from "@/lib/lead-email";
+import { SKOX_WEBSITE } from "@/lib/lead-email";
 import { EMAIL_STATUS_LABEL, type StatusReport } from "@/lib/resend-events";
 
 /**
@@ -22,6 +22,8 @@ export function EmailDraft({
   initiallyOpen = false,
   saved,
   canSend,
+  fromLine,
+  signedBy = null,
   doNotEmail = false,
   outreachBlocked,
   delivery = null,
@@ -34,6 +36,10 @@ export function EmailDraft({
   initiallyOpen?: boolean;
   saved?: SavedEmailDraft;
   canSend: boolean;
+  /** "Josh Fox <josh@outreach.skoxsoftware.com>": who the lead sees it from if the signed-in person sends it. */
+  fromLine: string;
+  /** Set when the draft is signed by someone else on the team, so the sender fixes it first. */
+  signedBy?: string | null;
   dealId: string;
   to: string | null;
   draft: { subject: string; body: string };
@@ -88,7 +94,8 @@ export function EmailDraft({
           <div className="email-draft-to small">
             To: {to ? <strong>{to}</strong> : <span className="muted">no email on file; add it in the mail app or Details</span>}
           </div>
-          <p className="small">From: <strong>{status === "draft" ? OUTREACH_SENDER_EMAIL : saved?.fromEmail ?? OUTREACH_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "scheduled" ? `Scheduled for ${saved?.scheduledAt ? new Date(saved.scheduledAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : "later"}` : status === "sending" || status === "scheduling" ? "Processing" : "Draft — not sent"}</p>
+          {signedBy && status === "draft" && <p className="small email-draft-warning" role="note">This draft is signed by <strong>{signedBy}</strong>. Change the name and phone number at the bottom before you send it.</p>}
+          <p className="small">From: <strong>{status === "draft" ? fromLine : saved?.fromEmail ?? fromLine}</strong> · {status === "sent" ? "Sent" : status === "scheduled" ? `Scheduled for ${saved?.scheduledAt ? new Date(saved.scheduledAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : "later"}` : status === "sending" || status === "scheduling" ? "Processing" : "Draft — not sent"}</p>
           {delivery?.status === "bounced" && <p className="small">This address bounced{delivery.reason ? `: ${delivery.reason}` : "."} The lead is marked do-not-email.</p>}
           <label className="sr-only" htmlFor={`email-subject-${dealId}`}>
             Subject
@@ -123,7 +130,7 @@ export function EmailDraft({
           {outreachBlocked && <p className="small"><strong>Sending blocked.</strong> {outreachBlocked}</p>}
           {doNotEmail && <p className="small"><strong>Do not email.</strong> This contact opted out, so sending is blocked.</p>}
           {message && <p role="status" className="small">{message}</p>}
-          {!canSend && <p className="small muted">Sign in as {LEAD_SENDER_EMAIL} to send.</p>}
+          {!canSend && <p className="small muted">Sending isn&apos;t available for this account.</p>}
           {copied === "failed" && <p className="small muted">Couldn&apos;t reach the clipboard. Select the text and copy it.</p>}
         </section>
       )}

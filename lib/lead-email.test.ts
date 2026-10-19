@@ -67,3 +67,25 @@ test("unsubscribe tokens round-trip for the deal and address they were signed fo
   assert.throws(() => unsubscribeToken(DEAL, "lead@example.com", ""), /UNSUBSCRIBE_SECRET/);
   assert.equal(unsubscribeUrl("https://www.skoxsoftware.com/portal/", DEAL, "lead@example.com", "secret"), `https://www.skoxsoftware.com/portal/u/${token}`);
 });
+
+test("each founder sends from the outreach domain; replies go to their own inbox", async () => {
+  const { outreachSender, senderLine, signedByOther } = await import("./lead-email.ts");
+  const josh = outreachSender("Founders@SKOXsoftware.com");
+  const reiss = outreachSender("reiss@skoxsoftware.com");
+  assert.equal(senderLine(josh), "Josh Fox <josh@outreach.skoxsoftware.com>");
+  assert.equal(josh.replyTo, "founders@skoxsoftware.com");
+  assert.equal(senderLine(reiss), "Reiss Skeen <reiss@outreach.skoxsoftware.com>");
+  assert.equal(reiss.replyTo, "reiss@skoxsoftware.com");
+  const other = outreachSender("sam.lee@skoxsoftware.com");
+  assert.equal(senderLine(other), "Sam Lee <sam.lee@outreach.skoxsoftware.com>");
+  for (const s of [josh, reiss, other]) assert.match(s.fromEmail, /@outreach\.skoxsoftware\.com$/);
+  // A draft Reiss signed, about to go out from Josh, is flagged.
+  assert.equal(signedByOther("Thanks,\nReiss Skeen", josh), "Reiss Skeen");
+  assert.equal(signedByOther("Thanks,\nReiss Skeen", reiss), null);
+});
+
+test("a generated draft is written and signed as whoever sends it", () => {
+  const draft = buildEmailDraft({ company: "Acme", brief: null, author: { name: "Josh Fox", firstName: "Josh", title: "Co-founder, SKOX Software" } });
+  assert.match(draft.body, /I'm Josh with SKOX Software/);
+  assert.match(draft.body, /Josh Fox\nCo-founder, SKOX Software/);
+});

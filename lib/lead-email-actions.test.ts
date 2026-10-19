@@ -29,12 +29,14 @@ function harness({ email = "reiss@skoxsoftware.com", status = "draft", productio
     "@/lib/db": { getDb: () => db },
     "@/lib/db/schema": { deals: {}, emailMessages: {}, emailThreads: {} },
     "@/lib/events": { eventInsert: () => ({}) },
-    "@/lib/lead-email": { LEAD_SENDER_EMAIL: "reiss@skoxsoftware.com", leadEmailPayload: (to: string, subject: string, body: string, footer: unknown) => ({ from: "Reiss Skeen <reiss@skoxsoftware.com>", replyTo: "reiss@skoxsoftware.com", to, subject, text: body, footer }) },
+    "@/lib/lead-email": {
+      outreachSender: (e: string) => ({ name: e.startsWith("reiss@") ? "Reiss Skeen" : "Other", firstName: "X", fromEmail: `${e.split("@")[0]}@outreach.skoxsoftware.com`, replyTo: e, title: "" }),
+    },
     "@/lib/cold-outreach": {
       outreachConfig: () => { if (!postal.trim() || !secret) throw Error("SKOX_POSTAL_ADDRESS missing"); },
-      sendColdOutreach: async (input: {to:string;subject:string;body:string}) => {
+      sendColdOutreach: async (input: {to:string;subject:string;body:string;sender:{name:string;fromEmail:string;replyTo:string}}) => {
         calls.send++;
-        payload={from:"Reiss Skeen <reiss@skoxsoftware.com>",footer:{postalAddress:postal,unsubscribeUrl:`https://www.skoxsoftware.com/portal/u/${deal.id}.sig`}};
+        payload={from:`${input.sender.name} <${input.sender.fromEmail}>`,replyTo:input.sender.replyTo,footer:{postalAddress:postal,unsubscribeUrl:`https://www.skoxsoftware.com/portal/u/${deal.id}.sig`}};
         return rejected ? {error:{message:"Rejected"}} : {data:{id:"provider-id"},payload:{text:input.body}};
       },
     },
@@ -47,11 +49,11 @@ function harness({ email = "reiss@skoxsoftware.com", status = "draft", productio
 }
 
 test("saving never calls the email provider", async () => { const h=harness(); assert.equal((await h.run("save")).status,"draft"); assert.equal(h.calls.send,0); });
-test("another staff account cannot send as Reiss", async () => { const h=harness({email:"other@skoxsoftware.com"}); assert.match(String((await h.run()).error),/Sign in as/); assert.equal(h.calls.send,0); assert.equal(h.calls.updates,0); });
+test("anyone on the team sends as themselves, from the outreach domain", async () => { const h=harness({email:"other@skoxsoftware.com"}); assert.equal((await h.run()).status,"sent"); assert.equal(h.calls.send,1); const p=h.payload() as {from:string;replyTo:string}; assert.equal(p.from,"Other <other@outreach.skoxsoftware.com>"); assert.equal(p.replyTo,"other@skoxsoftware.com"); });
 test("changed recipient, sent draft and in-progress draft never send", async () => { for (const status of ["sent","sending","scheduled","scheduling"]) { const h=harness({status}); assert.ok((await h.run()).error); assert.equal(h.calls.send,0); } const h=harness(); assert.ok((await h.run("send","changed@example.com")).error); assert.equal(h.calls.send,0); });
 test("no production configuration means no send and no false sent record", async () => { for (const opts of [{production:false},{key:""}]) { const h=harness(opts); assert.ok((await h.run()).error); assert.equal(h.calls.send,0); assert.equal(h.calls.batches,0); } });
 test("a competing claim prevents duplicate send", async () => { const h=harness({claim:false}); assert.ok((await h.run()).error); assert.equal(h.calls.send,0); });
-test("accepted email records the send, while provider rejection does not", async () => { const h=harness(); assert.equal((await h.run()).status,"sent"); assert.equal(h.calls.send,1); assert.equal(h.calls.batches,1); assert.equal((h.payload() as {from:string}).from,"Reiss Skeen <reiss@skoxsoftware.com>"); const fail=harness({rejected:true}); assert.ok((await fail.run()).error); assert.equal(fail.calls.batches,0); });
+test("accepted email records the send, while provider rejection does not", async () => { const h=harness(); assert.equal((await h.run()).status,"sent"); assert.equal(h.calls.send,1); assert.equal(h.calls.batches,1); assert.equal((h.payload() as {from:string}).from,"Reiss Skeen <reiss@outreach.skoxsoftware.com>"); const fail=harness({rejected:true}); assert.ok((await fail.run()).error); assert.equal(fail.calls.batches,0); });
 test("sent mail carries the postal address and this deal's unsubscribe link", async () => { const h=harness(); assert.equal((await h.run()).status,"sent"); assert.deepEqual(JSON.parse(JSON.stringify((h.payload() as {footer:unknown}).footer)),{ postalAddress:"123 Example St, Orlando, FL 32801", unsubscribeUrl:"https://www.skoxsoftware.com/portal/u/4e9de8c6-50f1-47cf-a564-4cafbf382c22.sig" }); });
 test("an opted-out contact is never emailed, on this lead or another at the same address", async () => { for (const opts of [{doNotEmail:true},{optedOutElsewhere:true}]) { const h=harness(opts); assert.match(String((await h.run()).error),/asked not to be emailed/); assert.equal(h.calls.send,0); assert.equal(h.calls.updates,0); } });
 test("without a postal address or unsubscribe secret nothing is sent or claimed", async () => { for (const opts of [{postal:""},{postal:"  "},{secret:""}]) { const h=harness(opts); assert.match(String((await h.run()).error),/SKOX_POSTAL_ADDRESS/); assert.equal(h.calls.send,0); assert.equal(h.calls.updates,0); } });

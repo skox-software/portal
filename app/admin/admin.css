@@ -250,3 +250,83 @@ kbd{font:600 10px var(--mono);border:1px solid var(--line);border-bottom-width:2
 .outreach-lead a{color:var(--ink);font-weight:600;text-decoration:none}.outreach-lead a:hover{text-decoration:underline}.outreach-dim{color:var(--muted)}.outreach-kind{display:block;font-size:12px;color:var(--muted)}.outreach-to{overflow-wrap:anywhere}.outreach-subject{min-width:180px}.outreach-why{display:block;margin-top:4px;font-size:12px;color:var(--muted);max-width:240px;overflow-wrap:anywhere}
 @media(max-width:1100px){.outreach-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.outreach-summary{grid-template-columns:1fr 1fr;gap:8px}.outreach-summary .admin-metric strong{font-size:24px}.outreach-table-wrap{background:none;border:0;overflow:visible}.outreach-table,.outreach-table tbody,.outreach-table tr,.outreach-table td{display:block}.outreach-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.outreach-table tr{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px}.outreach-table td{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:5px 0;border:0}.outreach-table td::before{content:attr(data-label);font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:2px}.outreach-table td>.email-status{justify-self:start}.outreach-table td>*{grid-column:2}.outreach-subject{min-width:0}}
+
+/* ---- Overview (app/admin/page.tsx) ---- */
+.ov .page-head{align-items:flex-end}
+.ov-actions{display:flex;gap:8px;flex-wrap:wrap}
+.admin-metrics-6{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.admin-metrics-6 .admin-metric{padding:16px 18px}
+.admin-metrics-6 .admin-metric strong{font-size:30px}
+.admin-metric small.ov-warn{color:var(--danger)}
+.ov-queue-head{align-items:center;gap:16px;flex-wrap:wrap}
+.ov-queue-head .crm-views a{min-height:32px;padding:0 13px;font-size:13px}
+.ov-item{gap:12px}
+.ov-tier{flex-shrink:0;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:var(--fog);color:var(--muted)}
+.ov-tier[data-tier=now]{background:var(--danger-bg);color:var(--danger)}
+.ov-tier[data-tier=today]{background:var(--blush);color:var(--amber-ink)}
+.ov-item .crm-owner{flex-shrink:0;width:26px;height:26px;font-size:9px}
+.crm-owner.ov-owner-team{background:var(--fog);color:var(--muted);border:1px dashed var(--line)}
+.ov-more summary{cursor:pointer;list-style:none;text-align:center;padding:16px 24px}
+.ov-more summary::-webkit-details-marker{display:none}
+.ov-stages{margin:20px 24px 4px;display:flex;flex-wrap:wrap}
+.ov-stages li{flex:1 1 0;min-width:120px}
+.ov-stages span{font:11px var(--sans);color:var(--muted);display:flex;align-items:center;gap:6px}
+.ov-stages strong{font:600 20px var(--mono)}
+.ov-stages small{font:11px var(--mono);color:var(--muted)}
+.ov-dot{width:8px;height:8px;border-radius:50%;background:#a3a39a;display:inline-block}
+.ov-dot[data-stage=proposal_sent]{background:var(--amber-hover)}
+.ov-dot[data-stage=negotiation]{background:var(--amber)}
+.ov-desk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border-top:1px solid var(--line-soft);margin-top:20px}
+.ov-desk>div{min-width:0;padding-bottom:12px}
+.ov-desk>div+div{border-left:1px solid var(--line-soft)}
+.ov-sub{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:0;padding:18px 24px 10px;font:600 13px var(--sans)}
+.ov-sub small{font:11px var(--mono);color:var(--muted);font-weight:400}
+.ov-desk .admin-action{padding:12px 24px}
+.ov-desk .admin-empty{padding:16px 24px}
+.ov-table{width:100%}
+.ov-table th,.ov-table td{padding:10px 14px;font-size:13px}
+.ov-table th:first-child,.ov-table td:first-child{padding-left:24px}
+.ov-table th:last-child,.ov-table td:last-child{padding-right:24px}
+.ov-table .num{text-align:right;font-variant-numeric:tabular-nums}
+.admin-body .ov-table td{padding-block:10px}
+.ov-outreach{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 24px;border:1px solid var(--line);border-radius:12px;overflow:hidden;text-decoration:none;color:var(--ink)}
+.ov-outreach:hover{border-color:#b8880a}
+.ov-outreach span{display:grid;gap:2px;padding:10px 12px;border-left:1px solid var(--line-soft)}
+.ov-outreach span:first-child{border-left:0}
+.ov-outreach strong{font:600 18px var(--mono)}
+.ov-outreach small{font-size:11px;color:var(--muted)}
+.ov-outreach span[data-key=bounced] strong{color:var(--danger)}
+.ov-note{margin:8px 24px 0;font-size:12px;color:var(--muted)}
+.ov-progress{display:block;max-width:180px;margin-top:8px}
+.ov-money{padding:18px 24px 20px;display:grid;gap:14px}
+.ov-money .spark{width:100%;height:56px}
+.ov-money dl{margin:0;display:grid;gap:8px}
+.ov-money dl div{display:flex;justify-content:space-between;gap:12px;font-size:13px}
+.ov-money dt{color:var(--muted)}
+.ov-money dd{margin:0;font-weight:550;text-align:right}
+.ov-feed{list-style:none;margin:0;padding:6px 0}
+.ov-feed li{display:flex;gap:12px;padding:10px 24px;align-items:flex-start}
+.ov-feed li>span{display:grid;place-items:center;flex-shrink:0;width:26px;height:26px;border-radius:8px;background:var(--fog);color:var(--amber-ink);font-size:12px}
+.ov-feed li[data-icon=paid]>span,.ov-feed li[data-icon=won]>span,.ov-feed li[data-icon=onboarded]>span,.ov-feed li[data-icon=signed]>span{background:var(--ok-bg);color:var(--ok)}
+.ov-feed li[data-icon=alert]>span,.ov-feed li[data-icon=lost]>span{background:var(--danger-bg);color:var(--danger)}
+.ov-feed p{margin:0;font-size:13px;line-height:1.4;min-width:0}
+.ov-feed p strong{color:var(--ok);font-weight:600}
+.ov-feed small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+@media(max-width:1300px){.admin-metrics-6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1100px){.ov-desk{grid-template-columns:1fr}.ov-desk>div+div{border-left:0;border-top:1px solid var(--line-soft)}}
+@media(max-width:760px){
+  .admin-metrics-6{grid-template-columns:1fr 1fr}
+  .admin-metrics-6 .admin-metric strong{font-size:24px}
+  .ov-actions{width:100%}
+  .ov-actions .btn{flex:1 1 auto;justify-content:center}
+  .ov-stages{margin:16px 16px 4px}
+  .ov-stages li{min-width:45%}
+  .ov-sub{padding:16px 16px 8px}
+  .ov-outreach{margin:0 16px;grid-template-columns:1fr 1fr}
+  .ov-outreach span:nth-child(3){border-left:0}
+  .ov-outreach span:nth-child(n+3){border-top:1px solid var(--line-soft)}
+  .ov-table th:first-child,.ov-table td:first-child{padding-left:16px}
+  .ov-item .ov-tier{display:none}
+  .ov-feed li{padding:10px 16px}
+  .ov-money{padding:16px}
+}

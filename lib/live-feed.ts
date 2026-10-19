@@ -17,9 +17,14 @@ export const LIVE_VERBS = [
   "deal.created",
   "commission.earned",
   "statement.paid",
+  "statement.approved",
+  "commission.needs_attention",
+  "document.signed",
+  "onboarding.completed",
+  "deal.meeting_booked",
 ] as const;
 
-export type LiveIcon = "paid" | "invoice" | "won" | "stage" | "lost" | "call" | "deal" | "commission" | "statement";
+export type LiveIcon = "paid" | "invoice" | "won" | "stage" | "lost" | "call" | "deal" | "commission" | "statement" | "signed" | "onboarded" | "meeting" | "alert";
 
 export type LiveLine = { icon: LiveIcon; text: string; amountCents?: number };
 
@@ -89,6 +94,25 @@ export function describeEvent(verb: string, payload: Payload | null | undefined)
       const rep = str(p, "rep");
       return { icon: "statement", text: rep ? `Statement paid to ${rep}` : "Commission statement paid", amountCents: cents(p, "totalCents") };
     }
+    case "statement.approved": {
+      const rep = str(p, "rep");
+      return { icon: "statement", text: rep ? `Statement approved for ${rep}` : "Commission statement approved", amountCents: cents(p, "totalCents") };
+    }
+    case "commission.needs_attention": {
+      const invoice = str(p, "invoice");
+      return { icon: "alert", text: `Commission needs review${invoice ? ` on ${invoice}` : ""}` };
+    }
+    case "document.signed": {
+      const title = str(p, "title");
+      const who = str(p, "client");
+      return { icon: "signed", text: `${who ?? "A client"} signed${title ? ` ${title}` : " a document"}` };
+    }
+    case "onboarding.completed": {
+      const who = str(p, "client");
+      return { icon: "onboarded", text: `${who ?? "A client"} finished onboarding` };
+    }
+    case "deal.meeting_booked":
+      return { icon: "meeting", text: `Scope call booked with ${company ?? "a lead"}` };
     default:
       return null;
   }

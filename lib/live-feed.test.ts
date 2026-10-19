@@ -68,3 +68,11 @@ test("only events not seen before count as new", () => {
   assert.deepEqual(newEvents([e("a"), e("b")], [e("c"), e("a"), e("b")]).map((x) => x.id), ["c"]);
   assert.deepEqual(newEvents([], [e("a")]).map((x) => x.id), ["a"]);
 });
+
+test("signatures, finished onboarding, scope calls and commission flags make the feed", () => {
+  assert.deepEqual(describeEvent("document.signed", { title: "Services agreement", client: "Harbor Dental" }), { icon: "signed", text: "Harbor Dental signed Services agreement" });
+  assert.equal(describeEvent("onboarding.completed", { client: "Acme" })?.text, "Acme finished onboarding");
+  assert.equal(describeEvent("deal.meeting_booked", { company: "Acme Roofing", when: "2026-10-21T14:00" })?.text, "Scope call booked with Acme Roofing");
+  assert.equal(describeEvent("commission.needs_attention", { invoice: "SK-1042", reason: "no profile" })?.text, "Commission needs review on SK-1042");
+  assert.deepEqual(describeEvent("statement.approved", { rep: "Dana", totalCents: 75_000 }), { icon: "statement", text: "Statement approved for Dana", amountCents: 75_000 });
+});

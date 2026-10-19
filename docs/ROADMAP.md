@@ -98,6 +98,26 @@ paid invoice on a client project credits the project's rep at their rate
 statements the owner approves and marks paid. Staff manage reps at
 `/admin/reps` and money at `/admin/commissions`. Migration 0013.
 
+### Overview rebuilt as the team's home (2026-10-19)
+`/admin` now pulls from every part of the portal, read in one pass by
+`lib/overview-data.ts`, with the ranking rules in `lib/overview-math.ts`.
+- **Pulse:** money in the bank, collected this month against the yearly goal,
+  weighted pipeline, money owed, follow-ups due and unread Inbox mail. Each
+  number links to the page that owns it.
+- **Needs you:** one queue ranked Now, Today, This week, with a Mine or
+  Everyone filter. It holds follow-ups, scope calls booked by reps, overdue
+  and due invoices, statements to approve or pay, open commission flags,
+  stalled deals, bounced outreach and Inbox roll-ups, plus the delivery items
+  the old page had.
+- **Sales desk:** open deals by stage, the next five calls (the call desk's
+  own priority), each person's calls, emails, new leads and wins this week,
+  and outreach rates for 30 days.
+- **Projects in motion:** milestone progress and when the client last looked.
+- **Right rail:** 12-month cash sparkline, next payout, unpaid commission,
+  this month's race, payments to chase, client setups and the latest activity.
+
+No migration.
+
 ## Next
 
 ### Phase 3, remaining

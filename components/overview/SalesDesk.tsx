@@ -28,7 +28,7 @@ export function SalesDesk({ sales, names }: { sales: Overview["sales"]; names: M
                 <i className="ov-dot" data-stage={s.key} aria-hidden="true" /> {s.label}
               </span>
               <strong>{s.count}</strong>
-              <small>{s.cents ? formatMoney(s.cents) : "No value set"}</small>
+              <small>{s.cents ? formatMoney(s.cents) : "—"}</small>
             </Link>
           </li>
         ))}
@@ -122,7 +122,15 @@ export function SalesDesk({ sales, names }: { sales: Overview["sales"]; names: M
               );
             })}
           </Link>
-          {!sent && <p className="ov-note">No outreach emails in the last 30 days.</p>}
+          {!sent ? (
+            <p className="ov-note">No outreach emails in the last 30 days.</p>
+          ) : sales.outreach.untracked ? (
+            <p className="ov-note">
+              {sales.outreach.tracked
+                ? `${sales.outreach.untracked} went out before delivery tracking; rates count the ${sales.outreach.tracked} tracked.`
+                : `All ${sent} went out before delivery tracking, so there are no rates yet.`}
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

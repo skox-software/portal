@@ -20,14 +20,21 @@ export function PulseStrip({ pulse }: { pulse: Overview["pulse"] }) {
         <strong>{formatMoney(p.collectedMonthCents)}</strong>
         <small className={p.pace && !p.pace.onTrack ? "ov-warn" : undefined}>{collectedNote}</small>
       </Link>
-      <Link className="admin-metric" href="/admin/pipeline">
-        <span>Pipeline, weighted</span>
-        <strong>{formatMoney(p.weightedPipelineCents)}</strong>
-        <small>
-          {p.openDealCount} open deal{p.openDealCount === 1 ? "" : "s"}
-          {p.openDealCents ? ` · ${formatMoney(p.openDealCents)} face value` : ""}
-        </small>
-      </Link>
+      {p.weightedPipelineCents > 0 ? (
+        <Link className="admin-metric" href="/admin/pipeline">
+          <span>Pipeline, weighted</span>
+          <strong>{formatMoney(p.weightedPipelineCents)}</strong>
+          <small>
+            {p.openDealCount} open deal{p.openDealCount === 1 ? "" : "s"} · {formatMoney(p.openDealCents)} face value
+          </small>
+        </Link>
+      ) : (
+        <Link className="admin-metric" href="/admin/pipeline">
+          <span>Open deals</span>
+          <strong>{p.openDealCount}</strong>
+          <small>{p.openDealCount ? "No deal values set yet" : "Add or import leads"}</small>
+        </Link>
+      )}
       <Link className="admin-metric" href={p.owed.overdueCount ? "/admin/billing?status=overdue" : "/admin/billing?status=open"}>
         <span>Owed to SKOX</span>
         <strong>{formatMoney(p.owed.openCents)}</strong>

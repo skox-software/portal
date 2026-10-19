@@ -31,7 +31,7 @@ import { periodRange, type PeriodRange } from "@/lib/finance-periods";
 import { stripePayouts } from "@/lib/finance-stripe";
 import { followUpState } from "@/lib/follow-up";
 import { dueFollowUps } from "@/lib/follow-up-data";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, formatMonth } from "@/lib/format";
 import { isCallable, zoneFor } from "@/lib/local-time";
 import { loadOutreachLog } from "@/lib/outreach-log-data";
 import { inPeriod as outreachInPeriod, summarize } from "@/lib/outreach-log";
@@ -289,7 +289,7 @@ export async function loadOverview({ ws, me, role, today, now }: OverviewInput) 
       source: "commission",
       owner: me.toLowerCase(),
       text: `${draft ? "Approve" : "Pay"} ${s.name ?? "a"} commission statement · ${formatMoney(s.totalCents)}`,
-      detail: draft ? `Drafted for ${s.periodStart.slice(0, 7)}` : "Approved, not yet marked paid",
+      detail: draft ? `${formatMonth(s.periodStart)} · waiting for your approval` : `${formatMonth(s.periodStart)} · approved, not yet marked paid`,
       href: "/admin/commissions",
       at: iso(s.createdAt),
     });

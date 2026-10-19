@@ -8,6 +8,7 @@ const items = [
   ["/admin/pipeline", "Pipeline", "⇉"],
   ["/admin/clients", "Clients", "◎"],
   ["/admin/inbox", "Inbox", "✉"],
+  ["/admin/outreach", "Outreach", "➚"],
   ["/admin/projects", "Projects", "▦"],
   ["/admin/billing", "Billing", "$"],
   ["/admin/finance", "Finance", "◔"],

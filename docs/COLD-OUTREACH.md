@@ -15,3 +15,5 @@ All prospect emails, including Inbox follow-ups, must use sendColdOutreach. Prov
 Monitor reply-based opt-outs and record them using Do not email immediately (legal maximum: 10 business days). Keep the address suppression record permanently. Do not transfer suppressed addresses for marketing. True transactional invoices and login messages are separate from marketing; adding promotional content requires review.
 
 The October 19 campaign already sent before these protections. Do not resend it. Its four bounced recipients must be verified before any later outreach; provider suppression remains in force.
+
+Release verification must be recorded against the deployed commit before outreach is enabled.

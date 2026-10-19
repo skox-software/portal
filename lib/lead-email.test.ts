@@ -89,3 +89,12 @@ test("a generated draft is written and signed as whoever sends it", () => {
   assert.match(draft.body, /I'm Josh with SKOX Software/);
   assert.match(draft.body, /Josh Fox\nCo-founder, SKOX Software/);
 });
+
+
+test("generated website preview is a hosted clickable link without images or attachments", () => {
+  const draft = buildEmailDraft({ company: "Example", brief: { preview: "https://example.com/concept/" } });
+  const mail = leadEmailPayload("lead@example.com", draft.subject, draft.body, footer);
+  assert.match(mail.html, /<a href="https:\/\/example.com\/concept\/">/);
+  assert.doesNotMatch(mail.html, /<img|data:image|cid:/i);
+  assert.equal("attachments" in mail, false);
+});

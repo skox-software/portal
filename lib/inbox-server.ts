@@ -1,4 +1,5 @@
-import { sendColdOutreach } from "@/lib/cold-outreach";
+import { isOptOutReply } from "@/lib/reply-opt-out";
+import { sendColdOutreach, suppressOutreach } from "@/lib/cold-outreach";
 import { outreachSender } from "@/lib/lead-email";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { Resend } from "resend";
@@ -93,6 +94,12 @@ export async function ingestEmail(mail: IncomingEmail) {
   const copy = inboxCopyAddress();
   const side = counterpartOf(from, recipients, staffMatcher(staff), copy ? [copy] : []);
   if (!side) return { skipped: "internal" as const };
+
+  // Persist before deduplication/storage: retries repair a partial failure and
+  // quoted copies of our footer cannot suppress an interested prospect.
+  if (side.direction === "inbound" && isOptOutReply(mail.subject, mail.text)) {
+    await suppressOutreach(from.email);
+  }
 
   const messageId = bareMessageId(mail.messageId);
   if (mail.providerId) {

@@ -91,7 +91,7 @@ export function buildEmailDraft(input: {
       ? `We could build you ${build}, at a fixed price agreed before we start.`
       : "We build new websites at a fixed price agreed before we start, with the launch date set up front.",
   );
-  if (brief?.preview) lines.push(`I put together a quick preview of what yours could look like: ${brief.preview}`);
+  if (brief?.preview) lines.push(`I put together a quick preview of what yours could look like:\n${brief.preview}\n`);
   const ask = brief?.askThem?.trim();
   if (ask) lines.push(/[?.!]$/.test(ask) ? ask : `${ask}?`);
   lines.push("Would you be open to a 15-minute call this week?");

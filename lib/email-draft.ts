@@ -6,7 +6,10 @@
 
 import type { CallBrief } from "./call-brief.ts";
 
-export const SIGNATURE = ["Reiss Skeen", "Co-founder, SKOX Software", "skoxsoftware.com"];
+/** Who the draft is written as: the person who'll send it. */
+export type DraftAuthor = { name: string; firstName: string; title: string };
+export const DEFAULT_AUTHOR: DraftAuthor = { name: "Reiss Skeen", firstName: "Reiss", title: "Co-founder, SKOX Software" };
+export const signatureFor = (author: DraftAuthor) => [author.name, author.title, "skoxsoftware.com"];
 
 const SUBJECTS: Record<string, (company: string) => string> = {
   "SITE DOWN": (c) => `${c}'s website isn't loading`,
@@ -65,7 +68,10 @@ export function buildEmailDraft(input: {
   contactName?: string | null;
   website?: string | null;
   brief: CallBrief | null;
+  /** Who's sending, for "I'm <name>" and the signature. */
+  author?: DraftAuthor;
 }) {
+  const author = input.author ?? DEFAULT_AUTHOR;
   const { company, website, brief } = input;
   if (brief?.emailDraft) return { subject: brief.emailDraft.subject, body: brief.emailDraft.body };
   const name = greetingName(input.contactName) ?? greetingName(brief?.askFor);
@@ -76,9 +82,9 @@ export function buildEmailDraft(input: {
 
   const lines: string[] = [];
   if (brief?.tag === "NO WEBSITE") {
-    lines.push(`I'm Reiss with SKOX Software. I looked ${company} up and couldn't find a website, just your listing.`);
+    lines.push(`I'm ${author.firstName} with SKOX Software. I looked ${company} up and couldn't find a website, just your listing.`);
   } else {
-    lines.push(`I'm Reiss with SKOX Software. I was looking at ${site ?? "your website"} and noticed ${problem ?? "it's showing its age"}.`);
+    lines.push(`I'm ${author.firstName} with SKOX Software. I was looking at ${site ?? "your website"} and noticed ${problem ?? "it's showing its age"}.`);
   }
   lines.push(
     build
@@ -90,7 +96,7 @@ export function buildEmailDraft(input: {
   if (ask) lines.push(/[?.!]$/.test(ask) ? ask : `${ask}?`);
   lines.push("Would you be open to a 15-minute call this week?");
 
-  const body = [`Hi ${name ?? "there"},`, "", lines.join(" "), "", "Thanks,", ...SIGNATURE].join("\n");
+  const body = [`Hi ${name ?? "there"},`, "", lines.join(" "), "", "Thanks,", ...signatureFor(author)].join("\n");
   return { subject, body };
 }
 

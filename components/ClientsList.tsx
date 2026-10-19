@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransiti
 import { bulkUpdateDeals } from "@/app/admin/pipeline/actions";
 import { followUpChoices } from "@/lib/follow-up";
 import { initials } from "@/lib/pipeline";
+import { EMAIL_STATUS_LABEL, type EmailStatus } from "@/lib/resend-events";
 
 export type ClientRow = {
   key: string;
@@ -38,6 +39,8 @@ export type ClientRow = {
   /** ISO time. */
   lastTouch: string | null;
   contacted: boolean;
+  /** What Resend last reported for the lead's outreach email. */
+  emailStatus: EmailStatus | null;
   untouched: boolean;
   search: string;
 };
@@ -371,6 +374,11 @@ export function ClientsList({
                                 <a href={`mailto:${r.contactEmail}`} title={`Email ${r.contactEmail}`} aria-label={`Email ${r.name}`}>
                                   Email
                                 </a>
+                              )}
+                              {r.emailStatus && (
+                                <span className="email-status" data-status={r.emailStatus} title={`Outreach email: ${EMAIL_STATUS_LABEL[r.emailStatus]}`}>
+                                  {EMAIL_STATUS_LABEL[r.emailStatus]}
+                                </span>
                               )}
                               {r.website && (
                                 <a href={r.website} target="_blank" rel="noreferrer" title={r.website} aria-label={`${r.name} website`}>

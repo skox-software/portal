@@ -1,6 +1,43 @@
-export const LEAD_SENDER_EMAIL = "reiss@skoxsoftware.com";
-export const OUTREACH_SENDER_EMAIL = "reiss@outreach.skoxsoftware.com";
-export const LEAD_SENDER = `Reiss Skeen <${OUTREACH_SENDER_EMAIL}>`;
+/**
+ * Cold outreach goes out from its own subdomain (verified in Resend), so spam
+ * reports on cold email can't hurt skoxsoftware.com, which sends sign-in
+ * codes, invoices and receipts. Replies come back to the sender's normal
+ * inbox through Reply-To, so nobody needs a mailbox on the subdomain.
+ */
+export const OUTREACH_DOMAIN = "outreach.skoxsoftware.com";
+
+/** Who an outreach email is from: the display name, the address on the outreach domain, and where replies go. */
+export type OutreachSender = { name: string; firstName: string; fromEmail: string; replyTo: string; title: string };
+
+/** The team's names as a lead should see them, keyed by portal sign-in. */
+const KNOWN_SENDERS: Record<string, { name: string; local: string; title: string }> = {
+  "reiss@skoxsoftware.com": { name: "Reiss Skeen", local: "reiss", title: "Co-founder, SKOX Software" },
+  "founders@skoxsoftware.com": { name: "Josh Fox", local: "josh", title: "Co-founder, SKOX Software" },
+};
+
+/** Outreach goes out as whoever presses Send: their name, on the outreach domain. */
+export function outreachSender(loginEmail: string): OutreachSender {
+  const email = loginEmail.trim().toLowerCase();
+  const known = KNOWN_SENDERS[email];
+  const local = (known?.local ?? email.split("@")[0]).replace(/[^a-z0-9._-]/g, "") || "hello";
+  const name = known?.name ?? local.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return { name, firstName: name.split(" ")[0], fromEmail: `${local}@${OUTREACH_DOMAIN}`, replyTo: email, title: known?.title ?? "SKOX Software" };
+}
+
+/** Reiss works most leads, so he's the default author of generated drafts. */
+export const REISS = outreachSender("reiss@skoxsoftware.com");
+export const LEAD_SENDER_EMAIL = REISS.replyTo;
+export const OUTREACH_SENDER_EMAIL = REISS.fromEmail;
+
+/** The "From" line a lead sees. */
+export function senderLine(sender: OutreachSender) {
+  return `${sender.name} <${sender.fromEmail}>`;
+}
+
+/** Another team member's name in a draft's body, e.g. a draft Reiss wrote that Josh is about to send. */
+export function signedByOther(body: string, sender: OutreachSender) {
+  return Object.values(KNOWN_SENDERS).find((k) => k.name !== sender.name && body.includes(k.name))?.name ?? null;
+}
 export const SKOX_WEBSITE = "https://www.skoxsoftware.com";
 export const OPT_OUT_LINE = "Not interested? Reply 'no thanks' or use this link and we won't email you again";
 
@@ -14,7 +51,7 @@ export type ComplianceFooter = { postalAddress: string; unsubscribeUrl: string }
  * then add the postal address and opt-out. Throws without either, so a cold
  * email can never leave without them.
  */
-export function leadEmailPayload(to: string, subject: string, body: string, footer: ComplianceFooter) {
+export function leadEmailPayload(to: string, subject: string, body: string, footer: ComplianceFooter, sender: OutreachSender = REISS) {
   const postalAddress = footer.postalAddress?.trim();
   if (!postalAddress) throw new Error("SKOX_POSTAL_ADDRESS is not set; cold email needs our postal address.");
   if (!/^https:\/\/[^\s<>"]+$/i.test(footer.unsubscribeUrl ?? "")) throw new Error("Cold email needs an https unsubscribe link.");
@@ -27,7 +64,7 @@ export function leadEmailPayload(to: string, subject: string, body: string, foot
   const text = lines.map(line => /^\s*SKOX Software\s*$/i.test(line) ? `${line.trim()} (${SKOX_WEBSITE})` : line).join("\n")
     + `\n\n--\nAdvertisement from SKOX Software · ${postalAddress}\n${OPT_OUT_LINE}: ${url}`;
   return {
-    from: LEAD_SENDER, replyTo: LEAD_SENDER_EMAIL, to, subject, text, html,
+    from: senderLine(sender), replyTo: sender.replyTo, to, subject, text, html,
     // One-click unsubscribe (RFC 8058), which Gmail and Yahoo expect from bulk senders.
     headers: { "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
   };

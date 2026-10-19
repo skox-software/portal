@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { Resend } from "resend";
 import { getDb } from "@/lib/db";
 import { deals, outreachRecipients } from "@/lib/db/schema";
-import { leadEmailPayload } from "@/lib/lead-email";
+import { leadEmailPayload, REISS, type OutreachSender } from "@/lib/lead-email";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
 
 export function outreachConfig() {
@@ -27,7 +27,7 @@ export async function suppressOutreach(email: string) {
 /** All prospect sends (including Inbox replies) use this immediate-only gateway.
  * Never pre-schedule provider messages: opt-outs must be checked at dispatch.
  */
-export async function sendColdOutreach(input: { to: string; subject: string; body: string; idempotencyKey: string }) {
+export async function sendColdOutreach(input: { to: string; subject: string; body: string; idempotencyKey: string; sender?: OutreachSender }) {
   const config = outreachConfig(); // Before any database claim/provider call.
   const db = getDb();
   const email = input.to.trim().toLowerCase();
@@ -38,7 +38,7 @@ export async function sendColdOutreach(input: { to: string; subject: string; bod
   const payload = leadEmailPayload(email, input.subject, input.body, {
     postalAddress: config.postalAddress,
     unsubscribeUrl: unsubscribeUrl(process.env.PORTAL_URL ?? "https://www.skoxsoftware.com/portal", recipient.id, email, config.secret),
-  });
+  }, input.sender ?? REISS);
   const result = await new Resend(config.key).emails.send(payload, { idempotencyKey: input.idempotencyKey });
   return { ...result, payload };
 }

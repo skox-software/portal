@@ -9,6 +9,7 @@ import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { emailThreads, events } from "@/lib/db/schema";
 import { nowMs } from "@/lib/format";
+import { loadEmailStatuses } from "@/lib/email-status-data";
 import { describeFollowUp, followUpState, salesToday, untouchedFor } from "@/lib/follow-up";
 import { daysSince, PRESALE, searchText, STALL_DAYS, type Card, type ColumnKey } from "@/lib/pipeline";
 import { loadPipeline } from "@/lib/pipeline-data";
@@ -54,7 +55,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const { viewer, staff } = await requireStaff();
   const ws = staff.workspaceId;
   const db = getDb();
-  const [{ columns, lost, clientRows, dealRows, projectRows, owners, reps }, projectTouches, dealTouches, clientMail, dealMail] = await Promise.all([
+  const [{ columns, lost, clientRows, dealRows, projectRows, owners, reps }, projectTouches, dealTouches, clientMail, dealMail, emailStatuses] = await Promise.all([
     loadPipeline(ws),
     db
       .select({ id: events.projectId, at: sql<Date>`max(${events.createdAt})` })
@@ -76,6 +77,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       .from(emailThreads)
       .where(and(eq(emailThreads.workspaceId, ws), isNotNull(emailThreads.dealId)))
       .groupBy(emailThreads.dealId),
+    loadEmailStatuses(ws),
   ]);
 
   const toMap = (rows: { id: string | null; at: Date | string }[]) => new Map(rows.filter((r) => r.id).map((r) => [r.id!, new Date(r.at)]));
@@ -155,6 +157,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       followUpOwner: isDeal ? card.ownerEmail : client?.nextStepOwner ?? null,
       lastTouch: lastTouch?.toISOString() ?? null,
       contacted: !!deal?.lastContactedAt,
+      emailStatus: isDeal ? emailStatuses.get(card.id)?.status ?? null : null,
       untouched: working && PRESALE.includes(stage as ColumnKey) && untouchedFor(deal?.lastContactedAt ?? null, card.since, now, 7),
       search: searchText([card.company, card.contactName, card.contactEmail, deal?.phone, deal?.website, card.location, card.industry, card.leadSource, deal?.notes]),
     };
@@ -191,6 +194,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       followUpOwner: c.nextStepOwner,
       lastTouch: latest(clientMailAt.get(c.id), c.createdAt)?.toISOString() ?? null,
       contacted: false,
+      emailStatus: null,
       untouched: false,
       search: c.name.toLowerCase(),
     }));

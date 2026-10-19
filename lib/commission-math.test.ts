@@ -182,3 +182,35 @@ test("ledger-based clawbacks still clear every cent on a full refund", () => {
     shares.forEach((share, i) => assert.equal(clawed[i], share.amountCents));
   }
 });
+
+test("a founder closing a lead the other founder sourced keeps 60%; the sourcer gets 40%", () => {
+  const people = team.map((p) => ({ ...p, userId: `user-${p.id}` }));
+  const plan = (credited: string, createdBy: string | null, base = 100_000) =>
+    math.planDealShares({ baseCents: base, projectRepId: credited, deals: [{ repId: null, ownerEmail: null, createdBy }], people, defaultSourceEmail: "josh@skox.test" });
+  const lines = (r: ReturnType<typeof math.planDealShares>) => {
+    assert.ok(r && "allocations" in r, JSON.stringify(r));
+    return r.allocations.map((a) => [a.id, a.rateBps, a.amountCents]);
+  };
+  // Reiss closes a lead Josh added: 60 / 40.
+  assert.deepEqual(lines(plan("reiss", "user-josh")), [["reiss", 6000, 60_000], ["josh", 4000, 40_000]]);
+  // Reiss closes a lead he added himself: all his.
+  assert.deepEqual(lines(plan("reiss", "user-reiss")), [["reiss", 10000, 100_000]]);
+  // Leads nobody added by hand (website, imports) are Josh's.
+  assert.deepEqual(lines(plan("reiss", "website")), [["reiss", 6000, 60_000], ["josh", 4000, 40_000]]);
+  assert.deepEqual(lines(plan("josh", "website")), [["josh", 10000, 100_000]]);
+  // And the other way round.
+  assert.deepEqual(lines(plan("josh", "user-reiss")), [["josh", 6000, 60_000], ["reiss", 4000, 40_000]]);
+  // Odd cents: the sourcer's 40% rounds half up, the closer gets exactly the rest.
+  const odd = lines(plan("reiss", "user-josh", 100_007));
+  assert.deepEqual(odd, [["reiss", 6000, 60_004], ["josh", 4000, 40_003]]);
+  // Rep deals are unchanged by who added the lead.
+  const rep = math.planDealShares({ baseCents: 125_000, projectRepId: "rep", deals: [{ repId: null, ownerEmail: null, createdBy: "user-josh" }], people, defaultSourceEmail: "josh@skox.test" });
+  assert.ok(rep && "allocations" in rep);
+  assert.deepEqual(rep.allocations.map((a) => a.rateBps), [2000, 4000, 4000]);
+  // Two leads behind one project, added by different founders: a person decides.
+  const mixed = math.planDealShares({
+    baseCents: 100, projectRepId: "reiss", people, defaultSourceEmail: "josh@skox.test",
+    deals: [{ repId: null, ownerEmail: null, createdBy: "user-josh" }, { repId: null, ownerEmail: null, createdBy: "user-reiss" }],
+  });
+  assert.ok(mixed && "attention" in mixed);
+});

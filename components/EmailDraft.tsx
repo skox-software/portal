@@ -6,6 +6,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { updateLeadEmail } from "@/app/admin/pipeline/email-actions";
 import type { SavedEmailDraft } from "@/lib/call-brief";
 import { LEAD_SENDER_EMAIL, OUTREACH_SENDER_EMAIL, SKOX_WEBSITE } from "@/lib/lead-email";
+import { EMAIL_STATUS_LABEL, type StatusReport } from "@/lib/resend-events";
 
 /**
  * The first email, drafted from the brief. Edit it here, then open it in the
@@ -23,7 +24,10 @@ export function EmailDraft({
   canSend,
   doNotEmail = false,
   outreachBlocked,
+  delivery = null,
 }: {
+  /** What Resend last reported for the sent email (lib/resend-events.ts); `when` is formatted on the server. */
+  delivery?: (StatusReport & { when: string }) | null;
   /** The contact opted out: nothing can be sent. */
   doNotEmail?: boolean;
   outreachBlocked?: string;
@@ -74,12 +78,18 @@ export function EmailDraft({
       <button type="button" className="btn btn-ghost btn-small" data-reach="email" title="Email draft (E)" aria-expanded={open} aria-controls={`email-${dealId}`} onClick={() => setOpen(!open)}>
         Email
       </button>
+      {delivery && (
+        <span className="email-status" data-status={delivery.status} title={`Outreach email ${EMAIL_STATUS_LABEL[delivery.status].toLowerCase()} ${delivery.when}${delivery.reason ? ` · ${delivery.reason}` : ""}`}>
+          {EMAIL_STATUS_LABEL[delivery.status]}
+        </span>
+      )}
       {open && (
         <section className="email-draft" id={`email-${dealId}`} aria-label="Email draft">
           <div className="email-draft-to small">
             To: {to ? <strong>{to}</strong> : <span className="muted">no email on file; add it in the mail app or Details</span>}
           </div>
           <p className="small">From: <strong>{status === "draft" ? OUTREACH_SENDER_EMAIL : saved?.fromEmail ?? OUTREACH_SENDER_EMAIL}</strong> · {status === "sent" ? "Sent" : status === "scheduled" ? `Scheduled for ${saved?.scheduledAt ? new Date(saved.scheduledAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : "later"}` : status === "sending" || status === "scheduling" ? "Processing" : "Draft — not sent"}</p>
+          {delivery?.status === "bounced" && <p className="small">This address bounced{delivery.reason ? `: ${delivery.reason}` : "."} The lead is marked do-not-email.</p>}
           <label className="sr-only" htmlFor={`email-subject-${dealId}`}>
             Subject
           </label>

@@ -15,9 +15,11 @@ import { events, type Deal } from "@/lib/db/schema";
 import { briefIsEmpty, parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
 import { buildEmailDraft } from "@/lib/email-draft";
 import { formatDate, timeAgo } from "@/lib/format";
+import { loadEmailStatuses } from "@/lib/email-status-data";
 import { describeFollowUp, outcomeLabel } from "@/lib/follow-up";
 import { leadClock } from "@/lib/local-time";
 import { COLUMNS, DEAL_KINDS } from "@/lib/pipeline";
+import { EMAIL_STATUS_LABEL, type EmailStatus } from "@/lib/resend-events";
 
 const STAGES = [...COLUMNS.filter((c) => c.key !== "in_build" && c.key !== "shipped"), { key: "lost", label: "Lost" }] as const;
 const stageName = (key: string) => STAGES.find((s) => s.key === key)?.label ?? key;
@@ -74,6 +76,7 @@ export async function DealPanel({
         .orderBy(desc(events.createdAt))
         .limit(12)
     : [];
+  const emailStatus = deal ? (await loadEmailStatuses(deal.workspaceId, deal.id)).get(deal.id) ?? null : null;
   const due = deal ? describeFollowUp(deal.nextStepOn, today) : null;
   const tel = deal?.phone ? `tel:${deal.phone.replace(/[^\d+]/g, "")}` : null;
   // Older leads may still carry the brief inside notes; show it either way, and keep notes for the seller's own words.
@@ -142,7 +145,13 @@ export async function DealPanel({
 
       {deal?.doNotEmail && (
         <p className="brief-warning" role="note">
-          <strong>Do not email</strong> {deal.contactEmail ?? "This contact"} opted out. Sending is blocked; call only if they asked you to.
+          {emailStatus?.status === "bounced" ? (
+            <><strong>Bad email</strong> Our email to {deal.contactEmail ?? "this contact"} bounced{emailStatus.reason ? ` (${emailStatus.reason})` : ""}. Sending is blocked; find a better address and call instead.</>
+          ) : emailStatus?.status === "complained" ? (
+            <><strong>Bad email</strong> {deal.contactEmail ?? "This contact"} marked our email as spam. Sending is blocked; don&apos;t email them again.</>
+          ) : (
+            <><strong>Do not email</strong> {deal.contactEmail ?? "This contact"} opted out. Sending is blocked; call only if they asked you to.</>
+          )}
         </p>
       )}
 
@@ -153,7 +162,7 @@ export async function DealPanel({
               Call {deal.phone}
             </a>
           )}
-          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} delivery={emailStatus && { ...emailStatus, when: new Date(emailStatus.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) }} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />}
           {deal.contactEmail && !deal.doNotEmail && (
             <form action={markDoNotEmail}>
               <input type="hidden" name="dealId" value={deal.id} />
@@ -208,6 +217,8 @@ export async function DealPanel({
                           ? p.via === "staff" ? "Marked do not email" : "Unsubscribed from email"
                         : e.verb === "deal.email_sent"
                           ? "Emailed"
+                        : e.verb === "deal.email_status"
+                          ? `Email ${EMAIL_STATUS_LABEL[p.status as EmailStatus]?.toLowerCase() ?? "update"}${p.reason ? ` · ${p.reason}` : ""}`
                     : e.verb === "deal.stage_changed" || (e.verb === "deal.updated" && p.to)
                       ? `Moved to ${stageName(p.to)}`
                       : "Details edited";

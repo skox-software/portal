@@ -1,3 +1,4 @@
+import { sendColdOutreach } from "@/lib/cold-outreach";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { getDb } from "@/lib/db";
@@ -281,7 +282,15 @@ export async function sendThreadReply({
   const key = process.env.RESEND_API_KEY;
   const live = process.env.NODE_ENV === "production" || process.env.EMAIL_SEND_IN_DEV === "1";
   let providerId: string | null = null;
-  if (key && live) {
+  if (thread.dealId || !thread.clientId) {
+    try {
+      const result = await sendColdOutreach({ to: thread.counterpartEmail, subject: finalSubject, body, idempotencyKey: `outreach-reply/${messageId}` });
+      if (result.error || !result.data?.id) return { ok: false as const, error: "Outreach was not accepted by the provider." };
+      providerId = `sent:${result.data.id}`;
+    } catch (error) {
+      return { ok: false as const, error: error instanceof Error ? error.message : "Cold outreach is blocked." };
+    }
+  } else if (key && live) {
     resend ??= new Resend(key);
     const { data, error } = await resend.emails.send({
       from: `${displayName} <${sender.email}>`,

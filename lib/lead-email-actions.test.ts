@@ -30,11 +30,19 @@ function harness({ email = "reiss@skoxsoftware.com", status = "draft", productio
     "@/lib/db/schema": { deals: {}, emailMessages: {}, emailThreads: {} },
     "@/lib/events": { eventInsert: () => ({}) },
     "@/lib/lead-email": { LEAD_SENDER_EMAIL: "reiss@skoxsoftware.com", leadEmailPayload: (to: string, subject: string, body: string, footer: unknown) => ({ from: "Reiss Skeen <reiss@skoxsoftware.com>", replyTo: "reiss@skoxsoftware.com", to, subject, text: body, footer }) },
+    "@/lib/cold-outreach": {
+      outreachConfig: () => { if (!postal.trim() || !secret) throw Error("SKOX_POSTAL_ADDRESS missing"); },
+      sendColdOutreach: async (input: {to:string;subject:string;body:string}) => {
+        calls.send++;
+        payload={from:"Reiss Skeen <reiss@skoxsoftware.com>",footer:{postalAddress:postal,unsubscribeUrl:`https://www.skoxsoftware.com/portal/u/${deal.id}.sig`}};
+        return rejected ? {error:{message:"Rejected"}} : {data:{id:"provider-id"},payload:{text:input.body}};
+      },
+    },
     "@/lib/unsubscribe": { unsubscribeUrl: (base: string, id: string) => `${base}/u/${id}.sig` },
   };
   const exports: { updateLeadEmail?: (x: unknown) => Promise<Record<string, unknown>> } = {};
   const source = ts.transpileModule(fs.readFileSync(new URL("../app/admin/pipeline/email-actions.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  vm.runInNewContext(source, { exports, require: (id: string) => { if (!(id in mocks)) throw Error(id); return mocks[id]; }, process: { env: { NODE_ENV: production ? "production" : "development", RESEND_API_KEY: key, SKOX_POSTAL_ADDRESS: postal, UNSUBSCRIBE_SECRET: secret, PORTAL_URL: "https://www.skoxsoftware.com/portal" } }, crypto: { randomUUID: () => "new-id" }, Date });
+  vm.runInNewContext(source, { Error, exports, require: (id: string) => { if (!(id in mocks)) throw Error(id); return mocks[id]; }, process: { env: { NODE_ENV: production ? "production" : "development", RESEND_API_KEY: key, SKOX_POSTAL_ADDRESS: postal, UNSUBSCRIBE_SECRET: secret, PORTAL_URL: "https://www.skoxsoftware.com/portal" } }, crypto: { randomUUID: () => "new-id" }, Date });
   return { calls, payload: () => payload, run: (intent = "send", to = deal.contactEmail) => exports.updateLeadEmail!({ dealId: deal.id, to, subject: "Reviewed", body: "Reviewed body", intent }) };
 }
 

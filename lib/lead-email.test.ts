@@ -9,7 +9,7 @@ const DEAL = "4e9de8c6-50f1-47cf-a564-4cafbf382c22";
 
 test("pipeline mail uses Reiss for From and Reply-To, preserving reviewed content", () => {
   const mail = leadEmailPayload("lead@example.com", "Their preview", "Reviewed message", footer);
-  assert.equal(mail.from, "Reiss Skeen <reiss@skoxsoftware.com>");
+  assert.equal(mail.from, "Reiss Skeen <reiss@outreach.skoxsoftware.com>");
   assert.equal(mail.replyTo, "reiss@skoxsoftware.com");
   assert.equal(mail.to, "lead@example.com");
   assert.equal(mail.subject, "Their preview");

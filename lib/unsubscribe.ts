@@ -1,9 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Signed opt-out links for cold outreach: `<deal id>.<HMAC of deal id + email>`.
+ * Signed opt-out links for cold outreach: `<stable recipient id>.<HMAC of stable recipient id + email>`.
  * The address is signed but not carried, so the link never puts it in a URL.
- * The route checks the signature against the addresses that deal was emailed at.
+ * The recipient record survives deal changes and deletion; tokens do not expire.
  *
  * Pure (node:crypto only) so it can be tested alone.
  */
@@ -19,7 +19,7 @@ export function unsubscribeToken(dealId: string, email: string, secret: string) 
   return `${dealId.toLowerCase()}.${sign(dealId, email, secret)}`;
 }
 
-/** The deal id a token names, before its signature is checked. Null when malformed. */
+/** The stable recipient id a token names, before its signature is checked. Null when malformed. */
 export function tokenDealId(token: string) {
   const [dealId, sig, extra] = token.split(".");
   return extra === undefined && sig && UUID.test(dealId) ? dealId.toLowerCase() : null;

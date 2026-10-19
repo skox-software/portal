@@ -2,15 +2,14 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { Resend } from "resend";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
 import { readBrief, type SavedEmailDraft } from "@/lib/call-brief";
 import { getDb } from "@/lib/db";
 import { deals, emailMessages, emailThreads } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
-import { LEAD_SENDER_EMAIL, leadEmailPayload } from "@/lib/lead-email";
-import { unsubscribeUrl } from "@/lib/unsubscribe";
+import { LEAD_SENDER_EMAIL, OUTREACH_SENDER_EMAIL } from "@/lib/lead-email";
+import { outreachConfig, sendColdOutreach } from "@/lib/cold-outreach";
 
 const fields = z.object({ dealId: z.uuid(), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20000), to: z.email() });
 
@@ -26,7 +25,7 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   if (previous?.status === "scheduled" || previous?.status === "scheduling") return { error: "This email is scheduled. Cancel it with the email provider before changing or sending it." };
   if (previous?.status === "sent") return { error: "This draft has already been sent. Open its conversation in the Inbox." };
   if (previous?.status === "sending") return { error: "This email is being processed. Check the Inbox before trying again." };
-  const draft: SavedEmailDraft = { id: crypto.randomUUID(), fromEmail: LEAD_SENDER_EMAIL, subject: parsed.data.subject, body: parsed.data.body, status: "draft", updatedAt: new Date().toISOString() };
+  const draft: SavedEmailDraft = { id: crypto.randomUUID(), fromEmail: OUTREACH_SENDER_EMAIL, subject: parsed.data.subject, body: parsed.data.body, status: "draft", updatedAt: new Date().toISOString() };
   const unchanged = previous
     ? sql`${deals.brief}->'emailDraft' = ${JSON.stringify(previous)}::jsonb`
     : sql`${deals.brief}->'emailDraft' is null`;
@@ -43,24 +42,17 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   // An opt-out on any lead at this address counts: they asked us to stop, not one card.
   const optedOut = deal.doNotEmail || (await db.select({ id: deals.id }).from(deals).where(and(eq(deals.workspaceId, staff.workspaceId), sql`lower(${deals.contactEmail}) = ${parsed.data.to.toLowerCase()}`, eq(deals.doNotEmail, true))).limit(1)).length > 0;
   if (optedOut) return { error: "This contact asked not to be emailed. Nothing was sent." };
-  const postalAddress = process.env.SKOX_POSTAL_ADDRESS?.trim();
-  const secret = process.env.UNSUBSCRIBE_SECRET;
-  if (!postalAddress || !secret) return { error: "Cold email needs SKOX_POSTAL_ADDRESS and UNSUBSCRIBE_SECRET set in Vercel. Nothing was sent; your draft is unchanged." };
-  let payload;
-  try {
-    payload = leadEmailPayload(parsed.data.to, draft.subject, draft.body, { postalAddress, unsubscribeUrl: unsubscribeUrl(process.env.PORTAL_URL ?? "https://www.skoxsoftware.com/portal", deal.id, parsed.data.to, secret) });
-  } catch (e) {
-    return { error: `${e instanceof Error ? e.message : "The email could not be built."} Nothing was sent.` };
+  try { outreachConfig(); } catch (e) {
+    return { error: e instanceof Error ? e.message : "Cold outreach is blocked." };
   }
   const sending = { ...draft, status: "sending" as const };
   // One caller wins the claim. Retries cannot send a second message, even if
   // the provider accepted it but the subsequent database write failed.
   const claimed = await db.update(deals).set({ brief: setDraft(sending) }).where(and(where, unchanged)).returning({ id: deals.id });
   if (!claimed.length) return { error: "This draft changed or is already being sent. Reload this lead." };
-  const resend = new Resend(process.env.RESEND_API_KEY);
   let accepted;
   try {
-    accepted = await resend.emails.send(payload, { idempotencyKey: `lead-draft/${draft.id}` });
+    accepted = await sendColdOutreach({ to: parsed.data.to, subject: draft.subject, body: draft.body, idempotencyKey: `lead-draft/${draft.id}` });
   } catch {
     return { error: "Delivery could not be confirmed. Check the Inbox or email provider before retrying; this draft is locked to prevent a duplicate." };
   }
@@ -73,7 +65,7 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   try {
     await db.batch([
       db.insert(emailThreads).values({ id: threadId, workspaceId: staff.workspaceId, dealId: deal.id, clientId: deal.clientId, subject: draft.subject, counterpartEmail: parsed.data.to, counterpartName: deal.contactName, mailbox: LEAD_SENDER_EMAIL, readAt: sentAt }),
-      db.insert(emailMessages).values({ workspaceId: staff.workspaceId, threadId, direction: "outbound", fromEmail: LEAD_SENDER_EMAIL, fromName: "Reiss Skeen", to: [parsed.data.to], subject: draft.subject, text: draft.body, providerId: `sent:${accepted.data.id}`, sentBy: viewer.userId, sentAt }),
+      db.insert(emailMessages).values({ workspaceId: staff.workspaceId, threadId, direction: "outbound", fromEmail: OUTREACH_SENDER_EMAIL, fromName: "Reiss Skeen", to: [parsed.data.to], subject: draft.subject, text: accepted.payload.text, providerId: `sent:${accepted.data.id}`, sentBy: viewer.userId, sentAt }),
       db.update(deals).set({ brief: setDraft({ ...draft, status: "sent", sentAt: sentAt.toISOString() }), lastContactedAt: sentAt, ...(deal.stage === "lead" ? { stage: "initial_outreach" as const, stageChangedAt: sentAt } : {}) }).where(where),
       eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "deal.email_sent", subjectType: "deal", subjectId: deal.id, payload: { to: parsed.data.to, from: LEAD_SENDER_EMAIL, subject: draft.subject, providerId: accepted.data.id, threadId } }),
     ]);
@@ -82,5 +74,5 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   }
   revalidatePath("/admin/pipeline");
   revalidatePath("/admin/inbox");
-  return { notice: `Sent from ${LEAD_SENDER_EMAIL} to ${parsed.data.to}.`, status: "sent" as const };
+  return { notice: `Sent from ${OUTREACH_SENDER_EMAIL} to ${parsed.data.to}.`, status: "sent" as const };
 }

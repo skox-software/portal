@@ -1,3 +1,4 @@
+import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { createDeal, markDoNotEmail, saveDeal } from "@/app/admin/pipeline/actions";
@@ -77,6 +78,8 @@ export async function DealPanel({
   const fromNotes = parseBrief(deal?.notes);
   const brief: CallBrief | null = readBrief(deal?.brief) ?? fromNotes.brief;
   const clock = deal ? leadClock(deal, now) : null;
+  let outreachBlocked: string | undefined;
+  try { outreachConfig(); } catch { outreachBlocked = "Cold outreach is disabled until the business mailing address and email safeguards are configured and verified."; }
   const draft = deal ? buildEmailDraft({ company: deal.company, contactName: deal.contactName, website: deal.website, brief }) : null;
 
   return (
@@ -143,7 +146,7 @@ export async function DealPanel({
               Call {deal.phone}
             </a>
           )}
-          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} doNotEmail={deal.doNotEmail} />}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} canSend={me.toLowerCase() === "reiss@skoxsoftware.com"} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />}
           {deal.contactEmail && !deal.doNotEmail && (
             <form action={markDoNotEmail}>
               <input type="hidden" name="dealId" value={deal.id} />

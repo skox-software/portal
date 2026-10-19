@@ -1,5 +1,6 @@
 export const LEAD_SENDER_EMAIL = "reiss@skoxsoftware.com";
-export const LEAD_SENDER = `Reiss Skeen <${LEAD_SENDER_EMAIL}>`;
+export const OUTREACH_SENDER_EMAIL = "reiss@outreach.skoxsoftware.com";
+export const LEAD_SENDER = `Reiss Skeen <${OUTREACH_SENDER_EMAIL}>`;
 export const SKOX_WEBSITE = "https://www.skoxsoftware.com";
 export const OPT_OUT_LINE = "Not interested? Reply 'no thanks' or use this link and we won't email you again";
 
@@ -22,9 +23,9 @@ export function leadEmailPayload(to: string, subject: string, body: string, foot
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#202124">${lines.map(line => /^\s*SKOX Software\s*$/i.test(line)
     ? `<a href="${SKOX_WEBSITE}">${escapeHtml(line.trim())}</a>`
     : /^https?:\/\/[^\s<>]+$/i.test(line.trim()) ? `<a href="${escapeHtml(line.trim())}">${escapeHtml(line.trim())}</a>` : escapeHtml(line)).join("<br>\n")}</div>`
-    + `\n<p style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#80868b;margin-top:24px">SKOX Software · ${escapeHtml(postalAddress)}<br>\n${escapeHtml(OPT_OUT_LINE)}: <a href="${escapeHtml(url)}" style="color:#80868b">unsubscribe</a></p>`;
+    + `\n<p style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#80868b;margin-top:24px">Advertisement from SKOX Software · ${escapeHtml(postalAddress)}<br>\n${escapeHtml(OPT_OUT_LINE)}: <a href="${escapeHtml(url)}" style="color:#80868b">unsubscribe</a></p>`;
   const text = lines.map(line => /^\s*SKOX Software\s*$/i.test(line) ? `${line.trim()} (${SKOX_WEBSITE})` : line).join("\n")
-    + `\n\n--\nSKOX Software · ${postalAddress}\n${OPT_OUT_LINE}: ${url}`;
+    + `\n\n--\nAdvertisement from SKOX Software · ${postalAddress}\n${OPT_OUT_LINE}: ${url}`;
   return {
     from: LEAD_SENDER, replyTo: LEAD_SENDER_EMAIL, to, subject, text, html,
     // One-click unsubscribe (RFC 8058), which Gmail and Yahoo expect from bulk senders.

@@ -927,3 +927,11 @@ export const withdrawalExpenses = pgTable("withdrawal_expenses", {
   amountCents: integer("amount_cents").notNull(),
   createdAt: createdAt(),
 }, t => [unique("withdrawal_expenses_workspace_reference").on(t.workspaceId, t.reference)]);
+
+/** Stable marketing recipients: deliberately no deal FK or cascading deletion. */
+export const outreachRecipients = pgTable("outreach_recipients", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  suppressed: boolean("suppressed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

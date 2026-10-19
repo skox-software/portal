@@ -1,3 +1,4 @@
+import { receiveOptOut } from "@/lib/received-opt-out";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { deals, events } from "@/lib/db/schema";
@@ -33,6 +34,11 @@ export async function POST(request: Request) {
     body = JSON.parse(payload);
   } catch {
     return new Response("Bad JSON", { status: 400 });
+  }
+  if ((body as { type?: string })?.type === "email.received") {
+    const emailId = (body as { data?: { email_id?: unknown } }).data?.email_id;
+    if (typeof emailId !== "string" || !emailId) return new Response("Missing email id", { status: 400 });
+    return Response.json(await receiveOptOut(emailId));
   }
   const report = readStatusEvent(body);
   if (!report) return Response.json({ ignored: (body as { type?: string })?.type ?? "unknown" });

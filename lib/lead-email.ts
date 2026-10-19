@@ -1,6 +1,7 @@
 /**
  * Cold outreach goes out from its own subdomain (verified in Resend), so spam
- * reports on cold email can't hurt skoxsoftware.com, which sends sign-in
+ * can be managed separately from transactional mail. Reputation isolation
+ * is not guaranteed. skoxsoftware.com sends sign-in
  * codes, invoices and receipts. Replies come back to the sender's normal
  * inbox through Reply-To, so nobody needs a mailbox on the subdomain.
  */

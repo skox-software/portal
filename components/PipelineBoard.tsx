@@ -15,6 +15,7 @@ export type BoardCard = {
   id: string;
   column: ColumnKey;
   company: string;
+  qualified?: boolean;
   contact: string | null;
   /** Empty when there's no value yet, so the card stays quiet. */
   value: string | null;
@@ -178,19 +179,19 @@ export function PipelineBoard({
   );
 
   const reach = (card: BoardCard) =>
-    (card.website || card.phone || card.email || card.type === "deal") && (
+    (card.website?.trim() || card.phone?.trim() || card.email?.trim()) && (
       <span className="pipeline-reach">
-        {card.website && (
+        {card.website?.trim() && (
           <a href={card.website} target="_blank" rel="noreferrer" title={`Website: ${card.website}`} aria-label={`${card.company} website`}>
             Site ↗
           </a>
         )}
-        {card.phone && (
+        {card.phone?.trim() && (
           <a href={`tel:${card.phone.replace(/[^\d+]/g, "")}`} title={`Call ${card.phone}`} aria-label={`Call ${card.company}, ${card.phone}`}>
             Call
           </a>
         )}
-        {card.type === "deal" ? (
+        {card.email?.trim() && (card.type === "deal" ? (
           // Deals open the drafted email in the panel, written from the call brief.
           <Link href={`/admin/pipeline${viewQuery(v, { deal: card.id, email: "1" })}`} scroll={false} title="Open the email draft" aria-label={`Email draft for ${card.company}`}>
             Email
@@ -201,7 +202,7 @@ export function PipelineBoard({
               Email
             </a>
           )
-        )}
+        ))}
       </span>
     );
 
@@ -338,10 +339,10 @@ export function PipelineBoard({
                             <div className="pipeline-card-title">
                               {href ? (
                                 <Link href={href} scroll={false}>
-                                  {card.company}
+                                  {card.company} {card.qualified && <span role="img" aria-label="Qualified lead" title="Qualified for outreach" style={{ color: "#d99b18" }}>★</span>}
                                 </Link>
                               ) : (
-                                <strong>{card.company}</strong>
+                                <strong>{card.company} {card.qualified && <span role="img" aria-label="Qualified lead" title="Qualified for outreach" style={{ color: "#d99b18" }}>★</span>}</strong>
                               )}
                               {(card.contact || card.location) && (
                                 <span title={[card.contact, card.location].filter(Boolean).join(" · ")}>

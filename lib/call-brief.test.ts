@@ -92,3 +92,26 @@ test("call-sheet order: due follow-ups, then dead sites, then not-mobile; warnin
   // A named contact and a specific upgrade beat a bare "ask for the owner".
   assert.ok(callPriority({ brief: { tag: "NOT MOBILE", askFor: "Jenna", upgradeAngle: "x" }, followUp: "none", contacted: false }) < p("NOT MOBILE"));
 });
+
+test("call-sheet order weights the vertical and the owner's outlook", () => {
+  const p = (brief: Parameters<typeof callPriority>[0]["brief"]) => callPriority({ brief, followUp: "none", contacted: false });
+  // Real estate beats a generic business with the same problem; medical sinks below both.
+  assert.ok(p({ tag: "NOT MOBILE", vertical: "Real estate & property" }) < p({ tag: "NOT MOBILE", vertical: "Retail & shops" }));
+  assert.ok(p({ tag: "NOT MOBILE", vertical: "Retail & shops" }) < p({ tag: "NOT MOBILE", vertical: "Medical, dental & care" }));
+  // An owner winding down goes to the back; a second generation taking over moves up.
+  assert.ok(p({ tag: "NOT MOBILE", outlook: "GROWING: second generation now runs it" }) < p({ tag: "NOT MOBILE" }));
+  assert.ok(p({ tag: "SITE DOWN", outlook: "WINDING DOWN? founder since 1972, no one else named" }) > p({ tag: "NOT MOBILE" }));
+});
+
+test("parses the OUTLOOK line into the brief", () => {
+  const { brief } = parseBrief("CALL ABOUT: NOT MOBILE · Legal\nOUTLOOK: GROWING: son joined the firm in 2021");
+  assert.equal(brief?.outlook, "GROWING: son joined the firm in 2021");
+});
+
+test("a lead-brain score orders the queue when present; warnings still go last", () => {
+  const p = (brief: Parameters<typeof callPriority>[0]["brief"], followUp: "overdue" | "none" = "none") =>
+    callPriority({ brief, followUp, contacted: false });
+  assert.ok(p({ tag: "NOT MOBILE", leadScore: 95 }) < p({ tag: "SITE DOWN", leadScore: 40 }));
+  assert.ok(p({ tag: "NOT MOBILE", leadScore: 10 }, "overdue") < p({ tag: "NOT MOBILE", leadScore: 99 }));
+  assert.ok(p({ tag: "NOT MOBILE", leadScore: 99, warnings: [{ kind: "check_first", text: "x" }] }) > p({ tag: "NOT MOBILE", leadScore: 5 }));
+});

@@ -48,7 +48,7 @@ export function CallBriefCard({ brief }: { brief: CallBrief }) {
         )}
         {brief.vertical && <span className="muted small">{brief.vertical}</span>}
         {typeof brief.leadScore === "number" && (
-          <span className="brief-score small" title={brief.scoreWhy || "Lead brain score"}>
+          <span className="brief-score small" title="Rank among uncalled leads, 1-100. 90 means top 10%.">
             Score {brief.leadScore}
           </span>
         )}
@@ -57,6 +57,13 @@ export function CallBriefCard({ brief }: { brief: CallBrief }) {
         <p className="brief-ask">
           <span>Ask for</span> <strong>{brief.askFor}</strong>
         </p>
+      )}
+      {typeof brief.leadScore === "number" && brief.scoreWhy && (
+        <ul className="brief-why small" aria-label="Why this score">
+          {brief.scoreWhy.split(/;\s*/).filter(Boolean).map((r, i) => (
+            <li key={i} data-dir={r.startsWith("-") ? "down" : "up"}>{r.replace(/^[+-]\s*/, "")}</li>
+          ))}
+        </ul>
       )}
       {brief.outlook && (
         <p className="brief-outlook small" data-outlook={/^WINDING DOWN/i.test(brief.outlook) ? "down" : /^GROWING/i.test(brief.outlook) ? "up" : "flat"}>

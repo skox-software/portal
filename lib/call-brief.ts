@@ -39,6 +39,10 @@ export type CallBrief = {
   stillActive?: string;
   upgradeAngle?: string;
   askThem?: string;
+  /** The lead brain's 1-100 rank among uncalled leads (scripts/lead-scan/lead_brain.py); 90 = top 10%. */
+  leadScore?: number;
+  /** The signals that moved the score most, e.g. "+ Real estate & property; + SITE DOWN". */
+  scoreWhy?: string;
   /** Whether the owner looks set to invest or wind down, from their own site: "GROWING — second generation now runs it". */
   outlook?: string;
   sources?: string;
@@ -49,7 +53,7 @@ export type CallBrief = {
   warnings?: BriefWarning[];
 };
 
-type Field = Exclude<keyof CallBrief, "warnings" | "tag" | "vertical" | "gatekeeper" | "emailDraft" | "qualified">;
+type Field = Exclude<keyof CallBrief, "warnings" | "tag" | "vertical" | "gatekeeper" | "emailDraft" | "qualified" | "leadScore" | "scoreWhy">;
 
 /** Label → where it goes. Labels are matched case-sensitively at the start of a line, as the imports write them. */
 const LABELS: [RegExp, Field | "callAbout" | "whyNoSite" | BriefWarning["kind"] | "drop"][] = [
@@ -160,12 +164,17 @@ export function callPriority(input: { brief: CallBrief | null; followUp: "overdu
   if (followUp === "overdue") score -= 200;
   else if (followUp === "today") score -= 150;
   else if (contacted) score += 50;
-  score += (TAG_RANK[brief?.tag ?? ""] ?? 5) * 10;
-  // What the calls have shown so far: real estate, title and property firms take the call; medical doesn't.
-  score += VERTICAL_WEIGHT[brief?.vertical ?? ""] ?? 0;
-  // Owners about to retire don't buy a new site; a second generation taking over often does.
-  if (/^WINDING DOWN/i.test(brief?.outlook ?? "")) score += 50;
-  else if (/^GROWING/i.test(brief?.outlook ?? "")) score -= 6;
+  if (typeof brief?.leadScore === "number") {
+    // The lead brain already weighs the problem, vertical, outlook and what past calls taught it.
+    score += Math.round((100 - Math.min(100, Math.max(1, brief.leadScore))) * 0.6);
+  } else {
+    score += (TAG_RANK[brief?.tag ?? ""] ?? 5) * 10;
+    // What the calls have shown so far: real estate, title and property firms take the call; medical doesn't.
+    score += VERTICAL_WEIGHT[brief?.vertical ?? ""] ?? 0;
+    // Owners about to retire don't buy a new site; a second generation taking over often does.
+    if (/^WINDING DOWN/i.test(brief?.outlook ?? "")) score += 50;
+    else if (/^GROWING/i.test(brief?.outlook ?? "")) score -= 6;
+  }
   if (brief?.upgradeAngle) score -= 3;
   if (brief?.askFor && !/^the owner/i.test(brief.askFor)) score -= 2;
   if (brief?.warnings?.length) score += 100;

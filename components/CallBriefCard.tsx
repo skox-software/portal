@@ -47,6 +47,11 @@ export function CallBriefCard({ brief }: { brief: CallBrief }) {
           </span>
         )}
         {brief.vertical && <span className="muted small">{brief.vertical}</span>}
+        {typeof brief.leadScore === "number" && (
+          <span className="brief-score small" title={brief.scoreWhy || "Lead brain score"}>
+            Score {brief.leadScore}
+          </span>
+        )}
       </div>
       {brief.askFor && (
         <p className="brief-ask">

@@ -107,3 +107,11 @@ test("parses the OUTLOOK line into the brief", () => {
   const { brief } = parseBrief("CALL ABOUT: NOT MOBILE · Legal\nOUTLOOK: GROWING: son joined the firm in 2021");
   assert.equal(brief?.outlook, "GROWING: son joined the firm in 2021");
 });
+
+test("a lead-brain score orders the queue when present; warnings still go last", () => {
+  const p = (brief: Parameters<typeof callPriority>[0]["brief"], followUp: "overdue" | "none" = "none") =>
+    callPriority({ brief, followUp, contacted: false });
+  assert.ok(p({ tag: "NOT MOBILE", leadScore: 95 }) < p({ tag: "SITE DOWN", leadScore: 40 }));
+  assert.ok(p({ tag: "NOT MOBILE", leadScore: 10 }, "overdue") < p({ tag: "NOT MOBILE", leadScore: 99 }));
+  assert.ok(p({ tag: "NOT MOBILE", leadScore: 99, warnings: [{ kind: "check_first", text: "x" }] }) > p({ tag: "NOT MOBILE", leadScore: 5 }));
+});

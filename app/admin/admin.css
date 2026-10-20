@@ -190,6 +190,7 @@ kbd{font:600 10px var(--mono);border:1px solid var(--line);border-bottom-width:2
 .brief-clock{display:inline-flex;align-items:center;gap:5px;font:600 11px var(--mono);color:var(--muted);white-space:nowrap}.brief-clock::before{content:"";width:7px;height:7px;border-radius:50%;background:#c9c7bd}.brief-clock[data-callable]{color:var(--ok)}.brief-clock[data-callable]::before{background:#3d9a5b}
 .brief-ask{margin:0;font-size:17px;line-height:1.35}.brief-ask span{display:block;font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);margin-bottom:2px}.brief-ask strong{font-weight:700}
 .brief-gatekeeper{margin:0;padding:8px 10px;border-radius:8px;background:var(--fog)}
+.brief-score{margin-left:auto;font:600 11px var(--mono);letter-spacing:.06em;padding:2px 8px;border-radius:999px;background:var(--fog)}
 .brief-outlook{margin:0;padding:6px 10px;border-radius:8px;background:var(--fog)}.brief-outlook span{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--label);margin-right:6px}.brief-outlook[data-outlook="down"]{background:#fdecec}.brief-outlook[data-outlook="up"]{background:#eaf6ee}
 .brief-opener{margin:0;padding:12px 14px;border-left:4px solid var(--amber);background:#fffaf0;border-radius:0 10px 10px 0;font:500 19px/1.45 var(--sans);color:var(--ink)}
 .brief-label{display:block;font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--amber-ink);margin-bottom:4px}

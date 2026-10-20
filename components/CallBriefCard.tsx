@@ -53,6 +53,11 @@ export function CallBriefCard({ brief }: { brief: CallBrief }) {
           <span>Ask for</span> <strong>{brief.askFor}</strong>
         </p>
       )}
+      {brief.outlook && (
+        <p className="brief-outlook small" data-outlook={/^WINDING DOWN/i.test(brief.outlook) ? "down" : /^GROWING/i.test(brief.outlook) ? "up" : "flat"}>
+          <span>Outlook</span> {brief.outlook}
+        </p>
+      )}
       {brief.gatekeeper && (
         <p className="brief-gatekeeper small">
           Last time <strong>{brief.gatekeeper}</strong> answered. Ask for {brief.askFor && !/^the owner/i.test(brief.askFor) ? brief.askFor.split(/,| or /)[0] : "the owner"} by name.

@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 
 const items = [
   ["/admin", "Overview", "◈"],
+  ["/admin/leads", "Outreach", "☏"],
   ["/admin/pipeline", "Pipeline", "⇉"],
   ["/admin/clients", "Clients", "◎"],
   ["/admin/inbox", "Inbox", "✉"],
-  ["/admin/outreach", "Outreach", "➚"],
+  ["/admin/outreach", "Email log", "➚"],
   ["/admin/projects", "Projects", "▦"],
   ["/admin/billing", "Billing", "$"],
   ["/admin/finance", "Finance", "◔"],

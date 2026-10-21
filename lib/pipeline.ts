@@ -12,14 +12,13 @@
 import { isCallable } from "./local-time.ts";
 
 export const COLUMNS = [
-  { key: "outreach_1", label: "Outreach 1" },
-  { key: "outreach_2", label: "Outreach 2" },
-  { key: "outreach_3", label: "Outreach 3" },
-  { key: "outreach_4", label: "Outreach 4" },
-  { key: "outreach_closed", label: "Close Outreach" },
-  { key: "emailed", label: "Emailed" },
-  { key: "replied", label: "Replied" },
-  { key: "meeting", label: "Meeting" },
+  { key: "outreach_1", label: "Attempt 1" },
+  { key: "outreach_2", label: "Attempt 2" },
+  { key: "outreach_3", label: "Attempt 3" },
+  { key: "outreach_4", label: "Attempt 4" },
+  { key: "outreach_closed", label: "Closed" },
+  { key: "replied", label: "Interested" },
+  { key: "meeting", label: "Scope call" },
   { key: "proposal_sent", label: "Proposal" },
   { key: "won", label: "Won" },
   { key: "in_build", label: "In build" },
@@ -31,33 +30,36 @@ export type ProjectStatus = "kickoff" | "building" | "review" | "launched" | "pa
 export type CardType = "deal" | "project" | "referral";
 
 /**
- * Two tracks over one record. Pre-qualified holds contact attempts; Potential
- * Deals holds the people we've emailed or who showed interest. Moving between
- * them only changes `deals.stage`, so contact details and history carry over.
+ * Two tracks over one record. Outreach holds contact attempts: calls and cold
+ * emails, however many, never make a lead more than a lead. Pipeline holds
+ * real opportunities, and a lead only gets there on a signal from them (see
+ * PROMOTION_SIGNALS). Moving between tracks only changes `deals.stage`, so
+ * contact details and history carry over.
  */
 export const OUTREACH_STAGES = ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "outreach_closed"] as const;
-export const DEAL_STAGES = ["emailed", "replied", "meeting", "proposal_sent", "won", "lost"] as const;
-export const STAGES = [...OUTREACH_STAGES, ...DEAL_STAGES] as const;
+export const ACTIVE_STAGES = ["replied", "meeting", "proposal_sent", "won", "lost"] as const;
+export const STAGES = [...OUTREACH_STAGES, ...ACTIVE_STAGES] as const;
 export type DealStage = (typeof STAGES)[number];
-export type Track = "outreach" | "deals";
+export type Track = "outreach" | "active";
 
 export const STAGE_LABEL: Record<DealStage, string> = {
-  outreach_1: "Outreach 1",
-  outreach_2: "Outreach 2",
-  outreach_3: "Outreach 3",
-  outreach_4: "Outreach 4",
-  outreach_closed: "Close Outreach",
-  emailed: "Emailed",
-  replied: "Replied",
-  meeting: "Meeting",
+  outreach_1: "Attempt 1",
+  outreach_2: "Attempt 2",
+  outreach_3: "Attempt 3",
+  outreach_4: "Attempt 4",
+  outreach_closed: "Closed",
+  replied: "Interested",
+  meeting: "Scope call",
   proposal_sent: "Proposal",
   won: "Won",
   lost: "Lost",
 };
 
-export const TRACK_LABEL: Record<Track, string> = { outreach: "Pre-qualified", deals: "Potential Deals" };
+export const TRACK_LABEL: Record<Track, string> = { outreach: "Outreach", active: "Pipeline" };
 
 export function stageLabel(stage: string) {
+  // "emailed" was a Pipeline stage until migration 0022; old history still names it.
+  if (stage === "emailed") return "Emailed";
   return STAGE_LABEL[stage as DealStage] ?? stage;
 }
 
@@ -66,34 +68,166 @@ export function isStage(value: string): value is DealStage {
 }
 
 export function trackOf(stage: DealStage): Track {
-  return (OUTREACH_STAGES as readonly string[]).includes(stage) ? "outreach" : "deals";
+  return (OUTREACH_STAGES as readonly string[]).includes(stage) ? "outreach" : "active";
 }
 
-/** Outreach 1 → 2 → 3 → 4; null from Outreach 4, Close Outreach or any deal stage. */
+/** `?track=` from a link: "deals" is the old name for the Pipeline track. */
+export function readTrack(value: string | null | undefined): Track | null {
+  if (value === "active" || value === "deals") return "active";
+  if (value === "outreach") return "outreach";
+  return null;
+}
+
+/** Attempt 1 → 2 → 3 → 4; null from Attempt 4, Closed or any Pipeline stage. */
 export function nextOutreach(stage: DealStage): DealStage | null {
   const i = ["outreach_1", "outreach_2", "outreach_3"].indexOf(stage);
   return i === -1 ? null : OUTREACH_STAGES[i + 1];
 }
 
-/** Where a new lead starts, and where a lead lands when it moves to Potential Deals. */
+/** Where a new lead starts, and where a promoted lead lands unless it booked a call. */
 export const FIRST_STAGE: DealStage = "outreach_1";
-export const FIRST_DEAL_STAGE: DealStage = "emailed";
+export const FIRST_ACTIVE_STAGE: DealStage = "replied";
 
 /** Still being worked: neither closed, won nor lost. */
-export const OPEN_STAGES: readonly DealStage[] = ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "emailed", "replied", "meeting", "proposal_sent"];
+export const OPEN_STAGES: readonly DealStage[] = ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "replied", "meeting", "proposal_sent"];
+export const OPEN_ACTIVE: readonly DealStage[] = ["replied", "meeting", "proposal_sent"];
 
-/** Board columns per track. Lost and Close Outreach are kept but folded on the Deals side. */
+/** Board columns per track. Lost is kept but folded under the Pipeline board. */
 export const TRACK_COLUMNS: Record<Track, readonly ColumnKey[]> = {
   outreach: ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "outreach_closed"],
-  deals: ["emailed", "replied", "meeting", "proposal_sent", "won"],
+  active: ["replied", "meeting", "proposal_sent", "won"],
 };
 
 /** The board shows only these; builds and launches live on Projects. */
-export const SALES_COLUMNS: readonly ColumnKey[] = [...TRACK_COLUMNS.outreach, ...TRACK_COLUMNS.deals];
+export const SALES_COLUMNS: readonly ColumnKey[] = [...TRACK_COLUMNS.outreach, ...TRACK_COLUMNS.active];
 
 /** Pre-sale columns, where a card can sit untouched for too long. */
 export const PRESALE: readonly ColumnKey[] = OPEN_STAGES as readonly ColumnKey[];
 export const STALL_DAYS = 10;
+/** Real opportunities go cold faster than cold leads: a week without moving is a stall. */
+export const ACTIVE_STALL_DAYS = 7;
+
+// ---- Promotion: the only door from Outreach into the Pipeline ----
+
+/**
+ * What a lead did that makes it a real opportunity. The first four are the
+ * ones a person picks when promoting by hand; the last two are set by the
+ * portal itself (a website enquiry, or a deal added straight to the Pipeline).
+ */
+export const PROMOTION_SIGNALS = [
+  { value: "replied", label: "They replied", short: "Replied", pick: true },
+  { value: "interested", label: "Interested on a call", short: "Interested on a call", pick: true },
+  { value: "preview", label: "Asked for a preview", short: "Asked for a preview", pick: true },
+  { value: "meeting", label: "Booked a scope call", short: "Booked a scope call", pick: true },
+  { value: "inbound", label: "Enquired through the website", short: "Website enquiry", pick: false },
+  { value: "direct", label: "Added straight to the Pipeline", short: "Added as a deal", pick: false },
+] as const;
+export type PromotionSignal = (typeof PROMOTION_SIGNALS)[number]["value"];
+export const PICKABLE_SIGNALS = PROMOTION_SIGNALS.filter((s) => s.pick).map((s) => s.value) as PromotionSignal[];
+
+export function signalLabel(signal: string | null | undefined) {
+  return PROMOTION_SIGNALS.find((s) => s.value === signal)?.short ?? null;
+}
+
+/**
+ * Where a signal takes a deal, or null when it changes nothing. From
+ * Outreach: a booked call goes to Scope call, anything else to Interested. In
+ * the Pipeline only a booked call moves an Interested deal on; nothing moves
+ * a deal that's won or lost.
+ */
+export function promotionTarget(stage: DealStage, signal: PromotionSignal): DealStage | null {
+  if (stage === "won" || stage === "lost") return null;
+  if (trackOf(stage) === "outreach") return signal === "meeting" ? "meeting" : FIRST_ACTIVE_STAGE;
+  if (signal === "meeting" && stage === "replied") return "meeting";
+  return null;
+}
+
+/** A deal can only cross tracks by promotion (with a signal) or demotion (with a reason). */
+export function crossesTracks(from: DealStage, to: DealStage) {
+  return trackOf(from) !== trackOf(to);
+}
+
+/** Why a Pipeline deal went back to Outreach. Free text is kept too. */
+export const DEMOTE_REASONS = ["Went quiet", "Not now, try later", "No budget yet", "Chose someone else"] as const;
+
+/**
+ * Where a demoted deal lands: the attempt after the ones already made, so the
+ * call desk picks it up where it left off. Never past Attempt 4.
+ */
+export function demotedStage(attempts: number): DealStage {
+  return `outreach_${Math.min(Math.max(attempts + 1, 1), 4)}` as DealStage;
+}
+
+/** Only open Pipeline deals can be sent back: won and lost are settled. */
+export function canDemote(stage: DealStage) {
+  return OPEN_ACTIVE.includes(stage);
+}
+
+// ---- Closing outreach: why we stopped, kept so the lead brain can learn ----
+
+export const CLOSE_REASONS = [
+  { value: "no_answer", label: "No answer after 4 tries" },
+  { value: "bad_number", label: "Bad number" },
+  { value: "not_interested", label: "Not interested" },
+] as const;
+export type CloseReason = (typeof CLOSE_REASONS)[number]["value"];
+
+/** Why they weren't interested, one tap each. */
+export const NOT_INTERESTED_REASONS = [
+  { value: "retiring", label: "Retiring" },
+  { value: "has_someone", label: "Has someone" },
+  { value: "redid_site", label: "Just redid site" },
+  { value: "no_budget", label: "No budget" },
+  { value: "not_decision_maker", label: "Not decision-maker" },
+] as const;
+export type NotInterestedReason = (typeof NOT_INTERESTED_REASONS)[number]["value"];
+
+export function closeReasonLabel(reason: string | null | undefined, detail?: string | null) {
+  const main = CLOSE_REASONS.find((r) => r.value === reason)?.label ?? null;
+  const why = NOT_INTERESTED_REASONS.find((r) => r.value === detail)?.label ?? null;
+  return main && why ? `${main} · ${why}` : main;
+}
+
+// ---- Preview websites for leads who ask for one (docs/prospects/preview-playbook.md) ----
+
+export const PREVIEW_STATUSES = [
+  { value: "none", label: "No preview" },
+  { value: "requested", label: "Requested" },
+  { value: "researching", label: "Researching" },
+  { value: "awaiting_approval", label: "Awaiting approval" },
+  { value: "building", label: "Building" },
+  { value: "ready", label: "Ready to send" },
+  { value: "sent", label: "Sent" },
+  { value: "opened", label: "Opened" },
+  { value: "archived", label: "Archived" },
+] as const;
+export type PreviewStatus = (typeof PREVIEW_STATUSES)[number]["value"];
+export const PREVIEW_STATUS_VALUES = PREVIEW_STATUSES.map((s) => s.value) as [PreviewStatus, ...PreviewStatus[]];
+
+export function previewLabel(status: string) {
+  return PREVIEW_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
+
+/** A preview is in flight from the request until it's archived. */
+export function previewInFlight(status: string) {
+  return status !== "none" && status !== "archived";
+}
+
+/** What the builder still has to do: research a request, or build an approved one. */
+export const PREVIEW_QUEUE: readonly PreviewStatus[] = ["requested", "building"];
+
+/** Gate A, Josh's one tap on the research brief. */
+export const PREVIEW_DECISIONS = [
+  { value: "go", label: "Go" },
+  { value: "go_with_changes", label: "Go with changes" },
+  { value: "no_go", label: "No-go" },
+] as const;
+export type PreviewDecision = (typeof PREVIEW_DECISIONS)[number]["value"];
+
+/** What the decision does: a go starts the build, a no-go archives the preview. */
+export function statusAfterDecision(decision: PreviewDecision): PreviewStatus {
+  return decision === "no_go" ? "archived" : "building";
+}
 
 export const DEAL_KINDS = [
   { value: "website", label: "Website" },
@@ -136,10 +270,15 @@ export function dealStageForColumn(column: ColumnKey | "lost"): DealStage | null
   return column;
 }
 
-/** Which columns a card may move to, for its stage menu. */
-export function allowedColumns(type: CardType): readonly (ColumnKey | "lost")[] {
+/**
+ * Which columns a card may move to, for its stage menu and drag targets. A
+ * deal stays inside its track: crossing over is Promote or Demote, which ask
+ * for the signal or the reason. Referrals are leads until someone works them.
+ */
+export function allowedColumns(type: CardType, column?: ColumnKey): readonly (ColumnKey | "lost")[] {
   if (type === "project") return ["won", "in_build", "shipped"];
-  return STAGES;
+  if (type === "referral" || !column || trackOf(column as DealStage) === "outreach") return OUTREACH_STAGES;
+  return ACTIVE_STAGES;
 }
 
 export function daysSince(from: Date, now: Date) {
@@ -147,7 +286,8 @@ export function daysSince(from: Date, now: Date) {
 }
 
 export function isStalled(column: ColumnKey, since: Date, now: Date) {
-  return PRESALE.includes(column) && daysSince(since, now) > STALL_DAYS;
+  const limit = (OPEN_ACTIVE as readonly string[]).includes(column) ? ACTIVE_STALL_DAYS : STALL_DAYS;
+  return PRESALE.includes(column) && daysSince(since, now) > limit;
 }
 
 /** "reiss@skoxsoftware.com" → "RE"; "Josh Fox" → "JF". */
@@ -380,8 +520,10 @@ export type BoardView = {
   stage: string;
   /** Only leads it's business hours for now. */
   callable?: boolean;
-  /** Which board: Pre-qualified (the default) or Potential Deals. */
+  /** Which board: Outreach or Pipeline. Each has its own page; this keeps old links working. */
   track?: Track;
+  /** A saved view on the board ("due", "previews", "next"…); empty for everything. */
+  show?: string;
 };
 
 /** The view's query string, minus defaults, for links that keep the filters. */
@@ -392,7 +534,7 @@ export function viewQuery(v: BoardView, extra: Record<string, string> = {}) {
   if (v.owner) p.set("owner", v.owner);
   if (v.view === "list" && v.stage) p.set("stage", v.stage);
   if (v.callable) p.set("callable", "1");
-  if (v.track === "deals") p.set("track", "deals");
+  if (v.show) p.set("show", v.show);
   for (const [k, val] of Object.entries(extra)) p.set(k, val);
   const s = p.toString();
   return s ? `?${s}` : "";
@@ -413,12 +555,26 @@ export function callQueue<T extends { queueable: boolean; zone: string | null; p
 }
 
 /**
+ * Where an "Emailed" deal lands when migration 0022 retires that stage. Keep
+ * in step with its CASE. Sending a cold email was never a sign of interest,
+ * so only a booked meeting or a reply from them keeps it in the Pipeline;
+ * otherwise it goes back to the outreach attempt its calls and emails reached,
+ * or to Closed if the last call was "Not interested".
+ */
+export function retiredEmailedStage(d: { meetingAt: Date | null; replied: boolean; attempts: number; lastOutcome: string | null }): DealStage {
+  if (d.meetingAt) return "meeting";
+  if (d.replied) return "replied";
+  if (d.lastOutcome === "not_interested") return "outreach_closed";
+  return `outreach_${Math.min(Math.max(d.attempts + 1, 1), 4)}` as DealStage;
+}
+
+/**
  * Where a deal from before the two tracks lands (migration 0021). Keep in step
  * with its CASE: settled stages stay, Negotiation folds into Proposal, a booked
  * meeting or any email sent counts as a Potential Deal, "Not interested" closes
  * outreach, and otherwise the calls logged so far pick the outreach attempt.
  */
-export function migratedStage(d: { stage: string; meetingAt: Date | null; emailed: boolean; calls: number; lastOutcome: string | null }): DealStage {
+export function migratedStage(d: { stage: string; meetingAt: Date | null; emailed: boolean; calls: number; lastOutcome: string | null }): DealStage | "emailed" {
   if (d.stage === "won" || d.stage === "lost" || d.stage === "proposal_sent") return d.stage;
   if (d.stage === "negotiation") return "proposal_sent";
   if (d.meetingAt) return "meeting";

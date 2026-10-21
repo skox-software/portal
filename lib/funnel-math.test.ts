@@ -12,9 +12,9 @@ test("each deal counts once per stage it entered", () => {
     { dealId: "a", stage: "lost", valueCents: 1000 },
   ]);
   // Old Lead and Initial outreach both fold into Outreach.
-  assert.deepEqual(rows.map((r) => r.count), [2, 0, 0, 0, 1, 0]);
+  assert.deepEqual(rows.map((r) => r.count), [2, 0, 0, 1, 0]);
   assert.equal(rows[0].valueCents, 3000);
-  assert.equal(rows[4].valueCents, 0);
+  assert.equal(rows[3].valueCents, 0);
 });
 
 test("conversion is the next stage over this one", () => {
@@ -22,10 +22,13 @@ test("conversion is the next stage over this one", () => {
     { dealId: "a", stage: "outreach_1", valueCents: 0 },
     { dealId: "b", stage: "outreach_2", valueCents: 0 },
     { dealId: "c", stage: "outreach_1", valueCents: 0 },
-    { dealId: "c", stage: "emailed", valueCents: 0 },
+    { dealId: "c", stage: "replied", valueCents: 0 },
+    // An old Emailed move was outreach, not interest (migration 0022).
+    { dealId: "d", stage: "emailed", valueCents: 0 },
   ]);
-  assert.equal(rows[0].conversion, 1 / 3);
+  assert.equal(rows[0].count, 4);
+  assert.equal(rows[0].conversion, 1 / 4);
   assert.equal(rows[1].conversion, 0);
   assert.equal(rows[2].conversion, null);
-  assert.equal(rows[5].conversion, null);
+  assert.equal(rows[4].conversion, null);
 });

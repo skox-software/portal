@@ -20,6 +20,7 @@ const PATHS = {
   plus: "M12 5v14M5 12h14",
   earnings: "M12 2v20M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.7 7 6.8c0 4.7 10 2.6 10 7.6 0 2.2-2.2 3.6-5 3.6s-5.2-1.2-5.2-3.4",
   leads: "M3 5h18M3 12h18M3 19h12",
+  phone: "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2",
 } as const;
 
 export type IconName = keyof typeof PATHS;

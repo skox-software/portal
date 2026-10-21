@@ -59,7 +59,8 @@ test("unknown verbs and missing payloads don't throw", () => {
 });
 
 test("stage names fall back to readable text", () => {
-  assert.equal(stageName("outreach_closed"), "Close Outreach");
+  assert.equal(stageName("outreach_closed"), "Closed");
+  assert.equal(stageName("emailed"), "Emailed");
   assert.equal(stageName("initial_outreach"), "initial outreach");
   assert.equal(stageName("lost"), "Lost");
   assert.equal(stageName("on_hold"), "on hold");

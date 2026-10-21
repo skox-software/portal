@@ -6,7 +6,7 @@ import { FollowUpControl } from "@/components/FollowUpControl";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { bulkUpdateDeals } from "@/app/admin/pipeline/actions";
 import { followUpChoices } from "@/lib/follow-up";
-import { initials, STAGE_LABEL, STAGES } from "@/lib/pipeline";
+import { ACTIVE_STAGES, CLOSE_REASONS, initials, OUTREACH_STAGES, STAGE_LABEL, TRACK_LABEL } from "@/lib/pipeline";
 import { EMAIL_STATUS_LABEL, type EmailStatus } from "@/lib/resend-events";
 
 export type ClientRow = {
@@ -48,7 +48,15 @@ export type ClientRow = {
 export type ClientGroup = { key: string; label: string; rows: ClientRow[] };
 
 const COLLAPSED_KEY = "skox.clients.collapsed";
-const BULK_STAGES = STAGES.map((key) => ({ key, label: STAGE_LABEL[key] }));
+/**
+ * Bulk moves stay inside a track (crossing over is Promote or Send back, one
+ * deal at a time), and closing outreach carries its reason.
+ */
+const BULK_GROUPS = [
+  { label: TRACK_LABEL.outreach, options: [...OUTREACH_STAGES.filter((k) => k !== "outreach_closed").map((key) => ({ key, label: STAGE_LABEL[key] })), ...CLOSE_REASONS.filter((r) => r.value !== "not_interested").map((r) => ({ key: `outreach_closed:${r.value}`, label: `Close · ${r.label}` }))] },
+  { label: TRACK_LABEL.active, options: ACTIVE_STAGES.map((key) => ({ key, label: STAGE_LABEL[key] })) },
+];
+const BULK_STAGES = BULK_GROUPS.flatMap((g) => g.options);
 
 // Folded groups live in this browser's storage; Close Outreach and Lost start folded.
 const DEFAULT_COLLAPSED = '["outreach_closed","lost"]';
@@ -160,7 +168,7 @@ export function ClientsList({
     return () => select?.removeEventListener("change", onChange);
   }, []);
 
-  function bulk(change: { stage?: string; ownerEmail?: string; nextStepOn?: string; repMembershipId?: string }, label: string) {
+  function bulk(change: { stage?: string; closeReason?: string; ownerEmail?: string; nextStepOn?: string; repMembershipId?: string }, label: string) {
     if (!picked.length) return;
     setMessage(null);
     startTransition(async () => {
@@ -190,12 +198,25 @@ export function ClientsList({
           <label className="sr-only" htmlFor="bulk-stage-move">
             Move selected to
           </label>
-          <select id="bulk-stage-move" value="" disabled={pending} onChange={(e) => e.target.value && bulk({ stage: e.target.value }, `Moved to ${BULK_STAGES.find((s) => s.key === e.target.value)?.label}`)}>
+          <select
+            id="bulk-stage-move"
+            value=""
+            disabled={pending}
+            onChange={(e) => {
+              const [stage, closeReason] = e.target.value.split(":");
+              const label = BULK_STAGES.find((s) => s.key === e.target.value)?.label ?? "";
+              if (stage) bulk({ stage, ...(closeReason ? { closeReason } : {}) }, closeReason ? `Outreach closed (${label.replace("Close · ", "")})` : `Moved to ${label}`);
+            }}
+          >
             <option value="">Move to…</option>
-            {BULK_STAGES.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
+            {BULK_GROUPS.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <label className="sr-only" htmlFor="bulk-owner">

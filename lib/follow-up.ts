@@ -5,7 +5,7 @@
  * so "today" doesn't roll over at 8pm the way a UTC date would.
  */
 
-import { FIRST_DEAL_STAGE, nextOutreach, trackOf, type DealStage } from "./pipeline.ts";
+import { nextOutreach, promotionTarget, trackOf, type CloseReason, type DealStage, type PromotionSignal } from "./pipeline.ts";
 
 export const SALES_TZ = "America/New_York";
 
@@ -18,6 +18,8 @@ export const OUTCOMES = [
   { value: "no_answer", label: "No answer", followUpDays: 1, button: true },
   { value: "voicemail", label: "Voicemail", followUpDays: 2, button: true },
   { value: "spoke", label: "Talked", followUpDays: 3, button: true },
+  { value: "interested", label: "Interested", followUpDays: 2, button: true },
+  { value: "preview", label: "Preview requested", followUpDays: 2, button: true },
   { value: "emailed", label: "Sent email", followUpDays: 3, button: true },
   { value: "not_interested", label: "Not interested", followUpDays: null, button: true },
   { value: "bad_number", label: "Bad number", followUpDays: null, button: true },
@@ -69,26 +71,46 @@ export function defaultFollowUp(outcome: Outcome, today: string) {
 }
 
 /**
- * Logging a contact never moves the lead by itself, with one exception: an
- * email sent from Pre-qualified puts it in Potential Deals, since sending is
- * enough to count as a deal we're following.
+ * What logging a contact does to the lead. Calls and emails are outreach:
+ * they never promote. Only what the person said does: "Interested" and
+ * "Preview requested" promote an Outreach lead to the Pipeline, and "Not
+ * interested" closes its outreach (the reason chip says why). Won and lost
+ * deals never move.
  */
+export function callEffect(stage: DealStage, outcome: Outcome): { stage: DealStage; signal: PromotionSignal | null; closeReason: CloseReason | null } {
+  const none = { stage, signal: null, closeReason: null };
+  if (stage === "won" || stage === "lost") return none;
+  if (outcome === "interested" || outcome === "preview") {
+    const to = promotionTarget(stage, outcome);
+    return to ? { stage: to, signal: outcome, closeReason: null } : none;
+  }
+  if (outcome === "not_interested" && trackOf(stage) === "outreach" && stage !== "outreach_closed") {
+    return { stage: "outreach_closed", signal: null, closeReason: "not_interested" };
+  }
+  return none;
+}
+
+/** The stage a contact leaves the lead in; see callEffect. */
 export function stageAfterCall(stage: DealStage, outcome: Outcome): DealStage {
-  if (outcome === "emailed" && trackOf(stage) === "outreach") return FIRST_DEAL_STAGE;
-  return stage;
+  return callEffect(stage, outcome).stage;
 }
 
 /**
  * The stage the "Save & move" button offers after this outcome: the next
- * outreach attempt, or Close Outreach when they weren't interested. Null when
- * there's nothing to offer (Outreach 4, deal stages, or an email, which moves
- * on its own).
+ * outreach attempt. Null when there's nothing to offer: Attempt 4, Pipeline
+ * stages, or an outcome that moves the lead by itself (interest, a preview
+ * request, "Not interested").
  */
 export function advanceAfterCall(stage: DealStage, outcome: Outcome | null): DealStage | null {
-  if (trackOf(stage) !== "outreach" || stage === "outreach_closed" || outcome === "emailed") return null;
-  if (outcome === "not_interested") return "outreach_closed";
+  if (trackOf(stage) !== "outreach" || stage === "outreach_closed") return null;
+  if (outcome === "not_interested" || outcome === "interested" || outcome === "preview") return null;
   return nextOutreach(stage);
 }
+
+/** Outcomes where the call reached the owner or a decision-maker (not a front desk), for the connect rate. */
+export const CONNECTED: readonly Outcome[] = ["spoke", "interested", "preview", "not_interested"];
+/** Outcomes that are a phone call at all (an email logged by hand isn't). */
+export const DIALED: readonly Outcome[] = ["no_answer", "voicemail", "spoke", "interested", "preview", "not_interested", "bad_number", "gatekeeper"];
 
 /** A Saturday or Sunday reminder moves to Monday: nobody works the list at the weekend. */
 export function onWorkday(iso: string) {
@@ -177,6 +199,8 @@ export function nextStepAfterCall(outcome: Outcome, gatekeeper: string) {
   if (outcome === "gatekeeper") return gatekeeper ? `Call back; ${gatekeeper} answered last time` : "Call back; a gatekeeper answered";
   if (outcome === "no_answer") return "Call again";
   if (outcome === "voicemail") return "Call again after the voicemail";
+  if (outcome === "interested") return "Book the scope call";
+  if (outcome === "preview") return "Send the preview when it's ready";
   return null;
 }
 

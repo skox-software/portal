@@ -7,8 +7,9 @@ import { requireRep } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, deals, memberships, referrals, repProfiles } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
-import { followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
-import { FIRST_STAGE, trackOf } from "@/lib/pipeline";
+import { callEffect, followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, type Outcome } from "@/lib/follow-up";
+import { FIRST_STAGE, NOT_INTERESTED_REASONS, previewInFlight } from "@/lib/pipeline";
+import { promotionWrites } from "@/lib/promotion-server";
 import { formatDate } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
@@ -30,6 +31,7 @@ function refreshRep(dealId?: string) {
   if (dealId) revalidatePath(`/rep/leads/${dealId}`);
   revalidatePath("/admin/clients");
   revalidatePath("/admin/pipeline");
+  revalidatePath("/admin/leads");
 }
 
 /** A rep's paused account can still sign in and see history, but not add or work leads. */
@@ -144,23 +146,35 @@ export async function logRepCall(formData: FormData) {
   if (!parsed.success) backWith(back, "error", "Pick what happened on the call.");
   const { outcome, note } = parsed.data;
   const gatekeeper = String(formData.get("gatekeeper") ?? "").trim().slice(0, 80);
+  const reasonRaw = String(formData.get("reason") ?? "");
+  const reason = outcome === "not_interested" && NOT_INTERESTED_REASONS.some((r) => r.value === reasonRaw) ? reasonRaw : null;
   const db = getDb();
-  const [deal] = await db.select({ stage: deals.stage, projectId: deals.projectId }).from(deals).where(eq(deals.id, lead.id)).limit(1);
-  // Reps have no stage buttons, so "Not interested" closes their outreach for them.
-  const stage = deal.projectId ? deal.stage : outcome === "not_interested" && trackOf(deal.stage) === "outreach" ? "outreach_closed" : stageAfterCall(deal.stage, outcome);
+  const [deal] = await db
+    .select({ id: deals.id, workspaceId: deals.workspaceId, company: deals.company, stage: deals.stage, projectId: deals.projectId, previewStatus: deals.previewStatus })
+    .from(deals)
+    .where(eq(deals.id, lead.id))
+    .limit(1);
+  // Reps have no stage buttons: what was said moves the lead (lib/follow-up.ts callEffect), as it does for SKOX.
+  const effect = deal.projectId ? { stage: deal.stage, signal: null, closeReason: null } : callEffect(deal.stage, outcome);
+  const now = new Date();
+  const promotion = effect.signal ? promotionWrites(deal, effect.signal, viewer.userId, now, { via: "rep_call" }) : null;
+  const stage = effect.stage;
   const closed = stage === "outreach_closed";
   const followUp = closed ? null : followUpAfterCall(outcome, parsed.data.followUp, salesToday());
   const nextStep = followUp ? parsed.data.nextStep || nextStepAfterCall(outcome, gatekeeper) : null;
+  const requestPreview = outcome === "preview" && !deal.projectId && !previewInFlight(deal.previewStatus);
   await db.batch([
     db
       .update(deals)
       .set({
-        lastContactedAt: new Date(),
-        stage,
+        lastContactedAt: now,
+        ...(promotion ? {} : { stage }),
         nextStepOn: followUp,
         nextStep,
         ...(outcome === "bad_number" ? { badNumber: true } : {}),
-        ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
+        ...(stage !== deal.stage && !promotion ? { stageChangedAt: now } : {}),
+        ...(effect.closeReason ? { closeReason: effect.closeReason, closeDetail: reason } : {}),
+        ...(requestPreview ? { previewStatus: "requested" as const, previewRequestedAt: now, previewDecision: null } : {}),
       })
       .where(and(eq(deals.id, lead.id), eq(deals.repMembershipId, rep.id))),
     eventInsert({
@@ -169,8 +183,15 @@ export async function logRepCall(formData: FormData) {
       verb: "deal.call_logged",
       subjectType: "deal",
       subjectId: lead.id,
-      payload: { company: lead.company, outcome, by: "rep", ...(note ? { note } : {}), ...(gatekeeper ? { gatekeeper } : {}), ...(followUp ? { followUp } : {}), ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}) },
+      payload: { company: lead.company, outcome, by: "rep", ...(note ? { note } : {}), ...(gatekeeper ? { gatekeeper } : {}), ...(reason ? { reason } : {}), ...(followUp ? { followUp } : {}), ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}) },
     }),
+    ...(promotion?.writes ?? []),
+    ...(effect.closeReason
+      ? [eventInsert({ workspaceId: rep.workspaceId, actorId: viewer.userId, verb: "deal.outreach_closed", subjectType: "deal", subjectId: lead.id, payload: { company: lead.company, from: deal.stage, reason: effect.closeReason, ...(reason ? { detail: reason } : {}), via: "rep_call" } })]
+      : []),
+    ...(requestPreview
+      ? [eventInsert({ workspaceId: rep.workspaceId, actorId: viewer.userId, verb: "deal.preview_updated", subjectType: "deal", subjectId: lead.id, payload: { company: lead.company, from: deal.previewStatus, to: "requested", via: "rep_call" } })]
+      : []),
   ]);
   refreshRep(lead.id);
   const nextId = String(formData.get("nextId") ?? "");
@@ -190,13 +211,20 @@ export async function markMeetingBooked(formData: FormData) {
   if (day < salesToday()) backWith(back, "error", "The call can't be in the past.");
   const when = `${formatDate(day)}${time ? ` at ${time}` : ""}`;
   const db = getDb();
-  const [full] = await db.select({ ownerEmail: deals.ownerEmail }).from(deals).where(eq(deals.id, lead.id)).limit(1);
+  const [full] = await db
+    .select({ id: deals.id, workspaceId: deals.workspaceId, company: deals.company, stage: deals.stage, projectId: deals.projectId, ownerEmail: deals.ownerEmail })
+    .from(deals)
+    .where(eq(deals.id, lead.id))
+    .limit(1);
+  // A booked scope call is a promotion signal: the lead becomes a real opportunity at Scope call.
+  const promotion = promotionWrites(full, "meeting", viewer.userId, new Date(), { via: "rep", when });
   await db.batch([
     db
       .update(deals)
       .set({ meetingAt: new Date(), nextStepOn: day, nextStep: `Scope call ${time || ""}`.trim() + " (booked by rep)", lastContactedAt: new Date() })
       .where(and(eq(deals.id, lead.id), eq(deals.repMembershipId, rep.id))),
     eventInsert({ workspaceId: rep.workspaceId, actorId: viewer.userId, verb: "deal.meeting_booked", subjectType: "deal", subjectId: lead.id, payload: { company: lead.company, when, ...(note ? { note } : {}) } }),
+    ...promotion.writes,
   ]);
   notifyLater(async () => (full?.ownerEmail ? [full.ownerEmail] : staffRecipients(rep.workspaceId)), {
     subject: `Scope call booked: ${lead.company}`,

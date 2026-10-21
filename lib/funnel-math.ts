@@ -4,16 +4,17 @@
  * alone; lib/finance-data.ts reads the stage moves from the audit trail.
  */
 
-export const FUNNEL_STAGES = ["outreach", "emailed", "replied", "meeting", "proposal_sent", "won"] as const;
+export const FUNNEL_STAGES = ["outreach", "replied", "meeting", "proposal_sent", "won"] as const;
 export type FunnelStage = (typeof FUNNEL_STAGES)[number];
 
 /**
  * Every outreach attempt counts as one "Outreach" step. Older history used
- * Lead / Initial outreach / Negotiation, which fold in the same way.
+ * Lead / Initial outreach / Emailed / Negotiation, which fold in the same way:
+ * an email sent was outreach, not interest (migration 0022).
  */
 export function funnelStageOf(stage: string): FunnelStage | null {
   if (stage.startsWith("outreach_") && stage !== "outreach_closed") return "outreach";
-  if (stage === "lead" || stage === "initial_outreach") return "outreach";
+  if (stage === "lead" || stage === "initial_outreach" || stage === "emailed") return "outreach";
   if (stage === "negotiation") return "proposal_sent";
   return (FUNNEL_STAGES as readonly string[]).includes(stage) ? (stage as FunnelStage) : null;
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FollowUpControl } from "@/components/FollowUpControl";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
-import { allowedColumns, callQueue, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
+import { allowedColumns, callQueue, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey, type Track } from "@/lib/pipeline";
 
 export type { BoardView };
 
@@ -55,7 +56,26 @@ export type BoardCard = {
   priority: number;
   /** Lower-cased text the search box matches against. */
   search: string;
+  /** Outreach: never called or emailed. */
+  untried?: boolean;
+  /** Pipeline: open with no follow-up, or an overdue one. */
+  needsNext?: boolean;
+  /** Pipeline: what promoted it ("Replied", "Asked for a preview"…). */
+  signal?: string | null;
+  /** A preview website in flight. */
+  preview?: { status: string; label: string } | null;
+  /** Closed outreach: why ("Not interested · Retiring"). */
+  closed?: string | null;
 };
+
+/** Does a card belong in a saved view? Empty means every card. */
+function inSavedView(card: BoardCard, show: string | undefined) {
+  if (show === "due") return card.followUpState === "overdue" || card.followUpState === "today";
+  if (show === "untried") return !!card.untried;
+  if (show === "next") return !!card.needsNext;
+  if (show === "stalled") return card.stalled;
+  return true;
+}
 
 type Column = { key: ColumnKey; label: string };
 const LABEL: Record<ColumnKey | "lost", string> = {
@@ -75,7 +95,14 @@ export function PipelineBoard({
   today,
   initial,
   nowMs,
+  track,
+  base,
+  views,
 }: {
+  track: Track;
+  /** The board's own page: "/admin/leads" or "/admin/pipeline". */
+  base: string;
+  views: { key: string; label: string; hint: string }[];
   cards: BoardCard[];
   columns: Column[];
   owners: string[];
@@ -106,19 +133,20 @@ export function PipelineBoard({
   // Phones show one column at a time; the chips jump between them.
   const board = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState<ColumnKey>(columns[0].key);
+  const router = useRouter();
 
   // Keep the filters in the address, so opening a lead and coming back keeps them.
   useEffect(() => {
     const url = new URL(window.location.href);
-    for (const k of ["view", "q", "owner", "stage", "callable", "track"]) url.searchParams.delete(k);
+    for (const k of ["view", "q", "owner", "stage", "callable", "track", "show"]) url.searchParams.delete(k);
     for (const [k, val] of new URLSearchParams(viewQuery(v))) url.searchParams.set(k, val);
     window.history.replaceState(window.history.state, "", url);
   }, [v]);
 
-  const matched = useMemo(() => optimistic.filter((c) => cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, v)), [optimistic, v]);
+  const matched = useMemo(() => optimistic.filter((c) => inSavedView(c, v.show) && cardMatches({ search: c.search, ownerEmail: c.owner?.email ?? null }, v)), [optimistic, v]);
   const callableNow = useMemo(() => callQueue(matched, now), [matched, now]);
   const shown = v.callable ? callableNow : matched;
-  const filtering = Boolean(v.q || v.owner || v.callable);
+  const filtering = Boolean(v.q || v.owner || v.callable || v.show);
 
   useEffect(() => {
     const el = board.current;
@@ -144,12 +172,19 @@ export function PipelineBoard({
 
   function move(card: BoardCard, to: ColumnKey | "lost") {
     if (card.column === to) return;
-    if (!allowedColumns(card.type).includes(to)) {
+    if (!allowedColumns(card.type, card.column).includes(to)) {
       setError(
         card.type === "project"
           ? "Projects are already won: move them between Won, In build and Shipped."
-          : "Start onboarding from the Won column to turn a deal into a build.",
+          : to === "in_build" || to === "shipped"
+            ? "Start onboarding from the Won column to turn a deal into a build."
+            : "Leads move to the Pipeline with Promote, and back with Send back, both in the lead's panel.",
       );
+      return;
+    }
+    // Closing outreach asks why: open the lead with the reasons showing.
+    if (to === "outreach_closed" && card.type === "deal") {
+      router.push(`${base}${viewQuery(v, { deal: card.id, close: "1" })}`, { scroll: false });
       return;
     }
     setError(null);
@@ -160,7 +195,7 @@ export function PipelineBoard({
     });
   }
 
-  const open = (card: BoardCard) => (card.type === "deal" ? `/admin/pipeline${viewQuery(v, { deal: card.id })}` : card.href);
+  const open = (card: BoardCard) => (card.type === "deal" ? `${base}${viewQuery(v, { deal: card.id })}` : card.href);
 
   const stageSelect = (card: BoardCard) => (
     <>
@@ -168,7 +203,7 @@ export function PipelineBoard({
         Stage for {card.company}
       </label>
       <select id={`stage-${card.key}`} className="pipeline-stage" value={card.column} onChange={(e) => move(card, e.target.value as ColumnKey | "lost")}>
-        {allowedColumns(card.type).map((key) => (
+        {allowedColumns(card.type, card.column).map((key) => (
           <option key={key} value={key}>
             {LABEL[key]}
           </option>
@@ -192,7 +227,7 @@ export function PipelineBoard({
         )}
         {card.email?.trim() && (card.type === "deal" ? (
           // Deals open the drafted email in the panel, written from the call brief.
-          <Link href={`/admin/pipeline${viewQuery(v, { deal: card.id, email: "1" })}`} scroll={false} title="Open the email draft" aria-label={`Email draft for ${card.company}`}>
+          <Link href={`${base}${viewQuery(v, { deal: card.id, email: "1" })}`} scroll={false} title="Open the email draft" aria-label={`Email draft for ${card.company}`}>
             Email
           </Link>
         ) : (
@@ -208,14 +243,19 @@ export function PipelineBoard({
   return (
     <>
       <div className="pipeline-toolbar">
-        <nav className="crm-views pipeline-views" aria-label="Layout">
-          <a href="/portal/admin/pipeline" aria-current="page">
-            Board
-          </a>
-          <Link href="/admin/clients">List</Link>
+        <nav className="crm-views pipeline-views" aria-label="Saved views">
+          {views.map((sv) => (
+            <button key={sv.key || "all"} type="button" title={sv.hint} aria-pressed={(v.show ?? "") === sv.key} onClick={() => setV({ ...v, show: sv.key, owner: sv.key === "mine" ? me : v.show === "mine" ? "" : v.owner })}>
+              {sv.label}
+              <span>{optimistic.filter((c) => (sv.key === "mine" ? c.owner?.email === me : inSavedView(c, sv.key))).length}</span>
+            </button>
+          ))}
+          <Link href="/admin/clients" title="Every lead and client as a list">
+            List
+          </Link>
         </nav>
         <label className="sr-only" htmlFor="pipeline-search">
-          Search the pipeline
+          Search {track === "outreach" ? "leads" : "deals"}
         </label>
         <input
           id="pipeline-search"
@@ -238,7 +278,7 @@ export function PipelineBoard({
           ))}
           <option value="none">Unassigned</option>
         </select>
-        <button
+        {track === "outreach" && <button
           type="button"
           className="pipeline-callable"
           aria-pressed={!!v.callable}
@@ -247,9 +287,9 @@ export function PipelineBoard({
         >
           <i aria-hidden="true" />
           Callable now <span>{callableNow.length}</span>
-        </button>
+        </button>}
         {filtering && (
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => setV({ ...v, q: "", owner: "", callable: false })}>
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setV({ ...v, q: "", owner: "", callable: false, show: "" })}>
             Clear
           </button>
         )}
@@ -368,14 +408,22 @@ export function PipelineBoard({
                               <span style={{ width: `${card.progress}%` }} />
                             </div>
                           )}
-                          {card.badNumber && (
+                          {(card.badNumber || card.signal || card.preview || card.closed) && (
                             <div className="pipeline-chips">
-                              <span className="brief-tag" data-tag="BAD NUMBER">Bad number</span>
+                              {card.badNumber && <span className="brief-tag" data-tag="BAD NUMBER">Bad number</span>}
+                              {card.signal && <span className="signal-chip" title="What promoted it to the Pipeline">{card.signal}</span>}
+                              {card.preview && <span className="preview-chip" data-status={card.preview.status}>Preview · {card.preview.label}</span>}
+                              {card.closed && <span className="close-chip">{card.closed}</span>}
                             </div>
                           )}
-                          {reach(card)}
+                          {track === "active" && card.type === "deal" && card.column !== "won" && (
+                            <p className="pipeline-next" data-missing={card.nextStep ? undefined : ""}>
+                              <span>Next</span> {card.nextStep ?? (card.followUp ? "Follow up" : "No next step set")}
+                            </p>
+                          )}
+                          {track === "outreach" && reach(card)}
                           <div className="pipeline-card-meta">
-                            {card.value && <strong className="pipeline-card-money">{card.value}</strong>}
+                            {card.value ? <strong className="pipeline-card-money">{card.value}</strong> : track === "active" && card.type === "deal" && <span className="pipeline-novalue">No value yet</span>}
                             {card.type === "deal" ? (
                               <FollowUpControl kind="deal" id={card.id} name={card.company} dueOn={card.followUpOn} note={card.nextStep} today={today} />
                             ) : (

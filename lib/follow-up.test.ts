@@ -3,6 +3,9 @@ import { test } from "node:test";
 import {
   addWorkdays,
   advanceAfterCall,
+  callEffect,
+  CONNECTED,
+  DIALED,
   defaultFollowUp,
   describeFollowUp,
   followUpAfterCall,
@@ -30,25 +33,51 @@ test("follow-ups skip the weekend", () => {
   assert.equal(defaultFollowUp("not_interested", "2026-10-16"), null);
 });
 
-test("logging a call never moves the lead; an email from outreach makes it a Potential Deal", () => {
-  assert.equal(stageAfterCall("outreach_1", "no_answer"), "outreach_1");
-  assert.equal(stageAfterCall("outreach_2", "not_interested"), "outreach_2");
+test("calls and cold emails are outreach: they never promote a lead", () => {
+  for (const outcome of ["no_answer", "voicemail", "spoke", "emailed", "bad_number", "gatekeeper"] as const) {
+    assert.deepEqual(callEffect("outreach_2", outcome), { stage: "outreach_2", signal: null, closeReason: null }, outcome);
+  }
+  // A cold email from Closed or Attempt 4 doesn't make a deal either.
+  assert.equal(stageAfterCall("outreach_closed", "emailed"), "outreach_closed");
+  assert.equal(stageAfterCall("outreach_4", "emailed"), "outreach_4");
   assert.equal(stageAfterCall("proposal_sent", "spoke"), "proposal_sent");
-  assert.equal(stageAfterCall("outreach_3", "emailed"), "emailed");
-  assert.equal(stageAfterCall("outreach_closed", "emailed"), "emailed");
-  // Already a deal: an email doesn't pull it back to Emailed.
   assert.equal(stageAfterCall("replied", "emailed"), "replied");
 });
 
-test("Save & move offers the next attempt, or Close Outreach when they said no", () => {
+test("interest and a preview request promote; not interested closes with a reason", () => {
+  assert.deepEqual(callEffect("outreach_1", "interested"), { stage: "replied", signal: "interested", closeReason: null });
+  assert.deepEqual(callEffect("outreach_4", "preview"), { stage: "replied", signal: "preview", closeReason: null });
+  // Reopened leads can be promoted from Closed too.
+  assert.equal(stageAfterCall("outreach_closed", "interested"), "replied");
+  assert.deepEqual(callEffect("outreach_3", "not_interested"), { stage: "outreach_closed", signal: null, closeReason: "not_interested" });
+  // Already closed: nothing to close again.
+  assert.equal(callEffect("outreach_closed", "not_interested").closeReason, null);
+  // In the Pipeline: interest doesn't move a deal, and "not interested" doesn't close it (that's Lost or Send back).
+  assert.deepEqual(callEffect("meeting", "interested"), { stage: "meeting", signal: null, closeReason: null });
+  assert.equal(stageAfterCall("proposal_sent", "not_interested"), "proposal_sent");
+  // Won and lost never move.
+  assert.equal(stageAfterCall("won", "preview"), "won");
+  assert.equal(stageAfterCall("lost", "interested"), "lost");
+});
+
+test("Save & move offers the next attempt, emails included", () => {
   assert.equal(advanceAfterCall("outreach_1", "voicemail"), "outreach_2");
   assert.equal(advanceAfterCall("outreach_3", null), "outreach_4");
+  assert.equal(advanceAfterCall("outreach_2", "emailed"), "outreach_3");
   assert.equal(advanceAfterCall("outreach_4", "no_answer"), null);
-  assert.equal(advanceAfterCall("outreach_2", "not_interested"), "outreach_closed");
-  assert.equal(advanceAfterCall("outreach_4", "not_interested"), "outreach_closed");
-  assert.equal(advanceAfterCall("outreach_2", "emailed"), null);
+  // These move the lead by themselves.
+  assert.equal(advanceAfterCall("outreach_2", "not_interested"), null);
+  assert.equal(advanceAfterCall("outreach_2", "interested"), null);
+  assert.equal(advanceAfterCall("outreach_2", "preview"), null);
   assert.equal(advanceAfterCall("outreach_closed", "spoke"), null);
   assert.equal(advanceAfterCall("replied", "spoke"), null);
+});
+
+test("connects are calls that reached the owner; a front desk isn't one", () => {
+  assert.ok(CONNECTED.includes("spoke") && CONNECTED.includes("not_interested") && CONNECTED.includes("preview"));
+  assert.ok(!CONNECTED.includes("gatekeeper") && !CONNECTED.includes("voicemail"));
+  assert.ok(!DIALED.includes("emailed"));
+  assert.equal(nextStepAfterCall("interested", ""), "Book the scope call");
 });
 
 test("follow-up labels and states", () => {

@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  allowedColumns,
   boardTotals,
+  canDemote,
+  closeReasonLabel,
+  crossesTracks,
+  demotedStage,
+  previewInFlight,
+  promotionTarget,
+  readTrack,
+  retiredEmailedStage,
+  statusAfterDecision,
   callQueue,
   buildBoard,
   cardMatches,
@@ -123,6 +133,9 @@ test("lost deals leave the board; only pre-sale cards stall after 10 days", () =
   assert.equal(totals.openCents, 1_200_000);
   assert.equal(totals.wonCents, 1_850_000);
   assert.equal(isStalled("in_build", daysAgo(40), now), false);
+  // Real opportunities stall after a week; cold leads after 10 days.
+  assert.equal(isStalled("meeting", daysAgo(8), now), true);
+  assert.equal(isStalled("outreach_2", daysAgo(8), now), false);
 });
 
 test("initials come from a name or the local part of an email", () => {
@@ -166,15 +179,76 @@ test("the call queue: open leads with a working number, business hours there, be
   assert.deepEqual(callQueue(cards, now).map((c) => c.id), ["et-first", "ct-late"]);
 });
 
-test("two tracks: outreach attempts, then Potential Deals", () => {
+test("two tracks: outreach attempts, then the Pipeline", () => {
   assert.equal(trackOf("outreach_1"), "outreach");
   assert.equal(trackOf("outreach_closed"), "outreach");
-  assert.equal(trackOf("emailed"), "deals");
-  assert.equal(trackOf("lost"), "deals");
+  assert.equal(trackOf("replied"), "active");
+  assert.equal(trackOf("lost"), "active");
   assert.equal(nextOutreach("outreach_1"), "outreach_2");
   assert.equal(nextOutreach("outreach_3"), "outreach_4");
   assert.equal(nextOutreach("outreach_4"), null);
-  assert.equal(nextOutreach("emailed"), null);
+  assert.equal(nextOutreach("replied"), null);
+  // Old links said track=deals.
+  assert.equal(readTrack("deals"), "active");
+  assert.equal(readTrack("outreach"), "outreach");
+  assert.equal(readTrack("anything"), null);
+});
+
+test("promotion: a signal moves an Outreach lead to Interested, a booked call to Scope call", () => {
+  for (const signal of ["replied", "interested", "preview", "inbound", "direct"] as const) {
+    assert.equal(promotionTarget("outreach_2", signal), "replied", signal);
+  }
+  assert.equal(promotionTarget("outreach_1", "meeting"), "meeting");
+  assert.equal(promotionTarget("outreach_closed", "replied"), "replied");
+  // In the Pipeline, only a booked call moves Interested on.
+  assert.equal(promotionTarget("replied", "meeting"), "meeting");
+  assert.equal(promotionTarget("replied", "replied"), null);
+  assert.equal(promotionTarget("proposal_sent", "meeting"), null);
+  assert.equal(promotionTarget("won", "replied"), null);
+  assert.equal(promotionTarget("lost", "interested"), null);
+});
+
+test("crossing tracks is only by promotion or demotion; bulk and drag stay inside", () => {
+  assert.ok(crossesTracks("outreach_4", "replied"));
+  assert.ok(crossesTracks("proposal_sent", "outreach_1"));
+  assert.ok(!crossesTracks("outreach_1", "outreach_closed"));
+  assert.ok(!crossesTracks("replied", "lost"));
+  assert.deepEqual(allowedColumns("deal", "outreach_2"), ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "outreach_closed"]);
+  assert.deepEqual(allowedColumns("deal", "meeting"), ["replied", "meeting", "proposal_sent", "won", "lost"]);
+  assert.deepEqual(allowedColumns("referral", "outreach_1"), allowedColumns("deal", "outreach_1"));
+  assert.deepEqual(allowedColumns("project", "won"), ["won", "in_build", "shipped"]);
+});
+
+test("demotion lands on the attempt after the ones made, never past 4; only open deals go back", () => {
+  assert.equal(demotedStage(0), "outreach_1");
+  assert.equal(demotedStage(2), "outreach_3");
+  assert.equal(demotedStage(9), "outreach_4");
+  assert.ok(canDemote("replied") && canDemote("meeting") && canDemote("proposal_sent"));
+  assert.ok(!canDemote("won") && !canDemote("lost") && !canDemote("outreach_2"));
+});
+
+test("close reasons and previews read in plain words", () => {
+  assert.equal(closeReasonLabel("not_interested", "retiring"), "Not interested · Retiring");
+  assert.equal(closeReasonLabel("no_answer", null), "No answer after 4 tries");
+  assert.equal(closeReasonLabel(null, null), null);
+  assert.ok(previewInFlight("requested") && previewInFlight("opened"));
+  assert.ok(!previewInFlight("none") && !previewInFlight("archived"));
+  assert.equal(statusAfterDecision("go"), "building");
+  assert.equal(statusAfterDecision("go_with_changes"), "building");
+  assert.equal(statusAfterDecision("no_go"), "archived");
+});
+
+test("retiring Emailed (migration 0022): only a reply or a meeting keeps a deal in the Pipeline", () => {
+  const base = { meetingAt: null, replied: false, attempts: 0, lastOutcome: null };
+  assert.equal(retiredEmailedStage({ ...base, meetingAt: now, replied: true }), "meeting");
+  assert.equal(retiredEmailedStage({ ...base, replied: true, attempts: 3 }), "replied");
+  // Sent but never answered: back to the attempt its calls and emails reached.
+  assert.equal(retiredEmailedStage({ ...base, attempts: 1 }), "outreach_2");
+  assert.equal(retiredEmailedStage({ ...base, attempts: 2, lastOutcome: "voicemail" }), "outreach_3");
+  assert.equal(retiredEmailedStage({ ...base, attempts: 6 }), "outreach_4");
+  // Moved to Emailed by hand with nothing logged.
+  assert.equal(retiredEmailedStage(base), "outreach_1");
+  assert.equal(retiredEmailedStage({ ...base, attempts: 2, lastOutcome: "not_interested" }), "outreach_closed");
 });
 
 test("old stages map by what already happened (matches migration 0021)", () => {

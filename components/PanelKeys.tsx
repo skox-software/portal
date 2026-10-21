@@ -8,7 +8,7 @@ const typing = (el: EventTarget | null) =>
 
 /**
  * Keyboard for the lead panel: J / K next and previous, Esc closes,
- * C calls, E opens the email draft, W opens the website, 1–6 press the call outcome buttons.
+ * C calls, E opens the email draft, W opens the website, 1–8 press the call outcome buttons.
  * Keys are ignored while typing in a field.
  */
 export function PanelKeys({
@@ -61,7 +61,7 @@ export function PanelKeys({
           click('a[data-reach="site"]');
           break;
         default:
-          if (/^[1-6]$/.test(e.key)) {
+          if (/^[1-8]$/.test(e.key)) {
             const button = panel?.querySelector<HTMLButtonElement>(`button[data-shortcut="${e.key}"]`);
             if (button && !button.disabled) {
               e.preventDefault();

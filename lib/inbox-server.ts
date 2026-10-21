@@ -18,6 +18,8 @@ import {
   type KnownContact,
 } from "@/lib/inbox";
 import { putPrivate } from "@/lib/storage";
+import { promotionWrites } from "@/lib/promotion-server";
+import { trackOf } from "@/lib/pipeline";
 import { staffOf, staffRow } from "@/lib/staff-filter";
 
 /** The address the Workspace routing rule copies mail to; never a counterpart. */
@@ -97,7 +99,8 @@ export async function ingestEmail(mail: IncomingEmail) {
 
   // Persist before deduplication/storage: retries repair a partial failure and
   // quoted copies of our footer cannot suppress an interested prospect.
-  if (side.direction === "inbound" && isOptOutReply(mail.subject, mail.text)) {
+  const optOut = side.direction === "inbound" && isOptOutReply(mail.subject, mail.text);
+  if (optOut) {
     await suppressOutreach(from.email);
   }
 
@@ -177,7 +180,24 @@ export async function ingestEmail(mail: IncomingEmail) {
       })
       .where(eq(emailThreads.id, threadId)),
   ]);
+  // A reply is the clearest signal there is: a lead still in Outreach becomes a Pipeline deal.
+  // A "stop emailing me" reply isn't interest, and neither is anything after an opt-out.
+  if (inbound && !optOut) await promoteOnReply(threadId, id).catch((error) => console.error("[inbox] reply promotion failed", error));
   return { threadId, messageId: id };
+}
+
+async function promoteOnReply(threadId: string, messageId: string) {
+  const db = getDb();
+  const [row] = await db
+    .select({ deal: deals })
+    .from(emailThreads)
+    .innerJoin(deals, eq(deals.id, emailThreads.dealId))
+    .where(eq(emailThreads.id, threadId))
+    .limit(1);
+  const deal = row?.deal;
+  if (!deal || deal.doNotEmail || trackOf(deal.stage) !== "outreach") return;
+  const { writes } = promotionWrites(deal, "replied", "inbox", new Date(), { via: "email", threadId, messageId });
+  if (writes.length) await db.batch([writes[0], ...writes.slice(1)]);
 }
 
 async function findOrCreateThread(mail: IncomingEmail, counterpart: Address, from: Address) {

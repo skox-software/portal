@@ -28,7 +28,6 @@ export const STAGE_WEIGHTS: Partial<Record<DealStage, number>> = {
   outreach_2: 0.05,
   outreach_3: 0.05,
   outreach_4: 0.05,
-  emailed: 0.15,
   replied: 0.3,
   meeting: 0.5,
   proposal_sent: 0.65,

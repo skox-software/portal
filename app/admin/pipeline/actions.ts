@@ -7,25 +7,40 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
-import { clients, deals, memberships, projects, referrals } from "@/lib/db/schema";
+import { clients, deals, memberships, projects, referrals, type Deal } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
 import { parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
-import { advanceAfterCall, followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
+import { advanceAfterCall, callEffect, followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, type Outcome } from "@/lib/follow-up";
 import { dedupeLeads, parseLeadSources } from "@/lib/pipeline-import";
 import {
+  canDemote,
+  CLOSE_REASONS,
+  crossesTracks,
   DEAL_KINDS,
   dealStageForColumn,
+  demotedStage,
   FIRST_STAGE,
+  NOT_INTERESTED_REASONS,
   OPEN_STAGES,
+  PICKABLE_SIGNALS,
+  PREVIEW_DECISIONS,
+  previewInFlight,
   projectStatusForColumn,
+  signalLabel,
   STAGES,
   stageLabel,
+  statusAfterDecision,
+  trackOf,
+  type CloseReason,
   type ColumnKey,
   type DealStage,
+  type PromotionSignal,
 } from "@/lib/pipeline";
+import { promotionWrites } from "@/lib/promotion-server";
+import { attemptCount } from "@/lib/attempts-server";
 import { staffOf } from "@/lib/staff-filter";
 import { after } from "next/server";
 import { creditProjectFromDeal, emailAssignedLeads, readRepField } from "@/lib/rep-assign";
@@ -38,6 +53,7 @@ import { creditProjectFromDeal, emailAssignedLeads, readRepField } from "@/lib/r
  */
 
 const BACK = "/admin/pipeline";
+const BASES = ["/admin/pipeline", "/admin/leads", "/admin/clients"] as const;
 const KINDS = DEAL_KINDS.map((k) => k.value) as [string, ...string[]];
 const stageKey = z.enum(STAGES);
 const columnKey = z.enum([...STAGES, "in_build", "shipped"]);
@@ -54,11 +70,11 @@ async function staffEmails(workspaceId: string) {
 
 /** The board's filters, carried through a save so the view comes back as it was. */
 function backTo(formData: FormData, extra: Record<string, string> = {}) {
-  // Leads open from the Pipeline or from Clients; go back to whichever it was.
-  const base = formData.get("base") === "/admin/clients" ? "/admin/clients" : BACK;
+  // Leads open from Outreach, the Pipeline or Clients; go back to whichever it was.
+  const base = BASES.find((b) => b === formData.get("base")) ?? BACK;
   const from = new URLSearchParams(String(formData.get("back") ?? "").replace(/^\?/, ""));
   const p = new URLSearchParams();
-  for (const k of ["view", "q", "owner", "stage", "callable", "track"]) {
+  for (const k of ["view", "q", "owner", "stage", "callable", "show"]) {
     const v = from.get(k);
     if (v) p.set(k, v.slice(0, 200));
   }
@@ -69,6 +85,7 @@ function backTo(formData: FormData, extra: Record<string, string> = {}) {
 
 function refresh() {
   revalidatePath(BACK);
+  revalidatePath("/admin/leads");
   revalidatePath("/admin/clients");
   revalidatePath("/admin");
 }
@@ -118,8 +135,10 @@ export async function moveCard(type: string, id: string, to: string): Promise<Mo
 
   const stage = dealStageForColumn(column);
   if (!stage) return { ok: false, error: "Start onboarding from the Won column to turn a deal into a build." };
+  if (stage === "outreach_closed") return { ok: false, error: "Open the lead and pick why outreach closed, so the reason is kept." };
 
   if (parsed.data.type === "referral") {
+    if (trackOf(stage) !== "outreach") return { ok: false, error: "Work the referral first. It moves to the Pipeline when they show interest." };
     const [referral] = await db
       .select()
       .from(referrals)
@@ -166,6 +185,9 @@ export async function moveCard(type: string, id: string, to: string): Promise<Mo
     .limit(1);
   if (!deal) return { ok: false, error: "That deal doesn't exist." };
   if (deal.stage === stage) return { ok: true };
+  if (crossesTracks(deal.stage, stage)) {
+    return { ok: false, error: trackOf(stage) === "active" ? "Use Promote on the lead and say what they did. Calls and emails alone don't make a deal." : "Use Send back to Outreach on the deal and say why." };
+  }
   await db.batch([
     db
       .update(deals)
@@ -173,8 +195,8 @@ export async function moveCard(type: string, id: string, to: string): Promise<Mo
         stage,
         stageChangedAt: new Date(),
         ...(stage === "won" && !deal.wonAt ? { wonAt: new Date() } : {}),
-        // Done pursuing: no reminder should keep bringing it back.
-        ...(stage === "outreach_closed" ? { nextStepOn: null, nextStep: null } : {}),
+        // Reopened: the old reason for closing no longer applies.
+        ...(deal.stage === "outreach_closed" ? { closeReason: null, closeDetail: null } : {}),
       })
       .where(eq(deals.id, deal.id)),
     ...(deal.referralId && (stage === "won" || stage === "lost")
@@ -291,6 +313,7 @@ export async function createDeal(formData: FormData) {
   const parsed = readDeal(formData);
   if (!parsed.success) backWith(`${BACK}?new=1`, "error", "Give the deal a company name. Emails and websites must be valid.");
   const input = parsed.data;
+  if (input.stage === "outreach_closed") backWith(`${BACK}?new=1`, "error", "Add the lead to an attempt, then close it with a reason.");
   const owners = await staffEmails(staff.workspaceId);
   if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(`${BACK}?new=1`, "error", "The owner must be on the SKOX team.");
   const repField = await readRepField(formData, staff.workspaceId);
@@ -305,6 +328,8 @@ export async function createDeal(formData: FormData) {
       ...dealValues(input),
       ...mergeBrief(null, input.notes, input.preview),
       stage: input.stage,
+      // Added straight to the Pipeline: someone already knows it's a real opportunity.
+      ...(trackOf(input.stage) === "active" ? { promotedAt: new Date(), promotedSignal: "direct" } : {}),
       ownerEmail: input.ownerEmail || viewer.email,
       ...(repField.value ? { repMembershipId: repField.value, repSource: "assigned" } : {}),
       createdBy: viewer.userId,
@@ -366,7 +391,7 @@ export async function saveDeal(formData: FormData) {
   const repChanged = repField.value !== undefined && repField.value !== deal.repMembershipId;
   // Once onboarded, the project owns the stage; the form's stage is ignored.
   // The lead panel moves stages with its own buttons, so a form without a stage field keeps the current one.
-  const stage = deal.projectId || !formData.has("stage") ? deal.stage : input.stage;
+  const stage = deal.projectId || !formData.has("stage") || crossesTracks(deal.stage, input.stage) || input.stage === "outreach_closed" ? deal.stage : input.stage;
   // Fields the lead panel no longer shows (notes, next step, follow-up date) are kept unless the form sent them.
   const values = dealValues(input);
   const sent = (key: string) => formData.has(key);
@@ -538,12 +563,14 @@ export async function bulkAddDeals(formData: FormData) {
 
 /**
  * Logs a contact attempt, a note, or both, and can move the lead on in the
- * same step ("Save & move to Outreach 2"). Every save becomes a line in the
+ * same step ("Save & move to Attempt 2"). Every save becomes a line in the
  * lead's history: a call with its outcome and note, or a note on its own.
  *
- * Logging never moves the lead by itself, except that an email sent from
- * Pre-qualified makes it a Potential Deal. A bad number is flagged, and the
- * follow-up is the outcome's default unless one was picked.
+ * Calls and emails never promote. What they said does (lib/follow-up.ts
+ * callEffect): "Interested" and "Preview requested" promote an Outreach lead
+ * to the Pipeline, "Preview requested" also queues the preview, and "Not
+ * interested" closes outreach with the reason chip picked. A bad number is
+ * flagged, and the follow-up is the outcome's default unless one was picked.
  */
 export async function logCall(formData: FormData) {
   const { viewer, staff } = await requireStaff();
@@ -557,6 +584,7 @@ export async function logCall(formData: FormData) {
       followUp: z.union([z.literal(""), z.iso.date()]),
       nextStep: z.string().trim().max(200),
       gatekeeper: z.string().trim().max(80),
+      reason: z.union([z.literal(""), z.enum(NOT_INTERESTED_REASONS.map((r) => r.value) as [string, ...string[]])]),
     })
     .safeParse({
       outcome: String(formData.get("outcome") ?? ""),
@@ -564,10 +592,12 @@ export async function logCall(formData: FormData) {
       followUp: String(formData.get("followUp") ?? ""),
       nextStep: String(formData.get("nextStep") ?? ""),
       gatekeeper: String(formData.get("gatekeeper") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
     });
   if (!parsed.success) backWith(back, "error", "Pick what happened, or write a note.");
   const { note, gatekeeper } = parsed.data;
   const outcome = parsed.data.outcome || null;
+  const reason = outcome === "not_interested" ? parsed.data.reason || null : null;
   const advance = formData.get("intent") === "advance";
   if (!outcome && !note && !advance) backWith(back, "error", "Pick what happened, or write a note.");
 
@@ -581,10 +611,13 @@ export async function logCall(formData: FormData) {
 
   // Once onboarded, the project owns the stage.
   const settled = !!deal.projectId || deal.stage === "won" || deal.stage === "lost";
-  let stage: DealStage = settled || !outcome ? deal.stage : stageAfterCall(deal.stage, outcome);
-  if (advance && !settled) stage = advanceAfterCall(deal.stage, outcome) ?? stage;
-  const moved = stage !== deal.stage;
+  const effect = settled || !outcome ? { stage: deal.stage, signal: null, closeReason: null } : callEffect(deal.stage, outcome);
+  let stage: DealStage = effect.stage;
+  if (advance && !settled && stage === deal.stage) stage = advanceAfterCall(deal.stage, outcome) ?? stage;
   const now = new Date();
+  // A promotion writes its own stage, timestamps and event.
+  const promotion = effect.signal ? promotionWrites(deal, effect.signal, viewer.userId, now, { via: "call" }) : null;
+  const moved = stage !== deal.stage;
   const writes = [] as Parameters<typeof db.batch>[0][number][];
 
   if (outcome) {
@@ -593,19 +626,23 @@ export async function logCall(formData: FormData) {
     // A typed next step wins, then the one already on the deal, unless a gatekeeper's name makes a better one.
     const auto = nextStepAfterCall(outcome, gatekeeper);
     // After a real conversation, only what was typed counts; the old "call back" step is done.
-    const nextStep = !followUp ? null : parsed.data.nextStep || (outcome === "spoke" ? null : outcome === "gatekeeper" && gatekeeper ? auto : deal.nextStep || auto);
+    const fresh = outcome === "spoke" || outcome === "interested" || outcome === "preview";
+    const nextStep = !followUp ? null : parsed.data.nextStep || (fresh ? (outcome === "spoke" ? null : auto) : outcome === "gatekeeper" && gatekeeper ? auto : deal.nextStep || auto);
     const brief = readBrief(deal.brief) ?? parseBrief(deal.notes).brief;
+    const requestPreview = outcome === "preview" && !previewInFlight(deal.previewStatus);
     writes.push(
       db
         .update(deals)
         .set({
           lastContactedAt: now,
-          stage,
+          ...(promotion ? {} : { stage }),
           nextStepOn: followUp,
           nextStep,
           ...(outcome === "bad_number" ? { badNumber: true } : {}),
           ...(outcome === "gatekeeper" && gatekeeper ? { brief: { ...brief, gatekeeper } } : {}),
-          ...(moved ? { stageChangedAt: now } : {}),
+          ...(moved && !promotion ? { stageChangedAt: now } : {}),
+          ...(effect.closeReason ? { closeReason: effect.closeReason, closeDetail: reason } : {}),
+          ...(requestPreview ? { previewStatus: "requested" as const, previewRequestedAt: now, previewDecision: null } : {}),
         })
         .where(eq(deals.id, deal.id)),
       eventInsert({
@@ -620,10 +657,14 @@ export async function logCall(formData: FormData) {
           outcome,
           ...(note ? { note } : {}),
           ...(gatekeeper ? { gatekeeper } : {}),
+          ...(reason ? { reason } : {}),
           ...(followUp ? { followUp } : {}),
           ...(moved ? { from: deal.stage, to: stage } : {}),
         },
       }),
+      ...(promotion?.writes ?? []),
+      ...(effect.closeReason ? [closeEvent(deal, viewer.userId, effect.closeReason, reason, "call")] : []),
+      ...(requestPreview ? [previewEvent(deal, viewer.userId, "requested", { via: "call" })] : []),
     );
   } else {
     if (note) {
@@ -641,7 +682,7 @@ export async function logCall(formData: FormData) {
     }
     if (moved) {
       writes.push(
-        db.update(deals).set({ stage, stageChangedAt: now, ...(stage === "outreach_closed" ? { nextStepOn: null, nextStep: null } : {}) }).where(eq(deals.id, deal.id)),
+        db.update(deals).set({ stage, stageChangedAt: now }).where(eq(deals.id, deal.id)),
         eventInsert({
           workspaceId: staff.workspaceId,
           actorId: viewer.userId,
@@ -657,16 +698,213 @@ export async function logCall(formData: FormData) {
   await db.batch(writes as [(typeof writes)[number], ...(typeof writes)[number][]]);
   refresh();
   const what = outcome ? `${outcomeLabel(outcome)} logged` : note ? "Note saved" : "Saved";
-  const message = `${what} for ${deal.company}${moved ? ` · moved to ${stageLabel(stage)}` : ""}${outcome === "bad_number" ? " · number flagged" : ""}.`;
+  const where = promotion ? ` · promoted to the Pipeline (${stageLabel(stage)})` : moved ? ` · moved to ${stageLabel(stage)}` : "";
+  const message = `${what} for ${deal.company}${where}${outcome === "preview" ? " · preview queued" : ""}${outcome === "bad_number" ? " · number flagged" : ""}.`;
   const nextId = String(formData.get("nextId") ?? "");
   if (formData.get("then") === "next" && z.uuid().safeParse(nextId).success) backWith(backTo(formData, { deal: nextId }), "notice", message);
   backWith(back, "notice", message);
 }
 
+function closeEvent(deal: Pick<Deal, "id" | "workspaceId" | "company" | "projectId" | "stage">, actorId: string, reason: CloseReason, detail: string | null, via: string) {
+  return eventInsert({
+    workspaceId: deal.workspaceId,
+    projectId: deal.projectId,
+    actorId,
+    verb: "deal.outreach_closed",
+    subjectType: "deal",
+    subjectId: deal.id,
+    payload: { company: deal.company, from: deal.stage, reason, ...(detail ? { detail } : {}), via },
+  });
+}
+
+function previewEvent(deal: Pick<Deal, "id" | "workspaceId" | "company" | "projectId" | "previewStatus">, actorId: string, to: string, extra: Record<string, unknown> = {}) {
+  return eventInsert({
+    workspaceId: deal.workspaceId,
+    projectId: deal.projectId,
+    actorId,
+    verb: "deal.preview_updated",
+    subjectType: "deal",
+    subjectId: deal.id,
+    payload: { company: deal.company, from: deal.previewStatus, to, ...extra },
+  });
+}
+
+/** Loads a deal in the signed-in team's workspace for one of the panel's actions, or goes back with an error. */
+async function panelDeal(formData: FormData) {
+  const { viewer, staff } = await requireStaff();
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!z.uuid().safeParse(dealId).success) backWith(BACK, "error", "Unknown deal.");
+  const back = backTo(formData, { deal: dealId });
+  const [deal] = await getDb()
+    .select()
+    .from(deals)
+    .where(and(eq(deals.id, dealId), eq(deals.workspaceId, staff.workspaceId)))
+    .limit(1);
+  if (!deal) backWith(back, "error", "That deal doesn't exist.");
+  return { viewer, staff, deal, back };
+}
+
+/** The Pipeline panel's quick value field: what the deal is worth, without the full details form. */
+export async function saveDealValue(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  const raw = String(formData.get("value") ?? "").replace(/[$,\s]/g, "");
+  const value = z.union([z.literal(""), z.coerce.number().min(0).max(10_000_000)]).safeParse(raw);
+  if (!value.success) backWith(back, "error", "Enter the value in dollars, like 4500.");
+  const cents = value.data === "" ? null : Math.round(value.data * 100);
+  if (cents === deal.valueCents) backWith(back, "notice", "Value unchanged.");
+  const db = getDb();
+  await db.batch([
+    db.update(deals).set({ valueCents: cents }).where(eq(deals.id, deal.id)),
+    eventInsert({
+      workspaceId: deal.workspaceId,
+      projectId: deal.projectId,
+      actorId: viewer.userId,
+      verb: "deal.updated",
+      subjectType: "deal",
+      subjectId: deal.id,
+      payload: { company: deal.company, changed: [{ field: "Value", from: deal.valueCents != null ? String(deal.valueCents / 100) : null, to: cents != null ? String(cents / 100) : null }] },
+    }),
+  ]);
+  refresh();
+  backWith(back, "notice", cents == null ? "Value cleared." : `Value set to $${(cents / 100).toLocaleString("en-US")}.`);
+}
+
+/** The panel's Promote: moves an Outreach lead to the Pipeline, saying what they did. */
+export async function promoteDeal(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  const signal = z.enum(PICKABLE_SIGNALS as [PromotionSignal, ...PromotionSignal[]]).safeParse(formData.get("signal"));
+  if (!signal.success) backWith(back, "error", "Pick what they did: replied, interested, asked for a preview or booked a call.");
+  if (trackOf(deal.stage) !== "outreach") backWith(back, "notice", "Already in the Pipeline.");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 1000);
+  const now = new Date();
+  const promotion = promotionWrites(deal, signal.data, viewer.userId, now, { via: "manual", ...(note ? { note } : {}) });
+  if (!promotion.writes.length) backWith(back, "error", "This lead can't be promoted from here.");
+  const requestPreview = signal.data === "preview" && !previewInFlight(deal.previewStatus);
+  const db = getDb();
+  await db.batch([
+    promotion.writes[0],
+    ...promotion.writes.slice(1),
+    ...(requestPreview
+      ? [
+          db.update(deals).set({ previewStatus: "requested", previewRequestedAt: now, previewDecision: null }).where(eq(deals.id, deal.id)),
+          previewEvent(deal, viewer.userId, "requested", { via: "promote" }),
+        ]
+      : []),
+  ]);
+  refresh();
+  backWith(back, "notice", `${deal.company} promoted to the Pipeline · ${stageLabel(promotion.stage)} (${signalLabel(signal.data)}).`);
+}
+
+/** Sends a Pipeline deal that went cold back to Outreach, with why. */
+export async function demoteDeal(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (deal.projectId || !canDemote(deal.stage)) backWith(back, "error", "Only open Pipeline deals can go back to Outreach.");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 300);
+  if (!reason) backWith(back, "error", "Say why it's going back to Outreach.");
+  const to = demotedStage(await attemptCount(deal.workspaceId, deal.id));
+  const now = new Date();
+  const db = getDb();
+  await db.batch([
+    db.update(deals).set({ stage: to, stageChangedAt: now, promotedAt: null, promotedSignal: null }).where(eq(deals.id, deal.id)),
+    eventInsert({
+      workspaceId: deal.workspaceId,
+      projectId: deal.projectId,
+      actorId: viewer.userId,
+      verb: "deal.demoted",
+      subjectType: "deal",
+      subjectId: deal.id,
+      payload: { company: deal.company, from: deal.stage, to, reason, ...(deal.promotedSignal ? { signal: deal.promotedSignal } : {}) },
+    }),
+  ]);
+  refresh();
+  backWith(back, "notice", `${deal.company} is back in Outreach · ${stageLabel(to)}.`);
+}
+
+/** Close Outreach, with the reason it stopped (and why they weren't interested), for the lead brain. */
+export async function closeOutreach(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (deal.stage === "outreach_closed") backWith(back, "notice", "Outreach is already closed.");
+  if (trackOf(deal.stage) !== "outreach") backWith(back, "error", "Pipeline deals close as Won or Lost, or go back to Outreach.");
+  const parsed = z
+    .object({
+      reason: z.enum(CLOSE_REASONS.map((r) => r.value) as [CloseReason, ...CloseReason[]]),
+      detail: z.union([z.literal(""), z.enum(NOT_INTERESTED_REASONS.map((r) => r.value) as [string, ...string[]])]),
+      note: z.string().trim().max(1000),
+    })
+    .safeParse({ reason: formData.get("reason"), detail: String(formData.get("detail") ?? ""), note: String(formData.get("note") ?? "") });
+  if (!parsed.success) backWith(back, "error", "Pick why outreach is closing.");
+  const { reason, note } = parsed.data;
+  const detail = reason === "not_interested" ? parsed.data.detail || null : null;
+  const now = new Date();
+  const db = getDb();
+  await db.batch([
+    db
+      .update(deals)
+      .set({
+        stage: "outreach_closed",
+        stageChangedAt: now,
+        closeReason: reason,
+        closeDetail: detail,
+        // Done pursuing: no reminder should keep bringing it back.
+        nextStepOn: null,
+        nextStep: null,
+        ...(reason === "bad_number" ? { badNumber: true } : {}),
+      })
+      .where(eq(deals.id, deal.id)),
+    closeEvent(deal, viewer.userId, reason, detail, "panel"),
+    ...(note
+      ? [eventInsert({ workspaceId: deal.workspaceId, projectId: deal.projectId, actorId: viewer.userId, verb: "deal.note_added", subjectType: "deal", subjectId: deal.id, payload: { company: deal.company, note } })]
+      : []),
+  ]);
+  refresh();
+  backWith(back, "notice", `Outreach closed for ${deal.company}.`);
+}
+
+/** "Preview requested" without logging a call: queues the preview, and promotes a lead still in Outreach. */
+export async function requestPreview(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (previewInFlight(deal.previewStatus)) backWith(back, "notice", "A preview is already in progress.");
+  const now = new Date();
+  const promotion = promotionWrites(deal, "preview", viewer.userId, now, { via: "preview" });
+  const db = getDb();
+  await db.batch([
+    db.update(deals).set({ previewStatus: "requested", previewRequestedAt: now, previewDecision: null, previewBrief: null }).where(eq(deals.id, deal.id)),
+    previewEvent(deal, viewer.userId, "requested", { via: "panel" }),
+    ...promotion.writes,
+  ]);
+  refresh();
+  backWith(back, "notice", `Preview requested for ${deal.company}.${promotion.writes.length ? " Promoted to the Pipeline." : ""}`);
+}
+
+/** Gate A: the go, go-with-changes or no-go on the builder's research brief. */
+export async function decidePreview(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (deal.previewStatus !== "awaiting_approval") backWith(back, "error", "This preview isn't waiting for a decision.");
+  const parsed = z
+    .object({ decision: z.enum(PREVIEW_DECISIONS.map((d) => d.value) as ["go", "go_with_changes", "no_go"]), changes: z.string().trim().max(2000) })
+    .safeParse({ decision: formData.get("decision"), changes: String(formData.get("changes") ?? "") });
+  if (!parsed.success) backWith(back, "error", "Pick Go, Go with changes or No-go.");
+  const { decision, changes } = parsed.data;
+  if (decision === "go_with_changes" && !changes) backWith(back, "error", "Write the changes the build should make.");
+  const to = statusAfterDecision(decision);
+  const value = { decision, ...(decision === "go_with_changes" ? { changes } : {}), by: viewer.email, at: new Date().toISOString() };
+  const db = getDb();
+  // Only from awaiting_approval, so two taps or a builder update in between can't both win.
+  const rows = await db
+    .update(deals)
+    .set({ previewStatus: to, previewDecision: value })
+    .where(and(eq(deals.id, deal.id), eq(deals.previewStatus, "awaiting_approval")))
+    .returning({ id: deals.id });
+  if (!rows.length) backWith(back, "error", "The preview changed in the meantime. Reload the lead.");
+  await previewEvent(deal, viewer.userId, to, { decision, ...(decision === "go_with_changes" ? { changes } : {}) });
+  refresh();
+  backWith(back, "notice", decision === "no_go" ? "No-go recorded. The preview is archived." : "Approved. The builder picks it up next.");
+}
+
 type BulkResult = { ok: true; count: number } | { ok: false; error: string };
 
 /** Changes the stage, owner or follow-up of several deals at once. Onboarded deals keep their project's stage. */
-export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ownerEmail?: string; nextStepOn?: string; repMembershipId?: string }): Promise<BulkResult> {
+export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; closeReason?: string; ownerEmail?: string; nextStepOn?: string; repMembershipId?: string }): Promise<BulkResult> {
   const { viewer, staff } = await requireStaff();
   const parsed = z
     .object({
@@ -675,10 +913,12 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
       ownerEmail: z.string().trim().max(200).optional(),
       nextStepOn: z.union([z.literal(""), z.iso.date()]).optional(),
       repMembershipId: z.union([z.literal(""), z.uuid()]).optional(),
+      closeReason: z.enum(CLOSE_REASONS.map((r) => r.value) as [CloseReason, ...CloseReason[]]).optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Pick some deals and a change to make." };
-  const { ids, stage, nextStepOn } = parsed.data;
+  const { ids, stage, nextStepOn, closeReason } = parsed.data;
+  if (stage === "outreach_closed" && !closeReason) return { ok: false, error: "Pick why outreach is closing." };
   const ownerEmail = parsed.data.ownerEmail === undefined ? undefined : normalizeEmail(parsed.data.ownerEmail);
   if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) return { ok: false, error: "The owner must be on the SKOX team." };
   const repId = parsed.data.repMembershipId;
@@ -696,13 +936,18 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
     .from(deals)
     .where(and(eq(deals.workspaceId, staff.workspaceId), inArray(deals.id, ids)));
   if (!rows.length) return { ok: false, error: "Those deals don't exist." };
+  if (stage && ownerEmail === undefined && nextStepOn === undefined && repId === undefined && rows.every((d) => crossesTracks(d.stage, stage))) {
+    return { ok: false, error: trackOf(stage) === "active" ? "Leads move to the Pipeline one at a time, with Promote." : "Pipeline deals go back to Outreach one at a time, with a reason." };
+  }
   const now = new Date();
   const writes = rows.map((d) => {
-    const nextStage = stage && !d.projectId && stage !== d.stage ? stage : undefined;
+    // Bulk moves stay inside a track: crossing over needs a signal or a reason, one deal at a time.
+    const nextStage = stage && !d.projectId && stage !== d.stage && !crossesTracks(d.stage, stage) ? stage : undefined;
     return db
       .update(deals)
       .set({
         ...(nextStage ? { stage: nextStage, stageChangedAt: now, ...(nextStage === "won" && !d.wonAt ? { wonAt: now } : {}) } : {}),
+        ...(nextStage === "outreach_closed" ? { closeReason, closeDetail: null, nextStepOn: null, nextStep: null } : d.stage === "outreach_closed" && nextStage ? { closeReason: null, closeDetail: null } : {}),
         ...(ownerEmail !== undefined ? { ownerEmail: ownerEmail || null } : {}),
         ...(nextStepOn !== undefined ? { nextStepOn: nextStepOn || null } : {}),
         ...(repId !== undefined && (repId || null) !== d.rep ? { repMembershipId: repId || null, repSource: repId ? "assigned" : null } : {}),
@@ -718,7 +963,7 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
       verb: "deal.bulk_updated",
       subjectType: "deal",
       subjectId: null,
-      payload: { count: rows.length, ...(stage ? { stage } : {}), ...(ownerEmail !== undefined ? { ownerEmail } : {}), ...(nextStepOn !== undefined ? { nextStepOn } : {}), ...(repId !== undefined ? { rep: repId || null } : {}) },
+      payload: { count: rows.length, ...(stage ? { stage } : {}), ...(closeReason ? { closeReason } : {}), ...(ownerEmail !== undefined ? { ownerEmail } : {}), ...(nextStepOn !== undefined ? { nextStepOn } : {}), ...(repId !== undefined ? { rep: repId || null } : {}) },
     }),
   ]);
   if (repId) {

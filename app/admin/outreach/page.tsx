@@ -7,7 +7,7 @@ import { loadOutreachLog } from "@/lib/outreach-log-data";
 import { withBase } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Outreach · SKOX" };
+export const metadata: Metadata = { title: "Email log · SKOX" };
 
 const STATUS_ORDER: RowStatus[] = ["sent", "delayed", "delivered", "opened", "clicked", "bounced", "complained", "untracked"];
 
@@ -41,7 +41,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
       <div className="crm-head">
         <div>
           <p className="eyebrow">Sales</p>
-          <h1>Outreach</h1>
+          <h1>Email log</h1>
         </div>
         <nav className="crm-views" aria-label="Period">
           {PERIODS.map((p) => (

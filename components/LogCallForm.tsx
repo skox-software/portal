@@ -4,15 +4,17 @@ import { useState } from "react";
 import { logCall } from "@/app/admin/pipeline/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { defaultFollowUp, describeFollowUp, followUpChoices, OUTCOMES, type Outcome } from "@/lib/follow-up";
+import { NOT_INTERESTED_REASONS } from "@/lib/pipeline";
 
 const BUTTONS = OUTCOMES.filter((o) => o.button);
-/** These need one more thing before saving: a name, or what was said. */
-const EXPANDS: Outcome[] = ["gatekeeper", "spoke"];
+/** These need one more thing before saving: a name, what was said, or why not. */
+const EXPANDS: Outcome[] = ["gatekeeper", "spoke", "not_interested"];
 
 /**
  * One tap per outcome. Each saves with a sensible follow-up and moves on to
  * the next lead in the queue. Gatekeeper asks for the name first; Talked
- * opens a note and the follow-up date. Keys 1–6 press the buttons.
+ * opens a note and the follow-up date; Not interested asks why. Keys 1–8
+ * press the buttons.
  */
 export function LogCallForm({
   dealId,
@@ -85,13 +87,13 @@ export function LogCallForm({
               }}
             >
               <span>{o.label}</span>
-              <small>{due ? `Follow up ${due}` : "…"}</small>
+              <small>{o.value === "not_interested" ? "Closes the lead" : due ? `Follow up ${due}` : "…"}</small>
               <kbd>{i + 1}</kbd>
             </button>
           ) : (
             <SubmitButton key={o.value} className="logcall-btn" name="outcome" value={o.value} data-tone={tone} data-shortcut={i + 1} pendingLabel="Saving…">
               <span>{o.label}</span>
-              <small>{o.value === "not_interested" ? "Closes the lead" : o.value === "bad_number" ? "Flags the number" : `Follow up ${due}`}</small>
+              <small>{o.value === "bad_number" ? "Flags the number" : o.value === "preview" ? "SKOX builds a preview" : `Follow up ${due}`}</small>
               <kbd>{i + 1}</kbd>
             </SubmitButton>
           );
@@ -130,6 +132,23 @@ export function LogCallForm({
           <input id={`nextstep-${dealId}`} name="nextStep" maxLength={200} placeholder={nextStep ? `Next step (was: ${nextStep})` : "Next step, e.g. send the preview"} />
           <SubmitButton className="btn btn-primary" name="outcome" value="spoke" pendingLabel="Saving…">
             Log talked {label}
+          </SubmitButton>
+        </div>
+      )}
+
+      {open === "not_interested" && (
+        <div className="logcall-more">
+          <span className="logcall-legend">Why not?</span>
+          <div className="logcall-chips choice-chips" role="radiogroup" aria-label="Why not interested">
+            {NOT_INTERESTED_REASONS.map((r) => (
+              <label key={r.value}>
+                <input type="radio" name="reason" value={r.value} />
+                <span>{r.label}</span>
+              </label>
+            ))}
+          </div>
+          <SubmitButton className="btn btn-primary" name="outcome" value="not_interested" pendingLabel="Saving…">
+            Log not interested {label}
           </SubmitButton>
         </div>
       )}

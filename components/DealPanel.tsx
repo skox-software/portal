@@ -1,7 +1,7 @@
 import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
-import { createDeal, moveDealStage, saveDeal } from "@/app/admin/pipeline/actions";
+import { closeOutreach, createDeal, decidePreview, demoteDeal, moveDealStage, promoteDeal, requestPreview, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
 import { ContactLog } from "@/components/ContactLog";
 import { CopyButton } from "@/components/CopyButton";
 import { EmailDraft } from "@/components/EmailDraft";
@@ -14,18 +14,51 @@ import { events, memberships, type Deal } from "@/lib/db/schema";
 import { parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
 import { buildEmailDraft } from "@/lib/email-draft";
 import { outreachSender, senderLine, signedByOther } from "@/lib/lead-email";
-import { formatDate, timeAgo } from "@/lib/format";
+import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 import { loadEmailStatuses } from "@/lib/email-status-data";
 import { outcomeLabel } from "@/lib/follow-up";
-import { DEAL_KINDS, FIRST_DEAL_STAGE, OUTREACH_STAGES, STAGE_LABEL, STAGES, stageLabel, TRACK_LABEL, trackOf, type DealStage } from "@/lib/pipeline";
+import {
+  ACTIVE_STAGES,
+  canDemote,
+  CLOSE_REASONS,
+  closeReasonLabel,
+  DEAL_KINDS,
+  DEMOTE_REASONS,
+  NOT_INTERESTED_REASONS,
+  OUTREACH_STAGES,
+  PICKABLE_SIGNALS,
+  PREVIEW_DECISIONS,
+  previewInFlight,
+  previewLabel,
+  PROMOTION_SIGNALS,
+  signalLabel,
+  STAGE_LABEL,
+  stageLabel,
+  TRACK_LABEL,
+  trackOf,
+  type DealStage,
+  type Track,
+} from "@/lib/pipeline";
 import { EMAIL_STATUS_LABEL, type EmailStatus } from "@/lib/resend-events";
 
 /** What a history line says. Everything that happened to the lead, in its own words. */
 function describe(verb: string, p: Record<string, unknown>) {
   const s = (k: string) => (typeof p[k] === "string" ? (p[k] as string) : "");
   switch (verb) {
-    case "deal.call_logged":
-      return outcomeLabel(s("outcome"));
+    case "deal.call_logged": {
+      const why = NOT_INTERESTED_REASONS.find((r) => r.value === s("reason"))?.label;
+      return `${outcomeLabel(s("outcome"))}${why ? ` · ${why}` : ""}`;
+    }
+    case "deal.promoted":
+      return `Promoted to the Pipeline · ${signalLabel(s("signal")) ?? "signal not recorded"}`;
+    case "deal.demoted":
+      return `Sent back to Outreach${s("reason") ? ` · ${s("reason")}` : ""}`;
+    case "deal.outreach_closed":
+      return `Outreach closed · ${closeReasonLabel(s("reason"), s("detail")) ?? "no reason"}`;
+    case "deal.preview_updated": {
+      const decision = PREVIEW_DECISIONS.find((d) => d.value === s("decision"))?.label;
+      return decision ? `Preview: ${decision}${s("changes") ? ` · ${s("changes")}` : ""}` : `Preview ${previewLabel(s("to")).toLowerCase()}`;
+    }
     case "deal.note_added":
       return "Note";
     case "deal.email_sent":
@@ -60,12 +93,17 @@ function describe(verb: string, p: Record<string, unknown>) {
   }
 }
 
-/** "Moved to X" lines for a call or an email that also moved the lead. */
-const movedBy = (verb: string, p: Record<string, unknown>) => (verb === "deal.call_logged" && typeof p.to === "string" ? stageLabel(p.to) : null);
+/** "Moved to X" lines for a call that also moved the lead, or a promotion or demotion. */
+const movedBy = (verb: string, p: Record<string, unknown>) =>
+  ["deal.call_logged", "deal.promoted", "deal.demoted"].includes(verb) && typeof p.to === "string" ? stageLabel(p.to) : null;
+
+/** A call with an outcome, or a cold email sent or scheduled: one outreach attempt. */
+const isAttempt = (verb: string, p: Record<string, unknown>) =>
+  verb === "deal.email_sent" || verb === "deal.email_scheduled" || (verb === "deal.call_logged" && typeof p.outcome === "string");
 
 export type PanelNav = {
-  /** "/admin/pipeline" or "/admin/clients": where saves come back to. */
-  base: "/admin/pipeline" | "/admin/clients";
+  /** "/admin/leads", "/admin/pipeline" or "/admin/clients": where saves come back to. */
+  base: "/admin/leads" | "/admin/pipeline" | "/admin/clients";
   /** The list's filters as a query string ("?view=list&q=…"), kept through saves. */
   back: string;
   closeHref: string;
@@ -93,9 +131,15 @@ export async function DealPanel({
   notice,
   error,
   emailOpen = false,
+  closeOpen = false,
+  newTrack = "outreach",
 }: {
   /** Open with the email draft showing (the board card's Email chip). */
   emailOpen?: boolean;
+  /** Open with the Close outreach reasons showing (a card dropped on Closed). */
+  closeOpen?: boolean;
+  /** Which board a new lead is added from: it picks the stages offered. */
+  newTrack?: Track;
   deal: Deal | null;
   owners: string[];
   reps?: { id: string; name: string; active: boolean }[];
@@ -136,6 +180,7 @@ export async function DealPanel({
     return what ? [{ e, p, what }] : [];
   });
   const lastReach = history.find((e) => e.verb === "deal.call_logged" || e.verb === "deal.email_sent");
+  const attempts = history.filter((e) => isAttempt(e.verb, (e.payload ?? {}) as Record<string, unknown>)).length;
   const lastReachWhat = lastReach ? describe(lastReach.verb, (lastReach.payload ?? {}) as Record<string, unknown>) : null;
 
   const emailStatus = deal ? (await loadEmailStatuses(deal.workspaceId, deal.id)).get(deal.id) ?? null : null;
@@ -191,6 +236,23 @@ export async function DealPanel({
             <i aria-hidden="true" />
             {track && TRACK_LABEL[track]} · {stageLabel(deal.stage)}
           </span>
+          {track === "outreach" && (
+            <span className="small" title="Calls logged with an outcome, plus cold emails sent or scheduled">
+              <strong>{attempts}</strong> attempt{attempts === 1 ? "" : "s"}
+            </span>
+          )}
+          {track === "active" && (
+            <span className="small" title="What moved it from Outreach to the Pipeline">
+              {deal.promotedSignal ? (
+                <>
+                  <strong>{signalLabel(deal.promotedSignal)}</strong>
+                  {deal.promotedAt && <span className="muted"> · {timeAgo(deal.promotedAt, now)}</span>}
+                </>
+              ) : (
+                <span className="muted">In the Pipeline from before signals were recorded</span>
+              )}
+            </span>
+          )}
           <span className="small">
             {lastReach ? (
               <>
@@ -211,7 +273,46 @@ export async function DealPanel({
         </p>
       )}
 
-      <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} tel={tel} />
+      {deal && track === "outreach" && (brief?.askFor || brief?.opener) && (
+        <dl className="lead-opener">
+          {brief.askFor && (
+            <div>
+              <dt>Ask for</dt>
+              <dd>{brief.gatekeeper ? `${brief.askFor} (last time ${brief.gatekeeper} answered)` : brief.askFor}</dd>
+            </div>
+          )}
+          {brief.opener && (
+            <div>
+              <dt>Opener</dt>
+              <dd>{brief.opener}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      {deal && track === "active" && !linkedProject && (
+        <form action={saveDealValue} className="deal-summary" aria-label="Deal">
+          {hidden}
+          <div>
+            <label htmlFor={`value-${deal.id}`}>Value</label>
+            <input id={`value-${deal.id}`} name="value" inputMode="decimal" defaultValue={deal.valueCents != null ? String(deal.valueCents / 100) : ""} placeholder="USD, not set" />
+          </div>
+          <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
+            Save value
+          </SubmitButton>
+          <p className="small muted">
+            {deal.stage === "proposal_sent"
+              ? `Proposal out since ${formatDate(deal.stageChangedAt.toISOString().slice(0, 10))}`
+              : deal.stage === "won"
+                ? `Won${deal.wonAt ? ` ${formatDate(deal.wonAt.toISOString().slice(0, 10))}` : ""}${deal.valueCents ? ` · ${formatMoney(deal.valueCents)}` : ""}`
+                : `${stageLabel(deal.stage)} since ${formatDate(deal.stageChangedAt.toISOString().slice(0, 10))}`}
+            {" · "}
+            {deal.nextStep ? `Next: ${deal.nextStep}` : "No next step: set one with Remind"}
+          </p>
+        </form>
+      )}
+
+      <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} tel={tel} newTrack={newTrack} />
 
       {deal && draft && (
         <div className="lead-email">
@@ -226,19 +327,85 @@ export async function DealPanel({
       )}
 
       {deal && !linkedProject && (
-        <form action={moveDealStage} className="stage-bar" aria-label="Stage">
-          {hidden}
-          <div className="stage-bar-row" role="group" aria-label={TRACK_LABEL[track!]}>
-            {(track === "outreach" ? OUTREACH_STAGES : STAGES.filter((s) => trackOf(s) === "deals")).map((s) => (
+        <div className="stage-bar" aria-label="Stage">
+          <form action={moveDealStage} className="stage-bar-row" role="group" aria-label={TRACK_LABEL[track!]}>
+            {hidden}
+            {(track === "outreach" ? OUTREACH_STAGES.filter((s) => s !== "outreach_closed") : ACTIVE_STAGES).map((s) => (
               <SubmitButton key={s} className="stage-bar-step" name="to" value={s} aria-current={deal.stage === s ? "step" : undefined} disabled={deal.stage === s} data-stage={s} pendingLabel="…">
-                {s === "outreach_closed" ? "Close" : STAGE_LABEL[s]}
+                {STAGE_LABEL[s]}
               </SubmitButton>
             ))}
-          </div>
+          </form>
+          {deal.stage === "outreach_closed" && (
+            <p className="small stage-closed">
+              <strong>Outreach closed</strong> · {closeReasonLabel(deal.closeReason, deal.closeDetail) ?? "no reason recorded"}. Pick an attempt to reopen it.
+            </p>
+          )}
           {track === "outreach" ? (
-            <SubmitButton className="btn btn-primary btn-small" name="to" value={FIRST_DEAL_STAGE} pendingLabel="Moving…">
-              Move to Potential Deals →
-            </SubmitButton>
+            <div className="stage-bar-extra">
+              <details className="stage-action" data-tone="promote">
+                <summary className="btn btn-primary btn-small">Promote to Pipeline →</summary>
+                <form action={promoteDeal} className="stage-action-body">
+                  {hidden}
+                  <fieldset>
+                    <legend>What did they do?</legend>
+                    <div className="choice-chips">
+                      {PROMOTION_SIGNALS.filter((sig) => PICKABLE_SIGNALS.includes(sig.value)).map((sig) => (
+                        <label key={sig.value}>
+                          <input type="radio" name="signal" value={sig.value} required />
+                          <span>{sig.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label className="sr-only" htmlFor={`promote-note-${deal.id}`}>
+                    Note
+                  </label>
+                  <input id={`promote-note-${deal.id}`} name="note" maxLength={1000} placeholder="What they said (optional)" />
+                  <SubmitButton className="btn btn-primary btn-small" pendingLabel="Promoting…">
+                    Promote
+                  </SubmitButton>
+                  <p className="small muted">Calls and emails alone don&apos;t promote. A reply, interest on a call, a preview request or a booked call does.</p>
+                </form>
+              </details>
+              {deal.stage !== "outreach_closed" && (
+                <details className="stage-action" open={closeOpen || undefined}>
+                  <summary className="btn btn-ghost btn-small">Close outreach…</summary>
+                  <form action={closeOutreach} className="stage-action-body">
+                    {hidden}
+                    <fieldset>
+                      <legend>Why is outreach stopping?</legend>
+                      <div className="choice-chips">
+                        {CLOSE_REASONS.map((r) => (
+                          <label key={r.value}>
+                            <input type="radio" name="reason" value={r.value} required defaultChecked={r.value === "no_answer" && deal.stage === "outreach_4"} />
+                            <span>{r.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <fieldset className="close-detail">
+                      <legend>If not interested, why?</legend>
+                      <div className="choice-chips">
+                        {NOT_INTERESTED_REASONS.map((r) => (
+                          <label key={r.value}>
+                            <input type="radio" name="detail" value={r.value} />
+                            <span>{r.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <label className="sr-only" htmlFor={`close-note-${deal.id}`}>
+                      Note
+                    </label>
+                    <input id={`close-note-${deal.id}`} name="note" maxLength={1000} placeholder="Anything else worth keeping (optional)" />
+                    <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Closing…">
+                      Close outreach
+                    </SubmitButton>
+                  </form>
+                </details>
+              )}
+            </div>
           ) : (
             <div className="stage-bar-extra">
               {deal.stage === "won" && (
@@ -246,15 +413,83 @@ export async function DealPanel({
                   Start onboarding →
                 </Link>
               )}
-              <SubmitButton className="btn btn-ghost btn-small" name="to" value="outreach_1" pendingLabel="Moving…" title="Back to Pre-qualified, history kept">
-                ← Back to outreach
-              </SubmitButton>
+              {canDemote(deal.stage) && (
+                <details className="stage-action">
+                  <summary className="btn btn-ghost btn-small">← Send back to Outreach</summary>
+                  <form action={demoteDeal} className="stage-action-body">
+                    {hidden}
+                    <label htmlFor={`demote-${deal.id}`}>Why? It goes back with its history.</label>
+                    <input id={`demote-${deal.id}`} name="reason" maxLength={300} required list={`demote-reasons-${deal.id}`} placeholder="Went quiet, not now…" />
+                    <datalist id={`demote-reasons-${deal.id}`}>
+                      {DEMOTE_REASONS.map((r) => (
+                        <option key={r} value={r} />
+                      ))}
+                    </datalist>
+                    <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Sending back…">
+                      Send back
+                    </SubmitButton>
+                  </form>
+                </details>
+              )}
             </div>
           )}
-        </form>
+        </div>
       )}
 
-      {deal && <ContactLog key={deal.id} dealId={deal.id} stage={deal.stage as DealStage} base={nav.base} back={nav.back} nextId={nav.nextId} />}
+      {deal && !linkedProject && deal.stage !== "lost" && (
+        <section className="lead-preview" aria-labelledby={`preview-${deal.id}`}>
+          <h3 id={`preview-${deal.id}`}>Preview site</h3>
+          {!previewInFlight(deal.previewStatus) ? (
+            <form action={requestPreview} className="lead-preview-row">
+              {hidden}
+              <span className="small muted">{deal.previewStatus === "archived" ? "The last preview was archived." : "None yet."}</span>
+              <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Requesting…" title={track === "outreach" ? "Queues a preview and promotes the lead to the Pipeline" : "Queues a preview"}>
+                Preview requested
+              </SubmitButton>
+            </form>
+          ) : (
+            <>
+              <p className="lead-preview-row">
+                <span className="preview-chip" data-status={deal.previewStatus}>
+                  {previewLabel(deal.previewStatus)}
+                </span>
+                <span className="small muted">
+                  {deal.previewRequestedAt && `Asked ${timeAgo(deal.previewRequestedAt, now)}`}
+                  {deal.previewSentAt && ` · sent ${timeAgo(deal.previewSentAt, now)}`}
+                  {deal.previewFirstOpenAt ? ` · first opened ${timeAgo(deal.previewFirstOpenAt, now)}` : deal.previewSentAt ? " · not opened yet" : ""}
+                </span>
+                {deal.previewUrl && (
+                  <a className="btn btn-ghost btn-small" href={deal.previewUrl} target="_blank" rel="noreferrer">
+                    Open preview ↗
+                  </a>
+                )}
+              </p>
+              {deal.previewStatus === "awaiting_approval" && (
+                <form action={decidePreview} className="gate-a">
+                  {hidden}
+                  <p className="small">
+                    <strong>Gate A.</strong> The builder researched this business. Go builds the preview; No-go archives it.
+                  </p>
+                  {deal.previewBrief ? <div className="gate-a-brief">{deal.previewBrief}</div> : <p className="small muted">The builder hasn&apos;t attached its brief yet.</p>}
+                  <label className="sr-only" htmlFor={`changes-${deal.id}`}>
+                    Changes for the build
+                  </label>
+                  <textarea id={`changes-${deal.id}`} name="changes" rows={2} maxLength={2000} placeholder="Changes for the build (needed for Go with changes)" />
+                  <div className="gate-a-actions">
+                    {PREVIEW_DECISIONS.map((d) => (
+                      <SubmitButton key={d.value} className={d.value === "go" ? "btn btn-primary btn-small" : "btn btn-ghost btn-small"} name="decision" value={d.value} pendingLabel="Saving…">
+                        {d.label}
+                      </SubmitButton>
+                    ))}
+                  </div>
+                </form>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {deal && <ContactLog key={deal.id} dealId={deal.id} stage={deal.stage as DealStage} base={nav.base} back={nav.back} nextId={nav.nextId} previewInFlight={previewInFlight(deal.previewStatus)} />}
 
       {deal && (
         <section className="lead-history" aria-label="History">
@@ -308,7 +543,9 @@ function DealForm({
   linked,
   nav,
   tel,
+  newTrack,
 }: {
+  newTrack: Track;
   deal: Deal | null;
   owners: string[];
   reps: { id: string; name: string; active: boolean }[];
@@ -364,8 +601,8 @@ function DealForm({
       {!deal && (
         <div className="lead-contact-row">
           <label htmlFor={f("stage")}>Stage</label>
-          <select id={f("stage")} name="stage" defaultValue="outreach_1">
-            {STAGES.map((s) => (
+          <select id={f("stage")} name="stage" defaultValue={newTrack === "outreach" ? "outreach_1" : "replied"}>
+            {(newTrack === "outreach" ? OUTREACH_STAGES.filter((s) => s !== "outreach_closed") : ACTIVE_STAGES.filter((s) => s !== "lost")).map((s) => (
               <option key={s} value={s}>
                 {TRACK_LABEL[trackOf(s)]} · {STAGE_LABEL[s]}
               </option>

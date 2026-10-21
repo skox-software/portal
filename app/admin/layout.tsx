@@ -36,12 +36,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       email={viewer.email}
       tabs={[
         { href: "/admin", label: "Overview", icon: "home", exact: true },
+        { href: "/admin/leads", label: "Outreach", icon: "phone" },
         { href: "/admin/pipeline", label: "Pipeline", icon: "pipeline" },
-        { href: "/admin/clients", label: "Clients", icon: "clients", count: dueCount },
         { href: "/admin/inbox", label: "Inbox", icon: "mail", count: inboxCount },
       ]}
       more={[
-        { href: "/admin/outreach", label: "Outreach", icon: "mail" },
+        { href: "/admin/clients", label: "Clients", icon: "clients", count: dueCount },
+        { href: "/admin/outreach", label: "Email log", icon: "mail" },
         { href: "/admin/billing", label: "Billing", icon: "billing" },
         { href: "/admin/finance", label: "Finance", icon: "results" },
         { href: "/admin/reps", label: "Team", icon: "clients" },

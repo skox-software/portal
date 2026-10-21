@@ -91,8 +91,8 @@ export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "
 export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
 export const onboardingStatus = pgEnum("onboarding_status", ["invited", "in_progress", "completed"]);
 /**
- * Pre-sale stages only, in two tracks: Pre-qualified (outreach_*) and Potential
- * Deals (emailed → won/lost). Once a deal becomes a project, the project's
+ * Pre-sale stages only, in two tracks: Outreach (outreach_*) and the Pipeline
+ * (replied → won/lost). Once a deal becomes a project, the project's
  * status drives the board. Keep in step with STAGES in lib/pipeline.ts.
  */
 export const dealStage = pgEnum("deal_stage", [
@@ -101,12 +101,24 @@ export const dealStage = pgEnum("deal_stage", [
   "outreach_3",
   "outreach_4",
   "outreach_closed",
-  "emailed",
   "replied",
   "meeting",
   "proposal_sent",
   "won",
   "lost",
+]);
+
+/** A preview website for a lead who asked for one. Keep in step with PREVIEW_STATUSES in lib/pipeline.ts. */
+export const leadPreviewStatus = pgEnum("lead_preview_status", [
+  "none",
+  "requested",
+  "researching",
+  "awaiting_approval",
+  "building",
+  "ready",
+  "sent",
+  "opened",
+  "archived",
 ]);
 
 export const workspaces = pgTable("workspaces", {
@@ -708,6 +720,22 @@ export const deals = pgTable(
     repNotes: text("rep_notes"),
     /** When the rep booked the scope call with SKOX. */
     meetingAt: timestamp("meeting_at", { withTimezone: true }),
+    /** When and why it left Outreach for the Pipeline (PROMOTION_SIGNALS). Cleared on demotion; the events keep the history. */
+    promotedAt: timestamp("promoted_at", { withTimezone: true }),
+    promotedSignal: text("promoted_signal"),
+    /** Why outreach stopped (CLOSE_REASONS) and, for "not interested", the reason chip. Read by the lead brain. */
+    closeReason: text("close_reason"),
+    closeDetail: text("close_detail"),
+    /** The lead's preview website (docs/prospects/preview-playbook.md). Separate from project design previews. */
+    previewStatus: leadPreviewStatus("preview_status").notNull().default("none"),
+    previewRequestedAt: timestamp("preview_requested_at", { withTimezone: true }),
+    previewUrl: text("preview_url"),
+    previewSentAt: timestamp("preview_sent_at", { withTimezone: true }),
+    previewFirstOpenAt: timestamp("preview_first_open_at", { withTimezone: true }),
+    /** The builder's research brief, waiting on Gate A. */
+    previewBrief: text("preview_brief"),
+    /** Gate A: { decision: go | go_with_changes | no_go, changes?, by, at }. */
+    previewDecision: jsonb("preview_decision"),
     stageChangedAt: timestamp("stage_changed_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by").notNull(),
     createdAt: createdAt(),
@@ -716,6 +744,7 @@ export const deals = pgTable(
     index("deals_workspace_idx").on(t.workspaceId, t.stage),
     index("deals_next_step_idx").on(t.workspaceId, t.nextStepOn),
     index("deals_rep_idx").on(t.repMembershipId),
+    index("deals_preview_idx").on(t.previewStatus),
   ],
 );
 

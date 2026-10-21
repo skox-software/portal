@@ -31,7 +31,7 @@ type View = (typeof VIEWS)[number]["key"];
 
 /** The order status groups appear in: outreach attempts, then Potential Deals, then clients; closed ones last. */
 const GROUPS: { key: Stage; label: string }[] = [
-  ...(["outreach_1", "outreach_2", "outreach_3", "outreach_4", "emailed", "replied", "meeting", "proposal_sent", "won"] as const).map((key) => ({ key, label: STAGE_LABEL[key] })),
+  ...(["outreach_1", "outreach_2", "outreach_3", "outreach_4", "replied", "meeting", "proposal_sent", "won"] as const).map((key) => ({ key, label: STAGE_LABEL[key] })),
   { key: "in_build", label: "In build" },
   { key: "shipped", label: "Shipped" },
   { key: "none", label: "No project yet" },

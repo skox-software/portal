@@ -5,10 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
-import { clients, deals, emailThreads } from "@/lib/db/schema";
+import { clients, deals, emailThreads, outreachRecipients, type Deal } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { backWith } from "@/lib/http";
 import { sendThreadReply } from "@/lib/inbox-server";
+import { trackOf } from "@/lib/pipeline";
+import { promotionWrites } from "@/lib/promotion-server";
 
 const BACK = "/admin/inbox";
 
@@ -41,6 +43,7 @@ export async function assignThread(formData: FormData) {
   let clientId: string | null = null;
   let dealId: string | null = null;
   let label = "unassigned";
+  let filedDeal: Deal | null = null;
   if (kind === "client" && z.uuid().safeParse(id).success) {
     const [client] = await db.select().from(clients).where(and(eq(clients.id, id), eq(clients.workspaceId, staff.workspaceId))).limit(1);
     if (!client) backWith(back, "error", "That client doesn't exist.");
@@ -52,12 +55,23 @@ export async function assignThread(formData: FormData) {
     dealId = deal.id;
     clientId = deal.clientId;
     label = deal.company;
+    filedDeal = deal;
   } else if (target !== "none") {
     backWith(back, "error", "Choose a client or deal.");
   }
 
+  // Filing a conversation they started, or replied in, under a lead still in Outreach promotes it,
+  // unless that address opted out (a "stop" reply isn't interest).
+  const [suppressed] = filedDeal && thread.lastInboundAt
+    ? await db.select({ id: outreachRecipients.id }).from(outreachRecipients).where(and(eq(outreachRecipients.email, thread.counterpartEmail.toLowerCase()), eq(outreachRecipients.suppressed, true))).limit(1)
+    : [];
+  const promotion =
+    filedDeal && thread.lastInboundAt && !filedDeal.doNotEmail && !suppressed && trackOf(filedDeal.stage) === "outreach"
+      ? promotionWrites(filedDeal, "replied", viewer.userId, new Date(), { via: "inbox", threadId: thread.id })
+      : null;
   await db.batch([
     db.update(emailThreads).set({ clientId, dealId }).where(eq(emailThreads.id, thread.id)),
+    ...(promotion?.writes ?? []),
     eventInsert({
       workspaceId: staff.workspaceId,
       actorId: viewer.userId,
@@ -68,7 +82,11 @@ export async function assignThread(formData: FormData) {
     }),
   ]);
   refresh();
-  backWith(back, "notice", clientId || dealId ? `Filed under ${label}. New mail from ${thread.counterpartEmail} lands there too.` : "Moved back to Needs a client.");
+  if (promotion?.writes.length) {
+    revalidatePath("/admin/leads");
+    revalidatePath("/admin/pipeline");
+  }
+  backWith(back, "notice", clientId || dealId ? `Filed under ${label}. New mail from ${thread.counterpartEmail} lands there too.${promotion?.writes.length ? " They replied, so it's in the Pipeline now." : ""}` : "Moved back to Needs a client.");
 }
 
 export async function sendReply(formData: FormData) {

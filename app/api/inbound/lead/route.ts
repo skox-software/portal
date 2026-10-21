@@ -74,6 +74,8 @@ export async function POST(request: Request) {
     if (lead.status === "unfinished") return Response.json({ ok: true, deal: existing.id, updated: false });
 
     const fresh = notesFor(lead, now);
+    // They wrote to us: that's interest, so a lead still in Outreach is promoted to the Pipeline.
+    const promote = trackOf(existing.stage) === "outreach";
     await db.batch([
       db
         .update(deals)
@@ -87,10 +89,9 @@ export async function POST(request: Request) {
                 leadSource: leadSourceLabel(lead),
                 notes: fresh,
                 attribution: attributionFor(lead),
-                // They wrote to us: that's interest, so it's a Potential Deal now.
-                ...(trackOf(existing.stage) === "outreach" ? { stage: "replied" as const } : {}),
               }
             : { notes: `${fresh}\n\n— Earlier —\n${existing.notes ?? ""}`.slice(0, 4000) }),
+          ...(promote ? { stage: "replied" as const, promotedAt: now, promotedSignal: "inbound", closeReason: null, closeDetail: null } : {}),
           gclid: existing.gclid ?? lead.gclid ?? null,
           industry: existing.industry ?? lead.industry ?? null,
           location: existing.location ?? lead.location ?? null,
@@ -106,6 +107,9 @@ export async function POST(request: Request) {
         subjectId: existing.id,
         payload: { company: existing.company, via: "website", enquiry: wasUnfinished ? "completed" : "repeat" },
       }),
+      ...(promote
+        ? [eventInsert({ workspaceId, actorId: ACTOR, verb: "deal.promoted", subjectType: "deal", subjectId: existing.id, payload: { company: existing.company, from: existing.stage, to: "replied", signal: "inbound", via: "website" } })]
+        : []),
     ]);
     return Response.json({ ok: true, deal: existing.id, updated: true });
   }
@@ -120,8 +124,9 @@ export async function POST(request: Request) {
       contactEmail: lead.email,
       website: lead.website ? `https://${lead.website}/` : null,
       kind: dealKind(lead.projectType),
-      // A sent enquiry is someone reaching out: a Potential Deal. A half-filled form is only a lead to try.
+      // A sent enquiry is someone reaching out: a Pipeline deal. A half-filled form is only a lead to try.
       stage: lead.status === "unfinished" ? FIRST_STAGE : "replied",
+      ...(lead.status === "unfinished" ? {} : { promotedAt: now, promotedSignal: "inbound" }),
       source: "website",
       leadSource: leadSourceLabel(lead),
       industry: lead.industry ?? null,

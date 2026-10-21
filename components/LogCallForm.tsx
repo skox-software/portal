@@ -91,7 +91,7 @@ export function LogCallForm({
           ) : (
             <SubmitButton key={o.value} className="logcall-btn" name="outcome" value={o.value} data-tone={tone} data-shortcut={i + 1} pendingLabel="Saving…">
               <span>{o.label}</span>
-              <small>{o.value === "not_interested" ? "Moves to Lost" : o.value === "bad_number" ? "Flags the number" : `Follow up ${due}`}</small>
+              <small>{o.value === "not_interested" ? "Closes the lead" : o.value === "bad_number" ? "Flags the number" : `Follow up ${due}`}</small>
               <kbd>{i + 1}</kbd>
             </SubmitButton>
           );

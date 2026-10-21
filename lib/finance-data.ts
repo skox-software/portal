@@ -5,6 +5,7 @@ import { repTotals, workspaceReps, EMPTY_TOTALS } from "@/lib/commissions";
 import { bucketKeys, STAGE_WEIGHTS, type PeriodRange } from "@/lib/finance-periods";
 import { addDays, SALES_TZ, salesToday } from "@/lib/follow-up";
 import { funnelRows } from "@/lib/funnel-math";
+import { OPEN_STAGES } from "@/lib/pipeline";
 import { describeEvent, LIVE_VERBS, type LiveEvent } from "@/lib/live-feed";
 import { normalizeEmail } from "@/lib/permissions";
 
@@ -95,7 +96,7 @@ export async function weightedPipeline(ws: string) {
   const rows = await getDb()
     .select({ stage: deals.stage, count: sql<number>`count(*)::int`, valueCents: sql<number>`coalesce(sum(${deals.valueCents}), 0)::int` })
     .from(deals)
-    .where(and(eq(deals.workspaceId, ws), inArray(deals.stage, ["lead", "initial_outreach", "proposal_sent", "negotiation"]), sql`${deals.projectId} is null`))
+    .where(and(eq(deals.workspaceId, ws), inArray(deals.stage, [...OPEN_STAGES]), sql`${deals.projectId} is null`))
     .groupBy(deals.stage);
   const stages = rows.map((r) => {
     const weight = STAGE_WEIGHTS[r.stage] ?? 0;
@@ -324,7 +325,7 @@ export async function raceStandings(ws: string, today: string) {
  */
 export async function funnel(ws: string, range: PeriodRange) {
   const db = getDb();
-  const stage = sql<string>`coalesce(${events.payload}->>'to', case when ${events.verb} = 'deal.created' then coalesce(${events.payload}->>'stage', 'lead') end)`;
+  const stage = sql<string>`coalesce(${events.payload}->>'to', case when ${events.verb} = 'deal.created' then coalesce(${events.payload}->>'stage', 'outreach_1') end)`;
   const rows = await db
     .select({ dealId: events.subjectId, stage, valueCents: deals.valueCents })
     .from(events)
@@ -344,6 +345,6 @@ export async function funnel(ws: string, range: PeriodRange) {
   const current = await db
     .select({ dealId: deals.id, stage: deals.stage, projectId: deals.projectId, valueCents: deals.valueCents })
     .from(deals)
-    .where(and(eq(deals.workspaceId, ws), or(and(inArray(deals.stage, ["lead", "initial_outreach", "proposal_sent", "negotiation"]), sql`${deals.projectId} is null`), and(isWon, isNotNull(deals.wonAt), inPeriod(deals.wonAt, range)))));
+    .where(and(eq(deals.workspaceId, ws), or(and(inArray(deals.stage, [...OPEN_STAGES]), sql`${deals.projectId} is null`), and(isWon, isNotNull(deals.wonAt), inPeriod(deals.wonAt, range)))));
   return { source: "current" as const, rows: funnelRows(current.map((r) => ({ dealId: r.dealId, stage: r.projectId || r.stage === "won" ? "won" : r.stage, valueCents: r.valueCents }))) };
 }

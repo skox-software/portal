@@ -5,7 +5,7 @@
  */
 
 import { outcomeLabel } from "./follow-up.ts";
-import { COLUMNS } from "./pipeline.ts";
+import { stageLabel } from "./pipeline.ts";
 
 /** Verbs the feed shows. `deal.updated` only when it moved stage (its payload has `to`). */
 export const LIVE_VERBS = [
@@ -37,8 +37,9 @@ const str = (p: Payload, key: string) => (typeof p[key] === "string" && (p[key] 
 const cents = (p: Payload, key: string) => (typeof p[key] === "number" && Number.isFinite(p[key]) ? Math.round(p[key] as number) : undefined);
 
 export function stageName(stage: string) {
-  if (stage === "lost") return "Lost";
-  return COLUMNS.find((c) => c.key === stage)?.label ?? stage.replace(/_/g, " ");
+  if (stage === "outreach") return "Outreach";
+  const label = stageLabel(stage);
+  return label === stage ? stage.replace(/_/g, " ") : label;
 }
 
 /** A stage move, worded for who reads it: a win is news, a loss is a fact. */
@@ -76,14 +77,14 @@ export function describeEvent(verb: string, payload: Payload | null | undefined)
       const outcome = str(p, "outcome");
       const to = str(p, "to");
       const base = `Call with ${company ?? "a lead"}${outcome ? ` · ${outcomeLabel(outcome)}` : ""}`;
-      return { icon: "call", text: to && to !== "initial_outreach" ? `${base} · ${stageName(to)}` : base };
+      return { icon: "call", text: to && !to.startsWith("outreach_") ? `${base} · ${stageName(to)}` : base };
     }
     case "deal.created": {
       const stage = str(p, "stage");
       const from = str(p, "from") ?? str(p, "source");
       if (!company) return { icon: "deal", text: from === "project" ? "New deal from a project" : "New deal added" };
       const via = from === "website" ? " from the website" : from === "referral" ? " by referral" : from === "rep" ? " by a rep" : "";
-      return { icon: "deal", text: `New ${stage && stage !== "lead" ? `${stageName(stage).toLowerCase()} deal` : "lead"}: ${company}${via}` };
+      return { icon: "deal", text: `New ${stage && stage !== "lead" && !stage.startsWith("outreach_") ? `${stageName(stage).toLowerCase()} deal` : "lead"}: ${company}${via}` };
     }
     case "commission.earned": {
       const rep = str(p, "rep") ?? "A rep";

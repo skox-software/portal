@@ -2,7 +2,7 @@
  * The sales pipeline, built from what the portal already knows.
  *
  * Three kinds of record become cards:
- * - deals (Lead → Won, or Lost): the only rows the pipeline owns;
+ * - deals (Outreach 1 → Won, or Lost): the only rows the pipeline owns;
  * - referrals nobody has worked yet, as leads;
  * - projects, whose status places them in Won, In build or Shipped.
  *
@@ -12,25 +12,87 @@
 import { isCallable } from "./local-time.ts";
 
 export const COLUMNS = [
-  { key: "lead", label: "Lead" },
-  { key: "initial_outreach", label: "Initial outreach" },
-  { key: "proposal_sent", label: "Proposal sent" },
-  { key: "negotiation", label: "Negotiation" },
+  { key: "outreach_1", label: "Outreach 1" },
+  { key: "outreach_2", label: "Outreach 2" },
+  { key: "outreach_3", label: "Outreach 3" },
+  { key: "outreach_4", label: "Outreach 4" },
+  { key: "outreach_closed", label: "Close Outreach" },
+  { key: "emailed", label: "Emailed" },
+  { key: "replied", label: "Replied" },
+  { key: "meeting", label: "Meeting" },
+  { key: "proposal_sent", label: "Proposal" },
   { key: "won", label: "Won" },
   { key: "in_build", label: "In build" },
   { key: "shipped", label: "Shipped" },
 ] as const;
 
 export type ColumnKey = (typeof COLUMNS)[number]["key"];
-export type DealStage = "lead" | "initial_outreach" | "proposal_sent" | "negotiation" | "won" | "lost";
 export type ProjectStatus = "kickoff" | "building" | "review" | "launched" | "paused";
 export type CardType = "deal" | "project" | "referral";
 
+/**
+ * Two tracks over one record. Pre-qualified holds contact attempts; Potential
+ * Deals holds the people we've emailed or who showed interest. Moving between
+ * them only changes `deals.stage`, so contact details and history carry over.
+ */
+export const OUTREACH_STAGES = ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "outreach_closed"] as const;
+export const DEAL_STAGES = ["emailed", "replied", "meeting", "proposal_sent", "won", "lost"] as const;
+export const STAGES = [...OUTREACH_STAGES, ...DEAL_STAGES] as const;
+export type DealStage = (typeof STAGES)[number];
+export type Track = "outreach" | "deals";
+
+export const STAGE_LABEL: Record<DealStage, string> = {
+  outreach_1: "Outreach 1",
+  outreach_2: "Outreach 2",
+  outreach_3: "Outreach 3",
+  outreach_4: "Outreach 4",
+  outreach_closed: "Close Outreach",
+  emailed: "Emailed",
+  replied: "Replied",
+  meeting: "Meeting",
+  proposal_sent: "Proposal",
+  won: "Won",
+  lost: "Lost",
+};
+
+export const TRACK_LABEL: Record<Track, string> = { outreach: "Pre-qualified", deals: "Potential Deals" };
+
+export function stageLabel(stage: string) {
+  return STAGE_LABEL[stage as DealStage] ?? stage;
+}
+
+export function isStage(value: string): value is DealStage {
+  return (STAGES as readonly string[]).includes(value);
+}
+
+export function trackOf(stage: DealStage): Track {
+  return (OUTREACH_STAGES as readonly string[]).includes(stage) ? "outreach" : "deals";
+}
+
+/** Outreach 1 → 2 → 3 → 4; null from Outreach 4, Close Outreach or any deal stage. */
+export function nextOutreach(stage: DealStage): DealStage | null {
+  const i = ["outreach_1", "outreach_2", "outreach_3"].indexOf(stage);
+  return i === -1 ? null : OUTREACH_STAGES[i + 1];
+}
+
+/** Where a new lead starts, and where a lead lands when it moves to Potential Deals. */
+export const FIRST_STAGE: DealStage = "outreach_1";
+export const FIRST_DEAL_STAGE: DealStage = "emailed";
+
+/** Still being worked: neither closed, won nor lost. */
+export const OPEN_STAGES: readonly DealStage[] = ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "emailed", "replied", "meeting", "proposal_sent"];
+
+/** Board columns per track. Lost and Close Outreach are kept but folded on the Deals side. */
+export const TRACK_COLUMNS: Record<Track, readonly ColumnKey[]> = {
+  outreach: ["outreach_1", "outreach_2", "outreach_3", "outreach_4", "outreach_closed"],
+  deals: ["emailed", "replied", "meeting", "proposal_sent", "won"],
+};
+
 /** The board shows only these; builds and launches live on Projects. */
-export const SALES_COLUMNS: readonly ColumnKey[] = ["lead", "initial_outreach", "proposal_sent", "negotiation", "won"];
+export const SALES_COLUMNS: readonly ColumnKey[] = [...TRACK_COLUMNS.outreach, ...TRACK_COLUMNS.deals];
 
 /** Pre-sale columns, where a card can sit untouched for too long. */
-export const PRESALE: readonly ColumnKey[] = ["lead", "initial_outreach", "proposal_sent", "negotiation"];
+export const PRESALE: readonly ColumnKey[] = OPEN_STAGES as readonly ColumnKey[];
 export const STALL_DAYS = 10;
 
 export const DEAL_KINDS = [
@@ -77,7 +139,7 @@ export function dealStageForColumn(column: ColumnKey | "lost"): DealStage | null
 /** Which columns a card may move to, for its stage menu. */
 export function allowedColumns(type: CardType): readonly (ColumnKey | "lost")[] {
   if (type === "project") return ["won", "in_build", "shipped"];
-  return ["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"];
+  return STAGES;
 }
 
 export function daysSince(from: Date, now: Date) {
@@ -231,7 +293,7 @@ export function buildBoard(input: BoardInput) {
       key: `deal:${d.id}`,
       type: "deal",
       id: d.id,
-      column: d.stage === "lost" ? "lead" : d.stage,
+      column: d.stage === "lost" ? "outreach_1" : d.stage,
       company: d.company,
       contact: d.contactName ?? d.contactEmail,
       valueCents: d.valueCents ?? 0,
@@ -258,7 +320,7 @@ export function buildBoard(input: BoardInput) {
       key: `referral:${r.id}`,
       type: "referral",
       id: r.id,
-      column: "lead",
+      column: "outreach_1",
       company: r.company || r.name,
       contact: r.company ? r.name : r.email,
       valueCents: 0,
@@ -290,7 +352,7 @@ export function boardTotals(columns: ReturnType<typeof buildBoard>["columns"], n
   const sum = (keys: ColumnKey[]) =>
     columns.filter((c) => keys.includes(c.key)).reduce((n, c) => n + c.totalCents, 0);
   return {
-    openCents: sum(["lead", "initial_outreach", "proposal_sent", "negotiation"]),
+    openCents: sum(PRESALE as ColumnKey[]),
     wonCents: sum(["won", "in_build"]),
     stalled: columns.flatMap((c) => c.cards).filter((card) => isStalled(card.column, card.since, now)).length,
   };
@@ -311,7 +373,16 @@ export function searchText(parts: (string | null | undefined)[]) {
   return parts.filter(Boolean).join(" \u0001 ").toLowerCase();
 }
 
-export type BoardView = { view: "board" | "list"; q: string; owner: string; stage: string; /** Only leads it's business hours for now. */ callable?: boolean };
+export type BoardView = {
+  view: "board" | "list";
+  q: string;
+  owner: string;
+  stage: string;
+  /** Only leads it's business hours for now. */
+  callable?: boolean;
+  /** Which board: Pre-qualified (the default) or Potential Deals. */
+  track?: Track;
+};
 
 /** The view's query string, minus defaults, for links that keep the filters. */
 export function viewQuery(v: BoardView, extra: Record<string, string> = {}) {
@@ -321,6 +392,7 @@ export function viewQuery(v: BoardView, extra: Record<string, string> = {}) {
   if (v.owner) p.set("owner", v.owner);
   if (v.view === "list" && v.stage) p.set("stage", v.stage);
   if (v.callable) p.set("callable", "1");
+  if (v.track === "deals") p.set("track", "deals");
   for (const [k, val] of Object.entries(extra)) p.set(k, val);
   const s = p.toString();
   return s ? `?${s}` : "";
@@ -338,4 +410,19 @@ export function queueable(deal: { stage: DealStage; phone: string | null; badNum
  */
 export function callQueue<T extends { queueable: boolean; zone: string | null; priority: number }>(cards: T[], now: Date) {
   return cards.filter((c) => c.queueable && isCallable(c.zone, now)).sort((a, b) => a.priority - b.priority);
+}
+
+/**
+ * Where a deal from before the two tracks lands (migration 0021). Keep in step
+ * with its CASE: settled stages stay, Negotiation folds into Proposal, a booked
+ * meeting or any email sent counts as a Potential Deal, "Not interested" closes
+ * outreach, and otherwise the calls logged so far pick the outreach attempt.
+ */
+export function migratedStage(d: { stage: string; meetingAt: Date | null; emailed: boolean; calls: number; lastOutcome: string | null }): DealStage {
+  if (d.stage === "won" || d.stage === "lost" || d.stage === "proposal_sent") return d.stage;
+  if (d.stage === "negotiation") return "proposal_sent";
+  if (d.meetingAt) return "meeting";
+  if (d.emailed) return "emailed";
+  if (d.lastOutcome === "not_interested") return "outreach_closed";
+  return `outreach_${Math.min(d.calls + 1, 4)}` as DealStage;
 }

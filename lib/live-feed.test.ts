@@ -18,9 +18,9 @@ test("new invoices carry their amount", () => {
 });
 
 test("stage moves read as wins, losses or moves", () => {
-  assert.deepEqual(describeEvent("deal.stage_changed", { company: "Acme", from: "negotiation", to: "won" }), { icon: "won", text: "Acme won" });
+  assert.deepEqual(describeEvent("deal.stage_changed", { company: "Acme", from: "proposal_sent", to: "won" }), { icon: "won", text: "Acme won" });
   assert.equal(describeEvent("deal.stage_changed", { company: "Acme", to: "lost" })?.icon, "lost");
-  assert.equal(describeEvent("deal.updated", { company: "Acme", from: "lead", to: "proposal_sent" })?.text, "Acme moved to Proposal sent");
+  assert.equal(describeEvent("deal.updated", { company: "Acme", from: "replied", to: "proposal_sent" })?.text, "Acme moved to Proposal");
 });
 
 test("deal edits that didn't move stage are skipped", () => {
@@ -30,14 +30,15 @@ test("deal edits that didn't move stage are skipped", () => {
 
 test("calls show the outcome, and a stage only when it's news", () => {
   assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "spoke" })?.text, "Call with Acme · Talked");
-  // Every first call moves a lead to Initial outreach: not worth repeating.
-  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "voicemail", from: "lead", to: "initial_outreach" })?.text, "Call with Acme · Voicemail");
+  // Moving between outreach attempts isn't news; a move into Potential Deals is.
+  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "voicemail", from: "outreach_1", to: "outreach_2" })?.text, "Call with Acme · Voicemail");
+  assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "emailed", from: "outreach_1", to: "emailed" })?.text, "Call with Acme · Sent email · Emailed");
   assert.equal(describeEvent("deal.call_logged", { company: "Acme", outcome: "not_interested", to: "lost" })?.text, "Call with Acme · Not interested · Lost");
 });
 
 test("new deals say where they came from", () => {
   assert.equal(describeEvent("deal.created", { company: "Acme", from: "website", status: "new" })?.text, "New lead: Acme from the website");
-  assert.equal(describeEvent("deal.created", { company: "Acme", stage: "proposal_sent" })?.text, "New proposal sent deal: Acme");
+  assert.equal(describeEvent("deal.created", { company: "Acme", stage: "proposal_sent" })?.text, "New proposal deal: Acme");
   assert.equal(describeEvent("deal.created", { from: "project" })?.text, "New deal from a project");
   assert.equal(describeEvent("deal.created", { company: "Acme", source: "rep" })?.text, "New lead: Acme by a rep");
 });
@@ -58,7 +59,8 @@ test("unknown verbs and missing payloads don't throw", () => {
 });
 
 test("stage names fall back to readable text", () => {
-  assert.equal(stageName("initial_outreach"), "Initial outreach");
+  assert.equal(stageName("outreach_closed"), "Close Outreach");
+  assert.equal(stageName("initial_outreach"), "initial outreach");
   assert.equal(stageName("lost"), "Lost");
   assert.equal(stageName("on_hold"), "on hold");
 });

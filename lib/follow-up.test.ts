@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addWorkdays,
+  advanceAfterCall,
   defaultFollowUp,
   describeFollowUp,
   followUpAfterCall,
@@ -29,10 +30,25 @@ test("follow-ups skip the weekend", () => {
   assert.equal(defaultFollowUp("not_interested", "2026-10-16"), null);
 });
 
-test("a first attempt moves a lead to Initial outreach; not interested closes it", () => {
-  assert.equal(stageAfterCall("lead", "no_answer"), "initial_outreach");
+test("logging a call never moves the lead; an email from outreach makes it a Potential Deal", () => {
+  assert.equal(stageAfterCall("outreach_1", "no_answer"), "outreach_1");
+  assert.equal(stageAfterCall("outreach_2", "not_interested"), "outreach_2");
   assert.equal(stageAfterCall("proposal_sent", "spoke"), "proposal_sent");
-  assert.equal(stageAfterCall("initial_outreach", "not_interested"), "lost");
+  assert.equal(stageAfterCall("outreach_3", "emailed"), "emailed");
+  assert.equal(stageAfterCall("outreach_closed", "emailed"), "emailed");
+  // Already a deal: an email doesn't pull it back to Emailed.
+  assert.equal(stageAfterCall("replied", "emailed"), "replied");
+});
+
+test("Save & move offers the next attempt, or Close Outreach when they said no", () => {
+  assert.equal(advanceAfterCall("outreach_1", "voicemail"), "outreach_2");
+  assert.equal(advanceAfterCall("outreach_3", null), "outreach_4");
+  assert.equal(advanceAfterCall("outreach_4", "no_answer"), null);
+  assert.equal(advanceAfterCall("outreach_2", "not_interested"), "outreach_closed");
+  assert.equal(advanceAfterCall("outreach_4", "not_interested"), "outreach_closed");
+  assert.equal(advanceAfterCall("outreach_2", "emailed"), null);
+  assert.equal(advanceAfterCall("outreach_closed", "spoke"), null);
+  assert.equal(advanceAfterCall("replied", "spoke"), null);
 });
 
 test("follow-up labels and states", () => {
@@ -65,8 +81,7 @@ test("one-tap outcomes: each sets its own follow-up; dead ends set none", () => 
 });
 
 test("a bad number leaves the stage alone; the gatekeeper's name goes in the next step", () => {
-  assert.equal(stageAfterCall("lead", "bad_number"), "lead");
-  assert.equal(stageAfterCall("lead", "gatekeeper"), "initial_outreach");
+  assert.equal(stageAfterCall("outreach_1", "bad_number"), "outreach_1");
   assert.equal(nextStepAfterCall("gatekeeper", "Sarah"), "Call back; Sarah answered last time");
   assert.equal(nextStepAfterCall("spoke", ""), null);
 });

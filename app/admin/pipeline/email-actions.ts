@@ -8,6 +8,7 @@ import { readBrief, type SavedEmailDraft } from "@/lib/call-brief";
 import { getDb } from "@/lib/db";
 import { deals, emailMessages, emailThreads } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
+import { FIRST_DEAL_STAGE, trackOf } from "@/lib/pipeline";
 import { outreachSender } from "@/lib/lead-email";
 import { outreachConfig, sendColdOutreach } from "@/lib/cold-outreach";
 
@@ -67,8 +68,12 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
     await db.batch([
       db.insert(emailThreads).values({ id: threadId, workspaceId: staff.workspaceId, dealId: deal.id, clientId: deal.clientId, subject: draft.subject, counterpartEmail: parsed.data.to, counterpartName: deal.contactName, mailbox: sender.replyTo, readAt: sentAt }),
       db.insert(emailMessages).values({ workspaceId: staff.workspaceId, threadId, direction: "outbound", fromEmail: sender.fromEmail, fromName: sender.name, to: [parsed.data.to], subject: draft.subject, text: accepted.payload.text, providerId: `sent:${accepted.data.id}`, sentBy: viewer.userId, sentAt }),
-      db.update(deals).set({ brief: setDraft({ ...draft, status: "sent", sentAt: sentAt.toISOString() }), lastContactedAt: sentAt, ...(deal.stage === "lead" ? { stage: "initial_outreach" as const, stageChangedAt: sentAt } : {}) }).where(where),
+      db.update(deals).set({ brief: setDraft({ ...draft, status: "sent", sentAt: sentAt.toISOString() }), lastContactedAt: sentAt, ...(trackOf(deal.stage) === "outreach" ? { stage: FIRST_DEAL_STAGE, stageChangedAt: sentAt } : {}) }).where(where),
       eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "deal.email_sent", subjectType: "deal", subjectId: deal.id, payload: { to: parsed.data.to, from: sender.fromEmail, replyTo: sender.replyTo, subject: draft.subject, providerId: accepted.data.id, threadId } }),
+      // Sending is enough to make it a Potential Deal.
+      ...(trackOf(deal.stage) === "outreach"
+        ? [eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "deal.stage_changed", subjectType: "deal", subjectId: deal.id, payload: { company: deal.company, from: deal.stage, to: FIRST_DEAL_STAGE, via: "email" } })]
+        : []),
     ]);
   } catch {
     return { error: "The email was accepted for delivery, but its activity could not be saved. Do not resend; check the email provider." };

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { bulkAddDeals } from "@/app/admin/pipeline/actions";
 import { SubmitButton } from "@/components/SubmitButton";
-import { dealKindLabel } from "@/lib/pipeline";
+import { dealKindLabel, OPEN_STAGES, STAGE_LABEL } from "@/lib/pipeline";
 import { parseLeadSources } from "@/lib/pipeline-import";
 
 const EXAMPLE = "Company, Contact, Email, Phone, Website, Value\nLumen Physio, Sofia Reyes, sofia@lumenphysio.com, 904-555-0101, lumenphysio.com, 12000";
@@ -56,11 +56,12 @@ export function BulkLeadForm({ owners, me }: { owners: string[]; me: string }) {
         </div>
         <div className="field">
           <label htmlFor="bulk-stage">Add to</label>
-          <select id="bulk-stage" name="stage" defaultValue="lead">
-            <option value="lead">Lead</option>
-            <option value="initial_outreach">Initial outreach</option>
-            <option value="proposal_sent">Proposal sent</option>
-            <option value="negotiation">Negotiation</option>
+          <select id="bulk-stage" name="stage" defaultValue="outreach_1">
+            {OPEN_STAGES.map((stage) => (
+              <option key={stage} value={stage}>
+                {STAGE_LABEL[stage]}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field">

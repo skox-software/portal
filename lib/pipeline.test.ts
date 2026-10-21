@@ -9,6 +9,9 @@ import {
   dealStageForColumn,
   initials,
   isStalled,
+  migratedStage,
+  nextOutreach,
+  trackOf,
   projectStatusForColumn,
   queueable,
   searchText,
@@ -45,7 +48,7 @@ const deal = (over: Partial<BoardInput["deals"][number]> = {}): BoardInput["deal
   contactEmail: null,
   kind: "web-app",
   valueCents: 1_200_000,
-  stage: "lead",
+  stage: "outreach_1",
   ownerEmail: "reiss@skoxsoftware.com",
   source: "manual",
   referralId: null,
@@ -61,13 +64,13 @@ test("project status places the card: kickoff is won, launched is shipped", () =
   assert.equal(columnForProject("paused"), "in_build");
   assert.equal(columnForProject("launched"), "shipped");
   assert.equal(projectStatusForColumn("shipped"), "launched");
-  assert.equal(projectStatusForColumn("lead"), null);
+  assert.equal(projectStatusForColumn("outreach_1"), null);
 });
 
 test("a deal can't be dragged into build without becoming a project", () => {
   assert.equal(dealStageForColumn("in_build"), null);
   assert.equal(dealStageForColumn("shipped"), null);
-  assert.equal(dealStageForColumn("negotiation"), "negotiation");
+  assert.equal(dealStageForColumn("proposal_sent"), "proposal_sent");
   assert.equal(dealStageForColumn("lost"), "lost");
 });
 
@@ -104,7 +107,7 @@ test("unworked referrals are leads; worked, won and lost ones are not repeated",
       { id: "r3", name: "Cy", email: "cy@x.test", company: null, referrerEmail: null, status: "lost", createdAt: daysAgo(1) },
     ],
   });
-  const leads = columns.find((c) => c.key === "lead")!.cards;
+  const leads = columns.find((c) => c.key === "outreach_1")!.cards;
   assert.deepEqual(leads.map((c) => c.key).sort(), ["deal:d1", "referral:r1"]);
 });
 
@@ -143,7 +146,7 @@ test("search matches every word anywhere on the card; owner narrows to one perso
 
 test("the call queue: open leads with a working number, business hours there, best first", () => {
   const today = "2026-10-16";
-  const open = { stage: "lead" as const, phone: "(303) 555-0100", badNumber: false, nextStepOn: null };
+  const open = { stage: "outreach_1" as const, phone: "(303) 555-0100", badNumber: false, nextStepOn: null };
   assert.equal(queueable(open, today), true);
   assert.equal(queueable({ ...open, badNumber: true }, today), false);
   assert.equal(queueable({ ...open, phone: null }, today), false);
@@ -161,4 +164,28 @@ test("the call queue: open leads with a working number, business hours there, be
     { id: "nowhere", queueable: true, zone: null, priority: 0 },
   ];
   assert.deepEqual(callQueue(cards, now).map((c) => c.id), ["et-first", "ct-late"]);
+});
+
+test("two tracks: outreach attempts, then Potential Deals", () => {
+  assert.equal(trackOf("outreach_1"), "outreach");
+  assert.equal(trackOf("outreach_closed"), "outreach");
+  assert.equal(trackOf("emailed"), "deals");
+  assert.equal(trackOf("lost"), "deals");
+  assert.equal(nextOutreach("outreach_1"), "outreach_2");
+  assert.equal(nextOutreach("outreach_3"), "outreach_4");
+  assert.equal(nextOutreach("outreach_4"), null);
+  assert.equal(nextOutreach("emailed"), null);
+});
+
+test("old stages map by what already happened (matches migration 0021)", () => {
+  const base = { stage: "lead", meetingAt: null, emailed: false, calls: 0, lastOutcome: null };
+  assert.equal(migratedStage(base), "outreach_1");
+  assert.equal(migratedStage({ ...base, stage: "initial_outreach", calls: 1, lastOutcome: "voicemail" }), "outreach_2");
+  assert.equal(migratedStage({ ...base, calls: 7, lastOutcome: "no_answer" }), "outreach_4");
+  assert.equal(migratedStage({ ...base, calls: 2, lastOutcome: "not_interested" }), "outreach_closed");
+  assert.equal(migratedStage({ ...base, calls: 2, emailed: true }), "emailed");
+  assert.equal(migratedStage({ ...base, emailed: true, meetingAt: now }), "meeting");
+  assert.equal(migratedStage({ ...base, stage: "negotiation" }), "proposal_sent");
+  assert.equal(migratedStage({ ...base, stage: "won", emailed: true }), "won");
+  assert.equal(migratedStage({ ...base, stage: "lost", calls: 3 }), "lost");
 });

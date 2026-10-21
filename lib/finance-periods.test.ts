@@ -77,7 +77,9 @@ test("bucket labels are short", () => {
 });
 
 test("later stages weigh more and won/lost aren't weighted", () => {
-  assert.equal(STAGE_WEIGHTS.lead, 0.1);
-  assert.equal(STAGE_WEIGHTS.negotiation, 0.75);
+  assert.equal(STAGE_WEIGHTS.outreach_1, 0.05);
+  assert.ok(STAGE_WEIGHTS.replied! < STAGE_WEIGHTS.meeting!);
+  assert.equal(STAGE_WEIGHTS.proposal_sent, 0.65);
+  assert.equal(STAGE_WEIGHTS.outreach_closed, undefined);
   assert.equal(STAGE_WEIGHTS.won, undefined);
 });

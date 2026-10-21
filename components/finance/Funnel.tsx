@@ -36,7 +36,7 @@ export function Funnel({ rows, source, periodLabel }: { rows: FunnelRow[]; sourc
           const tip = `${label}: ${r.count} deal${r.count === 1 ? "" : "s"}${source === "events" ? " entered" : ""} · ${formatMoney(r.valueCents)}${onward}`;
           return (
             <li key={r.stage}>
-              <Link href={`/admin/clients?stage=${r.stage}`} className="ffunnel-row" data-tip={tip} data-stage={r.stage} style={{ ["--i" as string]: i }}>
+              <Link href={`/admin/clients?stage=${r.stage === "outreach" ? "outreach_1" : r.stage}`} className="ffunnel-row" data-tip={tip} data-stage={r.stage} style={{ ["--i" as string]: i }}>
                 <span className="ffunnel-name">{label}</span>
                 <span className="ffunnel-shape" aria-hidden="true">
                   <svg viewBox="0 0 100 40" preserveAspectRatio="none">

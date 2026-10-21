@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { deals } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
+import { FIRST_STAGE, OPEN_STAGES, trackOf } from "@/lib/pipeline";
 import {
   attributionFor,
   companyFor,
@@ -25,7 +26,7 @@ import { normalizeEmail } from "@/lib/permissions";
  */
 
 const ACTOR = "website";
-const OPEN = ["lead", "initial_outreach", "proposal_sent", "negotiation"] as const;
+const OPEN = OPEN_STAGES;
 
 function authorised(request: Request): boolean {
   const secret = process.env.LEADS_INGEST_SECRET;
@@ -86,6 +87,8 @@ export async function POST(request: Request) {
                 leadSource: leadSourceLabel(lead),
                 notes: fresh,
                 attribution: attributionFor(lead),
+                // They wrote to us: that's interest, so it's a Potential Deal now.
+                ...(trackOf(existing.stage) === "outreach" ? { stage: "replied" as const } : {}),
               }
             : { notes: `${fresh}\n\n— Earlier —\n${existing.notes ?? ""}`.slice(0, 4000) }),
           gclid: existing.gclid ?? lead.gclid ?? null,
@@ -117,7 +120,8 @@ export async function POST(request: Request) {
       contactEmail: lead.email,
       website: lead.website ? `https://${lead.website}/` : null,
       kind: dealKind(lead.projectType),
-      stage: "lead",
+      // A sent enquiry is someone reaching out: a Potential Deal. A half-filled form is only a lead to try.
+      stage: lead.status === "unfinished" ? FIRST_STAGE : "replied",
       source: "website",
       leadSource: leadSourceLabel(lead),
       industry: lead.industry ?? null,

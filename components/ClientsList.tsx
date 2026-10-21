@@ -6,7 +6,7 @@ import { FollowUpControl } from "@/components/FollowUpControl";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { bulkUpdateDeals } from "@/app/admin/pipeline/actions";
 import { followUpChoices } from "@/lib/follow-up";
-import { initials } from "@/lib/pipeline";
+import { initials, STAGE_LABEL, STAGES } from "@/lib/pipeline";
 import { EMAIL_STATUS_LABEL, type EmailStatus } from "@/lib/resend-events";
 
 export type ClientRow = {
@@ -48,17 +48,10 @@ export type ClientRow = {
 export type ClientGroup = { key: string; label: string; rows: ClientRow[] };
 
 const COLLAPSED_KEY = "skox.clients.collapsed";
-const BULK_STAGES = [
-  { key: "lead", label: "Lead" },
-  { key: "initial_outreach", label: "Initial outreach" },
-  { key: "proposal_sent", label: "Proposal sent" },
-  { key: "negotiation", label: "Negotiation" },
-  { key: "won", label: "Won" },
-  { key: "lost", label: "Lost" },
-];
+const BULK_STAGES = STAGES.map((key) => ({ key, label: STAGE_LABEL[key] }));
 
-// Folded groups live in this browser's storage; Lost starts folded.
-const DEFAULT_COLLAPSED = '["lost"]';
+// Folded groups live in this browser's storage; Close Outreach and Lost start folded.
+const DEFAULT_COLLAPSED = '["outreach_closed","lost"]';
 const subscribeCollapsed = (onChange: () => void) => {
   window.addEventListener("storage", onChange);
   window.addEventListener(COLLAPSED_KEY, onChange);
@@ -75,7 +68,6 @@ const readCollapsed = () => {
   }
 };
 
-const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 const typing = (el: EventTarget | null) =>
   el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
@@ -309,12 +301,9 @@ export function ClientsList({
                       <span className="sr-only">Select</span>
                     </th>
                     <th>Company</th>
-                    <th className="crm-hide-split">Contact</th>
-                    <th>Reach</th>
+                    <th>Phone</th>
                     <th>Follow-up</th>
                     <th className="crm-hide-split">Last touch</th>
-                    <th className="crm-hide-split">In stage</th>
-                    <th className="crm-num crm-hide-split">Value</th>
                     <th>
                       <span className="sr-only">Owner</span>
                     </th>
@@ -349,25 +338,14 @@ export function ClientsList({
                           <Link href={r.href} scroll={false}>
                             {r.name}
                           </Link>
-                          {(r.subtitle || r.source) && <small>{r.subtitle ?? r.source}</small>}
-                          {r.rep && <small className="crm-rep">Rep · {r.rep}</small>}
+                          {r.contactName && <small>{r.contactName}</small>}
                         </td>
-                        <td className="crm-contact crm-hide-split" data-label="Contact">
-                          {r.contactName || r.contactEmail ? (
-                            <>
-                              <span>{r.contactName ?? r.contactEmail}</span>
-                              {r.contactName && r.contactEmail && <small>{r.contactEmail}</small>}
-                            </>
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
-                        </td>
-                        <td data-label="Reach">
+                        <td data-label="Phone">
                           {tel || r.contactEmail || r.website ? (
                             <span className="pipeline-reach">
                               {tel && (
                                 <a href={tel} title={`Call ${r.phone}`} aria-label={`Call ${r.name}, ${r.phone}`}>
-                                  Call
+                                  {r.phone}
                                 </a>
                               )}
                               {r.contactEmail && (
@@ -410,12 +388,6 @@ export function ClientsList({
                         <td className="crm-mono crm-hide-split" data-label="Last touch">
                           {r.lastTouch ? shortDate(r.lastTouch) : "—"}
                         </td>
-                        <td className="crm-mono crm-hide-split" data-label="In stage">
-                          <span className={r.slow ? "crm-slow" : undefined}>{r.days === null ? "—" : `${r.days}d`}</span>
-                        </td>
-                        <td className="crm-num crm-mono crm-hide-split" data-label="Value">
-                          {r.valueCents ? money(r.valueCents) : "—"}
-                        </td>
                         <td data-label="Owner">
                           {r.owner ? (
                             <span className="crm-owner" title={r.owner} data-tone={initials(r.owner).charCodeAt(0) % 2 ? "amber" : "ink"}>
@@ -435,8 +407,8 @@ export function ClientsList({
         );
       })}
       <p className="crm-keys small muted">
-        <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>Enter</kbd> open · <kbd>X</kbd> select · <kbd>/</kbd> search · in a lead: <kbd>C</kbd> call · <kbd>E</kbd> email · <kbd>W</kbd> site · <kbd>1</kbd>–<kbd>5</kbd> log
-        call · <kbd>Esc</kbd> close
+        <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>Enter</kbd> open · <kbd>X</kbd> select · <kbd>/</kbd> search · in a lead: <kbd>C</kbd> call · <kbd>E</kbd> email · <kbd>W</kbd> site · <kbd>1</kbd>–<kbd>6</kbd> pick
+        outcome · <kbd>Esc</kbd> close
       </p>
     </div>
   );

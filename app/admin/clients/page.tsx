@@ -11,7 +11,7 @@ import { emailThreads, events } from "@/lib/db/schema";
 import { nowMs } from "@/lib/format";
 import { loadEmailStatuses } from "@/lib/email-status-data";
 import { describeFollowUp, followUpState, salesToday, untouchedFor } from "@/lib/follow-up";
-import { daysSince, PRESALE, searchText, STALL_DAYS, type Card, type ColumnKey } from "@/lib/pipeline";
+import { daysSince, PRESALE, searchText, STAGE_LABEL, STALL_DAYS, type Card, type ColumnKey } from "@/lib/pipeline";
 import { loadPipeline } from "@/lib/pipeline-data";
 
 export const dynamic = "force-dynamic";
@@ -29,19 +29,18 @@ const VIEWS = [
 ] as const;
 type View = (typeof VIEWS)[number]["key"];
 
-/** The order status groups appear in. */
+/** The order status groups appear in: outreach attempts, then Potential Deals, then clients; closed ones last. */
 const GROUPS: { key: Stage; label: string }[] = [
-  { key: "lead", label: "Lead" },
-  { key: "initial_outreach", label: "Initial outreach" },
-  { key: "proposal_sent", label: "Proposal sent" },
-  { key: "negotiation", label: "Negotiation" },
-  { key: "won", label: "Won" },
+  ...(["outreach_1", "outreach_2", "outreach_3", "outreach_4", "emailed", "replied", "meeting", "proposal_sent", "won"] as const).map((key) => ({ key, label: STAGE_LABEL[key] })),
   { key: "in_build", label: "In build" },
   { key: "shipped", label: "Shipped" },
   { key: "none", label: "No project yet" },
+  { key: "outreach_closed", label: STAGE_LABEL.outreach_closed },
   { key: "lost", label: "Lost" },
 ];
-const OLD_STAGE_VIEWS = new Set(["lead", "initial_outreach", "shipped", "lost"]);
+const OLD_STAGE_VIEWS = new Set(["shipped", "lost"]);
+/** Closed for now: kept with their history, but out of the working views. */
+const CLOSED = new Set<string>(["outreach_closed", "lost"]);
 
 function sourceLabel(card: Card) {
   if (card.leadSource) return card.leadSource;
@@ -127,7 +126,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       deal?.lastContactedAt,
       card.since,
     );
-    const working = isDeal && stage !== "won" && stage !== "lost";
+    const working = isDeal && stage !== "won" && !CLOSED.has(stage);
     // A lead's reminder lives on the deal (lost ones too: "try again in 3 months"); a client's on the client.
     const client = !isDeal && card.clientId ? clientById.get(card.clientId) : undefined;
     const fuOn = isDeal ? deal?.nextStepOn ?? null : client?.nextStepOn ?? null;
@@ -202,8 +201,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
 
   const inView = (r: ClientRow, v: View) =>
     v === "all" ||
-    (v === "open" && !["shipped", "lost", "none"].includes(r.stage)) ||
-    (v === "mine" && r.owner === viewer.email && r.stage !== "lost") ||
+    (v === "open" && !["shipped", "none"].includes(r.stage) && !CLOSED.has(r.stage)) ||
+    (v === "mine" && r.owner === viewer.email && !CLOSED.has(r.stage)) ||
     (v === "due" && (r.followUpState === "overdue" || r.followUpState === "today")) ||
     (v === "untouched" && r.untouched);
   const matches = (r: ClientRow) =>

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { FollowUpControl } from "@/components/FollowUpControl";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { claimProject, moveCard } from "@/app/admin/pipeline/actions";
-import { isCallable, localTime, zoneShort } from "@/lib/local-time";
 import { allowedColumns, callQueue, cardMatches, COLUMNS, viewQuery, type BoardView, type CardType, type ColumnKey } from "@/lib/pipeline";
 
 export type { BoardView };
@@ -59,7 +58,7 @@ export type BoardCard = {
 };
 
 type Column = { key: ColumnKey; label: string };
-const STAGE_LABEL: Record<ColumnKey | "lost", string> = {
+const LABEL: Record<ColumnKey | "lost", string> = {
   ...(Object.fromEntries(COLUMNS.map((c) => [c.key, c.label])) as Record<ColumnKey, string>),
   lost: "Lost",
 };
@@ -111,7 +110,7 @@ export function PipelineBoard({
   // Keep the filters in the address, so opening a lead and coming back keeps them.
   useEffect(() => {
     const url = new URL(window.location.href);
-    for (const k of ["view", "q", "owner", "stage", "callable"]) url.searchParams.delete(k);
+    for (const k of ["view", "q", "owner", "stage", "callable", "track"]) url.searchParams.delete(k);
     for (const [k, val] of new URLSearchParams(viewQuery(v))) url.searchParams.set(k, val);
     window.history.replaceState(window.history.state, "", url);
   }, [v]);
@@ -171,7 +170,7 @@ export function PipelineBoard({
       <select id={`stage-${card.key}`} className="pipeline-stage" value={card.column} onChange={(e) => move(card, e.target.value as ColumnKey | "lost")}>
         {allowedColumns(card.type).map((key) => (
           <option key={key} value={key}>
-            {STAGE_LABEL[key]}
+            {LABEL[key]}
           </option>
         ))}
       </select>
@@ -339,10 +338,10 @@ export function PipelineBoard({
                             <div className="pipeline-card-title">
                               {href ? (
                                 <Link href={href} scroll={false}>
-                                  {card.company} {card.qualified && <span role="img" aria-label="Qualified lead" title="Qualified for outreach" style={{ color: "#d99b18" }}>★</span>}
+                                  {card.company}
                                 </Link>
                               ) : (
-                                <strong>{card.company} {card.qualified && <span role="img" aria-label="Qualified lead" title="Qualified for outreach" style={{ color: "#d99b18" }}>★</span>}</strong>
+                                <strong>{card.company}</strong>
                               )}
                               {(card.contact || card.location) && (
                                 <span title={[card.contact, card.location].filter(Boolean).join(" · ")}>
@@ -369,20 +368,9 @@ export function PipelineBoard({
                               <span style={{ width: `${card.progress}%` }} />
                             </div>
                           )}
-                          {(card.tag || card.zone || card.badNumber || card.warning) && (
+                          {card.badNumber && (
                             <div className="pipeline-chips">
-                              {card.badNumber && <span className="brief-tag" data-tag="BAD NUMBER">Bad number</span>}
-                              {card.tag && (
-                                <span className="brief-tag" data-tag={card.tag}>
-                                  {card.tag}
-                                </span>
-                              )}
-                              {card.warning && <span className="brief-tag" data-tag="CHECK">Check first</span>}
-                              {card.zone && (
-                                <span className="brief-clock" data-callable={isCallable(card.zone, now) ? "" : undefined} title="Their local time">
-                                  {localTime(card.zone, now)} {zoneShort(card.zone)}
-                                </span>
-                              )}
+                              <span className="brief-tag" data-tag="BAD NUMBER">Bad number</span>
                             </div>
                           )}
                           {reach(card)}

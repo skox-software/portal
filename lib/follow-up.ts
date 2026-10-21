@@ -5,23 +5,23 @@
  * so "today" doesn't roll over at 8pm the way a UTC date would.
  */
 
-import type { DealStage } from "./pipeline.ts";
+import { FIRST_DEAL_STAGE, nextOutreach, trackOf, type DealStage } from "./pipeline.ts";
 
 export const SALES_TZ = "America/New_York";
 
 /**
- * What can happen on a cold call, in the order of the one-tap buttons.
+ * What can happen on a contact attempt, in the order of the one-tap buttons.
  * `followUpDays` are workdays until the next try; null means no follow-up.
- * "Sent email" isn't a call outcome button: the email draft logs it.
+ * "Gatekeeper" is no longer a button but stays so older history still reads.
  */
 export const OUTCOMES = [
   { value: "no_answer", label: "No answer", followUpDays: 1, button: true },
   { value: "voicemail", label: "Voicemail", followUpDays: 2, button: true },
-  { value: "gatekeeper", label: "Gatekeeper", followUpDays: 1, button: true },
   { value: "spoke", label: "Talked", followUpDays: 3, button: true },
+  { value: "emailed", label: "Sent email", followUpDays: 3, button: true },
   { value: "not_interested", label: "Not interested", followUpDays: null, button: true },
   { value: "bad_number", label: "Bad number", followUpDays: null, button: true },
-  { value: "emailed", label: "Sent email", followUpDays: 3, button: false },
+  { value: "gatekeeper", label: "Gatekeeper", followUpDays: 1, button: false },
 ] as const;
 
 export type Outcome = (typeof OUTCOMES)[number]["value"];
@@ -69,16 +69,25 @@ export function defaultFollowUp(outcome: Outcome, today: string) {
 }
 
 /**
- * Where a deal goes after a call. Any first attempt moves a fresh lead to
- * Initial outreach; "Not interested" closes it; a bad number leaves it where
- * it is (flagged); otherwise the stage stays put.
+ * Logging a contact never moves the lead by itself, with one exception: an
+ * email sent from Pre-qualified puts it in Potential Deals, since sending is
+ * enough to count as a deal we're following.
  */
 export function stageAfterCall(stage: DealStage, outcome: Outcome): DealStage {
-  if (outcome === "not_interested") return "lost";
-  // Nobody was reached, so it hasn't really been worked yet.
-  if (outcome === "bad_number") return stage;
-  if (stage === "lead") return "initial_outreach";
+  if (outcome === "emailed" && trackOf(stage) === "outreach") return FIRST_DEAL_STAGE;
   return stage;
+}
+
+/**
+ * The stage the "Save & move" button offers after this outcome: the next
+ * outreach attempt, or Close Outreach when they weren't interested. Null when
+ * there's nothing to offer (Outreach 4, deal stages, or an email, which moves
+ * on its own).
+ */
+export function advanceAfterCall(stage: DealStage, outcome: Outcome | null): DealStage | null {
+  if (trackOf(stage) !== "outreach" || stage === "outreach_closed" || outcome === "emailed") return null;
+  if (outcome === "not_interested") return "outreach_closed";
+  return nextOutreach(stage);
 }
 
 /** A Saturday or Sunday reminder moves to Monday: nobody works the list at the weekend. */

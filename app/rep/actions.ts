@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { clients, deals, memberships, referrals, repProfiles } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
+import { FIRST_STAGE, trackOf } from "@/lib/pipeline";
 import { formatDate } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
@@ -86,7 +87,7 @@ export async function createRepLead(formData: FormData) {
       location: lead.location,
       repNotes: lead.repNotes,
       kind: "website",
-      stage: "lead",
+      stage: FIRST_STAGE,
       source: "rep",
       leadSource: `Rep · ${profile?.name ?? viewer.email}`,
       repMembershipId: rep.id,
@@ -145,8 +146,9 @@ export async function logRepCall(formData: FormData) {
   const gatekeeper = String(formData.get("gatekeeper") ?? "").trim().slice(0, 80);
   const db = getDb();
   const [deal] = await db.select({ stage: deals.stage, projectId: deals.projectId }).from(deals).where(eq(deals.id, lead.id)).limit(1);
-  const stage = deal.projectId ? deal.stage : stageAfterCall(deal.stage, outcome);
-  const closed = stage === "lost";
+  // Reps have no stage buttons, so "Not interested" closes their outreach for them.
+  const stage = deal.projectId ? deal.stage : outcome === "not_interested" && trackOf(deal.stage) === "outreach" ? "outreach_closed" : stageAfterCall(deal.stage, outcome);
+  const closed = stage === "outreach_closed";
   const followUp = closed ? null : followUpAfterCall(outcome, parsed.data.followUp, salesToday());
   const nextStep = followUp ? parsed.data.nextStep || nextStepAfterCall(outcome, gatekeeper) : null;
   await db.batch([
@@ -159,7 +161,6 @@ export async function logRepCall(formData: FormData) {
         nextStep,
         ...(outcome === "bad_number" ? { badNumber: true } : {}),
         ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
-        ...(closed ? { lostReason: note || "Not interested (rep)" } : {}),
       })
       .where(and(eq(deals.id, lead.id), eq(deals.repMembershipId, rep.id))),
     eventInsert({

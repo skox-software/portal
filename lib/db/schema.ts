@@ -90,8 +90,24 @@ export const referralStatus = pgEnum("referral_status", ["new", "contacted", "wo
 export const resourceKind = pgEnum("resource_kind", ["video", "guide", "link", "login_note"]);
 export const taskTrigger = pgEnum("task_trigger", ["file_upload"]);
 export const onboardingStatus = pgEnum("onboarding_status", ["invited", "in_progress", "completed"]);
-/** Pre-sale stages only. Once a deal becomes a project, the project's status drives the board. */
-export const dealStage = pgEnum("deal_stage", ["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]);
+/**
+ * Pre-sale stages only, in two tracks: Pre-qualified (outreach_*) and Potential
+ * Deals (emailed → won/lost). Once a deal becomes a project, the project's
+ * status drives the board. Keep in step with STAGES in lib/pipeline.ts.
+ */
+export const dealStage = pgEnum("deal_stage", [
+  "outreach_1",
+  "outreach_2",
+  "outreach_3",
+  "outreach_4",
+  "outreach_closed",
+  "emailed",
+  "replied",
+  "meeting",
+  "proposal_sent",
+  "won",
+  "lost",
+]);
 
 export const workspaces = pgTable("workspaces", {
   id: id(),
@@ -646,7 +662,7 @@ export const deals = pgTable(
     /** One of PROJECT_KINDS, or "retainer". */
     kind: text("kind").notNull().default("web-app"),
     valueCents: integer("value_cents"),
-    stage: dealStage("stage").notNull().default("lead"),
+    stage: dealStage("stage").notNull().default("outreach_1"),
     /** Staff email; shown as initials on the card. */
     ownerEmail: text("owner_email"),
     /** manual | referral | import | website | rep */

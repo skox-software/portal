@@ -16,7 +16,7 @@ import { loadMission } from "@/lib/finance-mission";
 import { bucketKeys, bucketLabel, parsePeriod, periodRange, unixToSalesDate } from "@/lib/finance-periods";
 import { stripeCharges, stripePayouts, type StripeRead } from "@/lib/finance-stripe";
 import { firstName, formatDate, formatMoney } from "@/lib/format";
-import { columnLabel } from "@/lib/pipeline";
+import { OPEN_STAGES, stageLabel } from "@/lib/pipeline";
 import { stripeEnabled } from "@/lib/stripe";
 import { FlowPanel, FunnelPanel, GoalPanel, HeatPanel, RacePanel, RunwayPanel } from "./panels";
 import "./finance.css";
@@ -251,9 +251,9 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                     {pipeline.stages.length > 0 && (
                       <BarChart
                         label="Weighted pipeline by stage"
-                        series={(["lead", "initial_outreach", "proposal_sent", "negotiation"] as const).map((stage) => {
+                        series={OPEN_STAGES.map((stage) => {
                           const s = pipeline.stages.find((r) => r.stage === stage);
-                          const label = columnLabel(stage);
+                          const label = stageLabel(stage);
                           return { key: stage, label, value: s?.weightedCents ?? 0, tip: `${label}: ${s?.count ?? 0} deals · ${formatMoney(s?.valueCents ?? 0)} × ${Math.round((s?.weight ?? 0) * 100)}% = ${formatMoney(s?.weightedCents ?? 0)}` };
                         })}
                       />

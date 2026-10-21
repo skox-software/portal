@@ -24,10 +24,14 @@ export function parsePeriod(value: string | null | undefined): PeriodKey {
 
 /** The chance an open deal closes, by stage: what the weighted pipeline multiplies by. */
 export const STAGE_WEIGHTS: Partial<Record<DealStage, number>> = {
-  lead: 0.1,
-  initial_outreach: 0.2,
-  proposal_sent: 0.5,
-  negotiation: 0.75,
+  outreach_1: 0.05,
+  outreach_2: 0.05,
+  outreach_3: 0.05,
+  outreach_4: 0.05,
+  emailed: 0.15,
+  replied: 0.3,
+  meeting: 0.5,
+  proposal_sent: 0.65,
 };
 
 function monthStart(iso: string) {

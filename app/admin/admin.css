@@ -14,7 +14,7 @@
 .pipeline-board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:14px;overflow-x:auto;padding-bottom:12px;align-items:stretch}
 .pipeline-col{background:var(--fog);border:1px solid transparent;border-radius:var(--radius);padding:14px 12px;min-height:320px;display:flex;flex-direction:column;gap:10px;transition:background .15s,border-color .15s}.pipeline-col[data-over]{background:var(--blush);border-color:#d9b35a}.pipeline-col[data-blocked]{opacity:.55}
 .pipeline-col-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:2px 4px 4px}.pipeline-col-head h2{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin:0}.pipeline-col-head h2 span{font-weight:400;color:var(--muted);letter-spacing:0}.pipeline-col-head strong{font:500 13px var(--mono);white-space:nowrap}
-.pipeline-col-head i{width:8px;height:8px;border-radius:50%;background:#a3a39a;flex-shrink:0}.pipeline-col[data-stage=negotiation] i,.pipeline-col[data-stage=won] i{background:var(--amber)}.pipeline-col[data-stage=in_build] i{background:var(--ok)}.pipeline-col[data-stage=shipped] i{background:var(--ink)}
+.pipeline-col-head i{width:8px;height:8px;border-radius:50%;background:#a3a39a;flex-shrink:0}.pipeline-col[data-stage=proposal_sent] i,.pipeline-col[data-stage=won] i{background:var(--amber)}.pipeline-col[data-stage=in_build] i{background:var(--ok)}.pipeline-col[data-stage=shipped] i{background:var(--ink)}
 .pipeline-cards{list-style:none;margin:0;padding:0;display:grid;gap:10px}.pipeline-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:12px;cursor:grab}.pipeline-card:hover{border-color:#cfcbbd}.pipeline-card[data-dragging]{opacity:.45}.pipeline-card:active{cursor:grabbing}
 .pipeline-card-title{display:grid;gap:3px;min-width:0}.pipeline-card-title a,.pipeline-card-title strong{font-size:15px;font-weight:600;color:var(--ink);text-decoration:none}.pipeline-card-title a:hover{text-decoration:underline}.pipeline-card-title span{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.pipeline-card-title small{font-size:11px;color:var(--amber-ink)}
 .pipeline-card-value{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}.pipeline-card-value strong{font:500 15px var(--mono)}.pipeline-tag{font:11px var(--mono);background:var(--fog);border-radius:6px;padding:3px 7px;color:var(--muted);white-space:nowrap}
@@ -50,7 +50,7 @@
 .pipeline-jump button:active{transform:scale(.95)}
 .pipeline-jump button span{font:500 12px var(--mono);color:var(--muted)}
 .pipeline-jump button i{width:7px;height:7px;border-radius:50%;background:#a3a39a}
-.pipeline-jump button[data-stage=negotiation] i,.pipeline-jump button[data-stage=won] i{background:var(--amber)}.pipeline-jump button[data-stage=in_build] i{background:var(--ok)}.pipeline-jump button[data-stage=shipped] i{background:var(--ink)}
+.pipeline-jump button[data-stage=proposal_sent] i,.pipeline-jump button[data-stage=won] i{background:var(--amber)}.pipeline-jump button[data-stage=in_build] i{background:var(--ok)}.pipeline-jump button[data-stage=shipped] i{background:var(--ink)}
 .pipeline-jump button[aria-selected=true]{background:var(--ink);border-color:var(--ink);color:#fff}.pipeline-jump button[aria-selected=true] span{color:#c8c9c4}
 .pipeline-hint{display:none}
 .pipeline-card:active{transform:scale(.985)}.pipeline-card{transition:transform .12s}
@@ -62,7 +62,7 @@
 .crm-table{width:100%;border-collapse:collapse;min-width:960px}.crm-table th{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--label);text-align:left;padding:18px 16px 14px;background:#fff;border-bottom:1px solid var(--line)}.crm-table th:first-child,.crm-table td:first-child{padding-left:26px}.crm-table td{padding:15px 16px;border-bottom:1px solid var(--line-soft);vertical-align:middle;font-size:15px}.crm-table tbody tr:last-child td{border-bottom:0}.crm-table tbody tr:hover{background:#fcfbf7}
 .crm-client a{display:block;color:var(--ink);font-weight:600;text-decoration:none}.crm-client a:hover{text-decoration:underline}.crm-client small,.crm-contact small{display:block;color:var(--muted);font-size:13px;margin-top:3px}
 .crm-num{text-align:right}.crm-table th.crm-num{text-align:right}.crm-mono{font-family:var(--mono);font-size:14px;white-space:nowrap}.crm-slow{color:var(--amber-ink);font-weight:600}
-.crm-stage{display:inline-flex;align-items:center;gap:8px;font:500 13px var(--mono);white-space:nowrap}.crm-stage i{width:8px;height:8px;border-radius:50%;background:#a3a39a;flex-shrink:0}.crm-stage[data-stage=negotiation] i,.crm-stage[data-stage=won] i{background:var(--amber)}.crm-stage[data-stage=in_build] i{background:var(--ok)}.crm-stage[data-stage=shipped] i{background:var(--ink)}.crm-stage[data-stage=lost] i{background:var(--danger)}.crm-stage[data-stage=lost],.crm-stage[data-stage=none]{color:var(--muted)}
+.crm-stage{display:inline-flex;align-items:center;gap:8px;font:500 13px var(--mono);white-space:nowrap}.crm-stage i{width:8px;height:8px;border-radius:50%;background:#a3a39a;flex-shrink:0}.crm-stage[data-stage=proposal_sent] i,.crm-stage[data-stage=won] i{background:var(--amber)}.crm-stage[data-stage=in_build] i{background:var(--ok)}.crm-stage[data-stage=shipped] i{background:var(--ink)}.crm-stage[data-stage=lost] i{background:var(--danger)}.crm-stage[data-stage=lost],.crm-stage[data-stage=none]{color:var(--muted)}
 .crm-owner{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;font:600 10px var(--sans)}.crm-owner[data-tone=amber]{background:var(--amber);color:var(--ink)}
 .admin-nav-count{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--amber);color:var(--ink);font:700 11px/20px var(--sans);text-align:center}.admin-nav a[aria-current] .admin-nav-count{background:var(--ink);color:#fff}:root[data-admin-sidebar=collapsed] .admin-nav-count{position:absolute;margin:0;transform:translate(14px,-12px);min-width:16px;height:16px;line-height:16px;font-size:10px;padding:0 4px}:root[data-admin-sidebar=collapsed] .admin-nav a{position:relative}
 @media(max-width:760px){
@@ -143,7 +143,7 @@ kbd{font:600 10px var(--mono);border:1px solid var(--line);border-bottom-width:2
 .crm-page.page{padding-top:28px}.crm-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px}.crm-head h1{margin:2px 0 0;font-size:36px}.crm-head .eyebrow{margin:0}
 .crm-views a[data-alert] span{background:var(--amber);color:var(--ink);border-radius:999px;padding:0 6px}
 .crm-filter{margin-bottom:12px}.crm-filter #crm-search{flex:1 1 260px}
-.crm-stages{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}.crm-stages a{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:13px;text-decoration:none}.crm-stages a span{font:11px var(--mono);color:var(--muted)}.crm-stages a i{width:7px;height:7px;border-radius:50%;background:#a3a39a}.crm-stages a[data-stage=negotiation] i,.crm-stages a[data-stage=won] i{background:var(--amber)}.crm-stages a[data-stage=in_build] i{background:var(--ok)}.crm-stages a[data-stage=shipped] i{background:var(--ink)}.crm-stages a[data-stage=lost] i{background:var(--danger)}.crm-stages a[aria-current]{background:var(--ink);border-color:var(--ink);color:#fff}.crm-stages a[aria-current] span{color:#c8c9c4}
+.crm-stages{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}.crm-stages a{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:13px;text-decoration:none}.crm-stages a span{font:11px var(--mono);color:var(--muted)}.crm-stages a i{width:7px;height:7px;border-radius:50%;background:#a3a39a}.crm-stages a[data-stage=proposal_sent] i,.crm-stages a[data-stage=won] i{background:var(--amber)}.crm-stages a[data-stage=in_build] i{background:var(--ok)}.crm-stages a[data-stage=shipped] i{background:var(--ink)}.crm-stages a[data-stage=lost] i{background:var(--danger)}.crm-stages a[aria-current]{background:var(--ink);border-color:var(--ink);color:#fff}.crm-stages a[aria-current] span{color:#c8c9c4}
 .crm-groups{display:grid;gap:14px}
 .crm-group{background:#fff;border:1px solid var(--line);border-radius:var(--radius);overflow:clip}
 .crm-group-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;padding:0 18px;background:#fbfaf6;border-bottom:1px solid var(--line-soft)}.crm-group-head>button{all:unset;flex:1;display:flex;align-items:center;gap:12px;padding:13px 0;cursor:pointer}.crm-group-head>button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}.crm-group-count{font:12px var(--mono);color:var(--muted)}
@@ -278,7 +278,7 @@ kbd{font:600 10px var(--mono);border:1px solid var(--line);border-bottom-width:2
 .ov-stages small{font:11px var(--mono);color:var(--muted)}
 .ov-dot{width:8px;height:8px;border-radius:50%;background:#a3a39a;display:inline-block}
 .ov-dot[data-stage=proposal_sent]{background:var(--amber-hover)}
-.ov-dot[data-stage=negotiation]{background:var(--amber)}
+.ov-dot[data-stage=proposal_sent]{background:var(--amber)}
 .ov-desk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border-top:1px solid var(--line-soft);margin-top:20px}
 .ov-desk>div{min-width:0;padding-bottom:12px}
 .ov-desk>div+div{border-left:1px solid var(--line-soft)}
@@ -332,4 +332,42 @@ kbd{font:600 10px var(--mono);border:1px solid var(--line);border-bottom-width:2
   .ov-item .ov-tier{display:none}
   .ov-feed li{padding:10px 16px}
   .ov-money{padding:16px}
+}
+
+/* Two tracks: Pre-qualified outreach and Potential Deals */
+.crm-stage[data-stage=emailed] i,.crm-stage[data-stage=replied] i,.crm-stage[data-stage=meeting] i,.crm-stages a[data-stage=emailed] i,.crm-stages a[data-stage=replied] i,.crm-stages a[data-stage=meeting] i,.pipeline-col[data-stage=emailed] i,.pipeline-col[data-stage=replied] i,.pipeline-col[data-stage=meeting] i{background:#d9b35a}
+.crm-stage[data-stage=outreach_closed] i,.crm-stages a[data-stage=outreach_closed] i,.pipeline-col[data-stage=outreach_closed] i{background:var(--danger)}.crm-stage[data-stage=outreach_closed]{color:var(--muted)}
+.pipeline-tracks a[aria-current]{background:var(--ink);color:#fff;border-radius:10px}.pipeline-tracks a[aria-current] span,.pipeline-tracks a[aria-current] strong{color:#fff}
+.pipeline-tracks a{display:block;padding:4px 10px;text-decoration:none}
+
+/* The lead panel: contact card, stage bar, log, history */
+.lead-contact{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.lead-contact-row{display:grid;grid-template-columns:72px minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.lead-contact-row label{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--label)}
+.lead-contact-row input,.lead-contact-row select{min-width:0;font-size:15px}
+.lead-contact .lead-more{margin-top:4px}.lead-contact .pipeline-form-actions{justify-content:flex-end}
+.lead-flag{font:600 11px var(--mono);color:var(--danger);background:var(--danger-bg);padding:3px 8px;border-radius:999px;white-space:nowrap}
+.stage-bar{display:grid;gap:8px}
+.stage-bar-row{display:flex;flex-wrap:wrap;gap:4px;background:var(--fog);padding:4px;border-radius:12px}
+.stage-bar-step{flex:1 1 auto;min-height:34px;padding:0 10px;border:0;border-radius:9px;background:transparent;color:var(--ink);font:550 13px var(--sans,inherit);cursor:pointer;white-space:nowrap}
+.stage-bar-step:hover:not(:disabled){background:#fff}
+.stage-bar-step[aria-current]{background:var(--ink);color:#fff;cursor:default;opacity:1}
+.stage-bar-step[data-stage=outreach_closed]:not([aria-current]),.stage-bar-step[data-stage=lost]:not([aria-current]){color:var(--danger)}
+.stage-bar>.btn{justify-self:start}.stage-bar-extra{display:flex;gap:8px;flex-wrap:wrap}
+.contact-log h3{margin:0}
+.contact-log-outcomes{display:flex;flex-wrap:wrap;gap:6px}
+.contact-log-pill{min-height:34px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);font:550 13px inherit;cursor:pointer}
+.contact-log-pill:hover{border-color:#d9b35a}
+.contact-log-pill[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+.contact-log-pill[data-tone=danger][aria-pressed=true]{background:var(--danger);border-color:var(--danger)}
+.contact-log textarea{font-size:14px;width:100%}
+.contact-log-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.contact-log-next{display:inline-flex;gap:6px;align-items:center;margin-left:auto}
+.lead-history li[data-kind=note]{border-left:3px solid #d9b35a;padding-left:10px}
+.lead-history li[data-kind=email]{border-left:3px solid var(--ok);padding-left:10px}
+.lead-earlier-notes{white-space:pre-wrap}
+@media (max-width:760px){
+  .lead-contact-row{grid-template-columns:1fr auto auto}.lead-contact-row label{grid-column:1/-1}
+  .stage-bar-step{flex:1 1 30%}
+  .contact-log-next{margin-left:0}
 }

@@ -45,7 +45,7 @@ import {
   type QueueItem,
 } from "@/lib/overview-math";
 import { loadPipeline } from "@/lib/pipeline-data";
-import { isStalled, PRESALE, queueable, type ColumnKey } from "@/lib/pipeline";
+import { isStalled, PRESALE, queueable, stageLabel, type ColumnKey, type DealStage } from "@/lib/pipeline";
 import { canApproveCommissions, type PortalRole } from "@/lib/permissions";
 import { staffOf } from "@/lib/staff-filter";
 
@@ -238,7 +238,7 @@ export async function loadOverview({ ws, me, role, today, now }: OverviewInput) 
   for (const f of followUps) {
     if (f.kind === "deal") {
       const deal = dealById.get(f.id);
-      if (deal && (deal.stage === "lost" || deal.stage === "won")) continue;
+      if (deal && (deal.stage === "lost" || deal.stage === "won" || deal.stage === "outreach_closed")) continue;
     }
     push({
       key: `fu-${f.kind}-${f.id}`,
@@ -397,7 +397,7 @@ export async function loadOverview({ ws, me, role, today, now }: OverviewInput) 
 
   // Sales: stalled deals and bounced outreach.
   for (const card of pipeline.columns.flatMap((c) => c.cards)) {
-    if (card.type !== "deal" || (card.column !== "proposal_sent" && card.column !== "negotiation")) continue;
+    if (card.type !== "deal" || (card.column !== "replied" && card.column !== "meeting" && card.column !== "proposal_sent")) continue;
     if (!isStalled(card.column, card.since, now)) continue;
     const days = Math.floor((now.getTime() - card.since.getTime()) / DAY);
     push({
@@ -405,7 +405,7 @@ export async function loadOverview({ ws, me, role, today, now }: OverviewInput) 
       tier: "week",
       source: "deal",
       owner: card.ownerEmail?.toLowerCase() ?? null,
-      text: `${card.company} has sat in ${card.column === "negotiation" ? "Negotiation" : "Proposal sent"} for ${days} days`,
+      text: `${card.company} has sat in ${stageLabel(card.column as DealStage)} for ${days} days`,
       detail: card.valueCents ? formatMoney(card.valueCents) : null,
       href: `/admin/clients?deal=${card.id}`,
       at: iso(card.since),
@@ -418,7 +418,7 @@ export async function loadOverview({ ws, me, role, today, now }: OverviewInput) 
     if (!row.dealId || (row.status !== "bounced" && row.status !== "complained") || bouncedSeen.has(row.dealId)) continue;
     const deal = dealById.get(row.dealId);
     // Gone once the lead is closed or has a different address on file.
-    if (!deal || deal.stage === "lost" || deal.stage === "won") continue;
+    if (!deal || deal.stage === "lost" || deal.stage === "won" || deal.stage === "outreach_closed") continue;
     if (row.to && deal.contactEmail && deal.contactEmail.trim().toLowerCase() !== row.to.trim().toLowerCase()) continue;
     bouncedSeen.add(row.dealId);
     push({

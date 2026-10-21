@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import * as pipeline from "./pipeline.ts";
 
 // Run the real action with isolated auth, database and provider adapters.
 // No test can reach a live mailbox or database.
 function harness({ email = "reiss@skoxsoftware.com", status = "draft", production = true, key = "test", claim = true, rejected = false, doNotEmail = false, optedOutElsewhere = false, postal = "123 Example St, Orlando, FL 32801", secret = "unsub-secret" } = {}) {
   const calls = { send: 0, updates: 0, batches: 0 };
   const draft = { id: "saved", fromEmail: email, subject: "Saved", body: "Original", status, updatedAt: "today" };
-  const deal = { id: "4e9de8c6-50f1-47cf-a564-4cafbf382c22", contactEmail: "lead@example.com", brief: { emailDraft: draft }, stage: "lead", doNotEmail };
+  const deal = { id: "4e9de8c6-50f1-47cf-a564-4cafbf382c22", contactEmail: "lead@example.com", brief: { emailDraft: draft }, stage: "outreach_2", doNotEmail };
   let selects = 0;
   const db = {
     // The first select loads the deal; the second looks for an opt-out on another lead at the same address.
@@ -29,6 +30,7 @@ function harness({ email = "reiss@skoxsoftware.com", status = "draft", productio
     "@/lib/db": { getDb: () => db },
     "@/lib/db/schema": { deals: {}, emailMessages: {}, emailThreads: {} },
     "@/lib/events": { eventInsert: () => ({}) },
+    "@/lib/pipeline": pipeline,
     "@/lib/lead-email": {
       outreachSender: (e: string) => ({ name: e.startsWith("reiss@") ? "Reiss Skeen" : "Other", firstName: "X", fromEmail: `${e.split("@")[0]}@outreach.skoxsoftware.com`, replyTo: e, title: "" }),
     },

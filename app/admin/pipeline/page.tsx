@@ -13,7 +13,6 @@ import { zoneFor } from "@/lib/local-time";
 import { withBase } from "@/lib/paths";
 import { loadPipeline } from "@/lib/pipeline-data";
 import {
-  boardTotals,
   callQueue,
   cardMatches,
   COLUMNS,
@@ -24,7 +23,10 @@ import {
   queueable,
   SALES_COLUMNS,
   searchText,
+  TRACK_COLUMNS,
+  TRACK_LABEL,
   viewQuery,
+  type Track,
   type BoardView,
   type Card,
 } from "@/lib/pipeline";
@@ -41,16 +43,16 @@ export default async function PipelinePage({
   const { viewer, staff } = await requireStaff();
   const ws = staff.workspaceId;
 
-  const { dealRows, projectRows, billing, columns, lost, owners, reps } = await loadPipeline(ws);
+  const { dealRows, projectRows, columns, lost, owners, reps } = await loadPipeline(ws);
   const dealById = new Map(dealRows.map((d) => [d.id, d]));
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).slice(0, 200) : "");
-  const filters: BoardView = { view: "board", q: str("q"), owner: str("owner"), stage: "", callable: sp.callable === "1" };
+  const track: Track = str("track") === "deals" ? "deals" : "outreach";
+  const filters: BoardView = { view: "board", q: str("q"), owner: str("owner"), stage: "", callable: sp.callable === "1", track };
 
   const now = new Date(nowMs());
   const today = salesToday(now);
-  const totals = boardTotals(columns, now);
-  const outstanding = billing.reduce((n, b) => n + b.openCents, 0);
-  const due = dealRows.filter((d) => d.stage !== "lost" && d.stage !== "won" && ["overdue", "today"].includes(followUpState(d.nextStepOn, today))).length;
+  const due = dealRows.filter((d) => d.stage !== "lost" && d.stage !== "won" && d.stage !== "outreach_closed" && ["overdue", "today"].includes(followUpState(d.nextStepOn, today))).length;
+  const inTrack = (t: Track) => columns.filter((c) => TRACK_COLUMNS[t].includes(c.key) && c.key !== "outreach_closed" && c.key !== "won").reduce((n, c) => n + c.cards.length, 0);
 
   const view = (card: Card): BoardCard => {
     const days = daysSince(card.since, now);
@@ -98,8 +100,9 @@ export default async function PipelinePage({
     };
   };
 
-  // The board is for selling: builds and launches live on Projects.
+  // The board is for selling: builds and launches live on Projects. The tab picks the track.
   const cards = columns.filter((c) => SALES_COLUMNS.includes(c.key)).flatMap((c) => c.cards).map(view);
+  const boardCards = cards.filter((c) => TRACK_COLUMNS[track].includes(c.column));
   const editing = typeof sp.deal === "string" ? dealRows.find((d) => d.id === sp.deal) ?? null : null;
   const creating = sp.new === "1";
   const linkedProject = editing?.projectId ? projectRows.find((p) => p.project.id === editing.projectId) : null;
@@ -125,29 +128,19 @@ export default async function PipelinePage({
             <p className="eyebrow">Sales</p>
             <h1>Pipeline</h1>
           </div>
-          <ul className="pipeline-strip" aria-label="Pipeline summary">
-            <li>
-              <span>Open</span>
-              <strong>{formatMoney(totals.openCents)}</strong>
-            </li>
-            <li>
-              <span>Won</span>
-              <strong>{formatMoney(totals.wonCents)}</strong>
-            </li>
+          <ul className="pipeline-strip pipeline-tracks" aria-label="Pipelines">
+            {(["outreach", "deals"] as const).map((t) => (
+              <li key={t}>
+                <Link href={`/admin/pipeline${viewQuery({ ...filters, track: t })}`} aria-current={track === t ? "page" : undefined}>
+                  <span>{TRACK_LABEL[t]}</span>
+                  <strong>{inTrack(t)}</strong>
+                </Link>
+              </li>
+            ))}
             <li>
               <Link href="/admin/clients?view=due">
                 <span>Follow-ups due</span>
                 <strong className={due ? "pipeline-metric-warn" : undefined}>{due}</strong>
-              </Link>
-            </li>
-            <li>
-              <span>Stalled</span>
-              <strong className={totals.stalled ? "pipeline-metric-warn" : undefined}>{totals.stalled}</strong>
-            </li>
-            <li>
-              <Link href="/admin/billing?status=open">
-                <span>Unpaid invoices</span>
-                <strong>{formatMoney(outstanding)}</strong>
               </Link>
             </li>
           </ul>
@@ -184,9 +177,9 @@ export default async function PipelinePage({
           </section>
         )}
 
-        <PipelineBoard columns={COLUMNS.filter((c) => SALES_COLUMNS.includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={cards} owners={owners} me={viewer.email} today={today} initial={filters} nowMs={now.getTime()} />
+        <PipelineBoard key={track} columns={COLUMNS.filter((c) => TRACK_COLUMNS[track].includes(c.key)).map(({ key, label }) => ({ key, label }))} cards={boardCards} owners={owners} me={viewer.email} today={today} initial={filters} nowMs={now.getTime()} />
 
-        {lost.length > 0 && (
+        {track === "deals" && lost.length > 0 && (
           <details className="card pipeline-lost">
             <summary>
               Lost deals <span className="chip">{lost.length}</span>

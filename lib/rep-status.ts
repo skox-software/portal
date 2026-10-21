@@ -18,9 +18,9 @@ export type RepStatus = (typeof REP_STATUSES)[number]["value"];
 
 export function repStatus(deal: { stage: DealStage; meetingAt: Date | string | null; projectId?: string | null }): RepStatus {
   if (deal.stage === "won" || deal.projectId) return "won";
-  if (deal.stage === "lost") return "lost";
-  if (deal.stage === "proposal_sent" || deal.stage === "negotiation") return "with_skox";
-  if (deal.meetingAt) return "booked";
+  if (deal.stage === "lost" || deal.stage === "outreach_closed") return "lost";
+  if (deal.stage === "proposal_sent") return "with_skox";
+  if (deal.stage === "meeting" || deal.meetingAt) return "booked";
   return "working";
 }
 

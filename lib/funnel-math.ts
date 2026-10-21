@@ -4,8 +4,19 @@
  * alone; lib/finance-data.ts reads the stage moves from the audit trail.
  */
 
-export const FUNNEL_STAGES = ["lead", "initial_outreach", "proposal_sent", "negotiation", "won"] as const;
+export const FUNNEL_STAGES = ["outreach", "emailed", "replied", "meeting", "proposal_sent", "won"] as const;
 export type FunnelStage = (typeof FUNNEL_STAGES)[number];
+
+/**
+ * Every outreach attempt counts as one "Outreach" step. Older history used
+ * Lead / Initial outreach / Negotiation, which fold in the same way.
+ */
+export function funnelStageOf(stage: string): FunnelStage | null {
+  if (stage.startsWith("outreach_") && stage !== "outreach_closed") return "outreach";
+  if (stage === "lead" || stage === "initial_outreach") return "outreach";
+  if (stage === "negotiation") return "proposal_sent";
+  return (FUNNEL_STAGES as readonly string[]).includes(stage) ? (stage as FunnelStage) : null;
+}
 
 export type StageEntry = { dealId: string; stage: string; valueCents: number | null };
 export type FunnelRow = { stage: FunnelStage; count: number; valueCents: number; conversion: number | null };
@@ -18,7 +29,8 @@ export type FunnelRow = { stage: FunnelStage; count: number; valueCents: number;
 export function funnelRows(entries: StageEntry[]): FunnelRow[] {
   const seen = new Map<FunnelStage, Map<string, number>>(FUNNEL_STAGES.map((s) => [s, new Map()]));
   for (const e of entries) {
-    const bucket = seen.get(e.stage as FunnelStage);
+    const stage = funnelStageOf(e.stage);
+    const bucket = stage && seen.get(stage);
     if (bucket && !bucket.has(e.dealId)) bucket.set(e.dealId, e.valueCents ?? 0);
   }
   const rows = FUNNEL_STAGES.map((stage) => {

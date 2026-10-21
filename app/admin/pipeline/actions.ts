@@ -13,14 +13,18 @@ import { todayIso } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { normalizeEmail } from "@/lib/permissions";
 import { parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
-import { followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
+import { advanceAfterCall, followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, stageAfterCall, type Outcome } from "@/lib/follow-up";
 import { dedupeLeads, parseLeadSources } from "@/lib/pipeline-import";
 import {
-  columnLabel,
   DEAL_KINDS,
   dealStageForColumn,
+  FIRST_STAGE,
+  OPEN_STAGES,
   projectStatusForColumn,
+  STAGES,
+  stageLabel,
   type ColumnKey,
+  type DealStage,
 } from "@/lib/pipeline";
 import { staffOf } from "@/lib/staff-filter";
 import { after } from "next/server";
@@ -35,7 +39,8 @@ import { creditProjectFromDeal, emailAssignedLeads, readRepField } from "@/lib/r
 
 const BACK = "/admin/pipeline";
 const KINDS = DEAL_KINDS.map((k) => k.value) as [string, ...string[]];
-const columnKey = z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "in_build", "shipped", "lost"]);
+const stageKey = z.enum(STAGES);
+const columnKey = z.enum([...STAGES, "in_build", "shipped"]);
 
 type MoveResult = { ok: true } | { ok: false; error: string };
 
@@ -53,7 +58,7 @@ function backTo(formData: FormData, extra: Record<string, string> = {}) {
   const base = formData.get("base") === "/admin/clients" ? "/admin/clients" : BACK;
   const from = new URLSearchParams(String(formData.get("back") ?? "").replace(/^\?/, ""));
   const p = new URLSearchParams();
-  for (const k of ["view", "q", "owner", "stage", "callable"]) {
+  for (const k of ["view", "q", "owner", "stage", "callable", "track"]) {
     const v = from.get(k);
     if (v) p.set(k, v.slice(0, 200));
   }
@@ -164,7 +169,13 @@ export async function moveCard(type: string, id: string, to: string): Promise<Mo
   await db.batch([
     db
       .update(deals)
-      .set({ stage, stageChangedAt: new Date(), ...(stage === "won" && !deal.wonAt ? { wonAt: new Date() } : {}) })
+      .set({
+        stage,
+        stageChangedAt: new Date(),
+        ...(stage === "won" && !deal.wonAt ? { wonAt: new Date() } : {}),
+        // Done pursuing: no reminder should keep bringing it back.
+        ...(stage === "outreach_closed" ? { nextStepOn: null, nextStep: null } : {}),
+      })
       .where(eq(deals.id, deal.id)),
     ...(deal.referralId && (stage === "won" || stage === "lost")
       ? [db.update(referrals).set({ status: stage }).where(eq(referrals.id, deal.referralId))]
@@ -190,7 +201,7 @@ const dealFields = z.object({
   website: z.union([z.literal(""), z.url({ protocol: /^https?$/ }).max(300)]),
   kind: z.enum(KINDS),
   value: z.union([z.literal(""), z.coerce.number().min(0).max(10_000_000)]),
-  stage: z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]),
+  stage: stageKey,
   ownerEmail: z.string().trim().max(200),
   notes: z.string().trim().max(4000),
   industry: z.string().trim().max(80),
@@ -211,7 +222,7 @@ function readDeal(formData: FormData) {
     website: get("website").trim(),
     kind: get("kind") || "web-app",
     value: get("value").replace(/[$,\s]/g, ""),
-    stage: get("stage") || "lead",
+    stage: get("stage") || FIRST_STAGE,
     ownerEmail: normalizeEmail(get("ownerEmail")),
     notes: get("notes"),
     industry: get("industry"),
@@ -258,6 +269,23 @@ function dealValues(input: z.infer<typeof dealFields>) {
   };
 }
 
+/** The contact details a save changed, old and new, so the lead's history shows "Phone changed". */
+const CONTACT_FIELDS = [
+  ["company", "Name"],
+  ["contactName", "Contact"],
+  ["contactEmail", "Email"],
+  ["phone", "Phone"],
+  ["website", "Website"],
+] as const;
+
+function contactChanges(before: Record<(typeof CONTACT_FIELDS)[number][0], string | null>, after: ReturnType<typeof dealValues>) {
+  return CONTACT_FIELDS.filter(([key]) => (before[key] ?? null) !== (after[key] ?? null)).map(([key, label]) => ({
+    field: label,
+    from: before[key] ?? null,
+    to: after[key] ?? null,
+  }));
+}
+
 export async function createDeal(formData: FormData) {
   const { viewer, staff } = await requireStaff();
   const parsed = readDeal(formData);
@@ -295,7 +323,7 @@ export async function createDeal(formData: FormData) {
     after(() => emailAssignedLeads(repId, [id]).catch((error) => console.error("[pipeline] rep email failed", error)));
   }
   refresh();
-  backWith(backTo(formData), "notice", `${input.company} added to ${input.stage === "lost" ? "lost deals" : columnLabel(input.stage)}.`);
+  backWith(backTo(formData), "notice", `${input.company} added to ${input.stage === "lost" ? "lost deals" : stageLabel(input.stage)}.`);
 }
 
 export async function saveDeal(formData: FormData) {
@@ -337,20 +365,31 @@ export async function saveDeal(formData: FormData) {
   if (!repField.ok) backWith(back, "error", "Pick a sales rep from the list.");
   const repChanged = repField.value !== undefined && repField.value !== deal.repMembershipId;
   // Once onboarded, the project owns the stage; the form's stage is ignored.
-  const stage = deal.projectId ? deal.stage : input.stage;
+  // The lead panel moves stages with its own buttons, so a form without a stage field keeps the current one.
+  const stage = deal.projectId || !formData.has("stage") ? deal.stage : input.stage;
+  // Fields the lead panel no longer shows (notes, next step, follow-up date) are kept unless the form sent them.
+  const values = dealValues(input);
+  const sent = (key: string) => formData.has(key);
+  const kept = {
+    ...(sent("notes") ? {} : { notes: deal.notes }),
+    ...(sent("nextStep") ? {} : { nextStep: deal.nextStep }),
+    ...(sent("nextStepOn") ? {} : { nextStepOn: deal.nextStepOn }),
+  };
+  const changed = contactChanges(deal, values);
 
   await db.batch([
     db
       .update(deals)
       .set({
-        ...dealValues(input),
-        ...mergeBrief(deal.brief, input.notes, input.preview, deal.notes),
+        ...values,
+        ...(sent("notes") || input.preview !== undefined ? mergeBrief(deal.brief, sent("notes") ? input.notes : (deal.notes ?? ""), input.preview, deal.notes) : {}),
+        ...kept,
         // A changed number gets a fresh chance.
         ...(deal.badNumber && (input.phone || null) !== deal.phone ? { badNumber: false } : {}),
         ownerEmail: input.ownerEmail || null,
         ...(repChanged ? { repMembershipId: repField.value ?? null, repSource: repField.value ? "assigned" : null } : {}),
         stage,
-        lostReason: stage === "lost" ? String(formData.get("lostReason") ?? "").trim().slice(0, 300) || null : null,
+        lostReason: stage !== "lost" ? null : sent("lostReason") ? String(formData.get("lostReason") ?? "").trim().slice(0, 300) || null : deal.lostReason,
         ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
         ...(stage === "won" && !deal.wonAt ? { wonAt: new Date() } : {}),
       })
@@ -362,7 +401,12 @@ export async function saveDeal(formData: FormData) {
       verb: "deal.updated",
       subjectType: "deal",
       subjectId: deal.id,
-      payload: { company: input.company, ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}), ...(repChanged ? { rep: repField.value ?? null } : {}) },
+      payload: {
+        company: input.company,
+        ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}),
+        ...(repChanged ? { rep: repField.value ?? null } : {}),
+        ...(changed.length ? { changed } : {}),
+      },
     }),
   ]);
   if (repChanged && repField.value) {
@@ -437,7 +481,7 @@ export async function bulkAddDeals(formData: FormData) {
     if (file.size > 900_000) backWith(back, "error", "That file is over 900 KB. Split it into smaller files.");
     fileText = await file.text();
   }
-  const stage = z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation"]).catch("lead").parse(formData.get("stage"));
+  const stage = z.enum(OPEN_STAGES as [DealStage, ...DealStage[]]).catch(FIRST_STAGE).parse(formData.get("stage"));
   const ownerEmail = normalizeEmail(String(formData.get("ownerEmail") ?? ""));
   if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) {
     backWith(back, "error", "The owner must be on the SKOX team.");
@@ -482,7 +526,7 @@ export async function bulkAddDeals(formData: FormData) {
     refresh();
   }
 
-  const parts = [`Added ${fresh.length} ${fresh.length === 1 ? "lead" : "leads"} to ${columnLabel(stage)}.`];
+  const parts = [`Added ${fresh.length} ${fresh.length === 1 ? "lead" : "leads"} to ${stageLabel(stage)}.`];
   if (duplicates.length) {
     const names = duplicates.slice(0, 3).join(", ") + (duplicates.length > 3 ? ` and ${duplicates.length - 3} more` : "");
     parts.push(`Skipped ${duplicates.length} already in the pipeline (${names}).`);
@@ -493,10 +537,13 @@ export async function bulkAddDeals(formData: FormData) {
 }
 
 /**
- * Logs a call or email in one step: stamps "last contacted", records the
- * outcome on the deal's history, moves a fresh lead to Initial outreach (or
- * closes it as not interested), flags a bad number, remembers the gatekeeper's
- * name and sets the follow-up (the outcome's default unless one was picked).
+ * Logs a contact attempt, a note, or both, and can move the lead on in the
+ * same step ("Save & move to Outreach 2"). Every save becomes a line in the
+ * lead's history: a call with its outcome and note, or a note on its own.
+ *
+ * Logging never moves the lead by itself, except that an email sent from
+ * Pre-qualified makes it a Potential Deal. A bad number is flagged, and the
+ * follow-up is the outcome's default unless one was picked.
  */
 export async function logCall(formData: FormData) {
   const { viewer, staff } = await requireStaff();
@@ -505,21 +552,24 @@ export async function logCall(formData: FormData) {
   const back = backTo(formData, { deal: dealId });
   const parsed = z
     .object({
-      outcome: z.enum(OUTCOMES.map((o) => o.value) as [Outcome, ...Outcome[]]),
-      note: z.string().trim().max(1000),
+      outcome: z.union([z.literal(""), z.enum(OUTCOMES.map((o) => o.value) as [Outcome, ...Outcome[]])]),
+      note: z.string().trim().max(2000),
       followUp: z.union([z.literal(""), z.iso.date()]),
       nextStep: z.string().trim().max(200),
       gatekeeper: z.string().trim().max(80),
     })
     .safeParse({
-      outcome: formData.get("outcome"),
+      outcome: String(formData.get("outcome") ?? ""),
       note: String(formData.get("note") ?? ""),
       followUp: String(formData.get("followUp") ?? ""),
       nextStep: String(formData.get("nextStep") ?? ""),
       gatekeeper: String(formData.get("gatekeeper") ?? ""),
     });
-  if (!parsed.success) backWith(back, "error", "Pick what happened on the call.");
-  const { outcome, note, gatekeeper } = parsed.data;
+  if (!parsed.success) backWith(back, "error", "Pick what happened, or write a note.");
+  const { note, gatekeeper } = parsed.data;
+  const outcome = parsed.data.outcome || null;
+  const advance = formData.get("intent") === "advance";
+  if (!outcome && !note && !advance) backWith(back, "error", "Pick what happened, or write a note.");
 
   const db = getDb();
   const [deal] = await db
@@ -530,49 +580,86 @@ export async function logCall(formData: FormData) {
   if (!deal) backWith(BACK, "error", "That deal doesn't exist.");
 
   // Once onboarded, the project owns the stage.
-  const stage = deal.projectId || deal.stage === "won" || deal.stage === "lost" ? deal.stage : stageAfterCall(deal.stage, outcome);
-  const closed = stage === "lost";
-  const followUp = closed ? null : followUpAfterCall(outcome, parsed.data.followUp, salesToday());
-  // A typed next step wins, then the one already on the deal, unless a gatekeeper's name makes a better one.
-  const auto = nextStepAfterCall(outcome, gatekeeper);
-  // After a real conversation, only what was typed counts; the old "call back" step is done.
-  const nextStep = !followUp ? null : parsed.data.nextStep || (outcome === "spoke" ? null : outcome === "gatekeeper" && gatekeeper ? auto : deal.nextStep || auto);
-  const brief = readBrief(deal.brief) ?? parseBrief(deal.notes).brief;
-  await db.batch([
-    db
-      .update(deals)
-      .set({
-        lastContactedAt: new Date(),
-        stage,
-        nextStepOn: followUp,
-        nextStep,
-        ...(outcome === "bad_number" ? { badNumber: true } : {}),
-        ...(outcome === "gatekeeper" && gatekeeper ? { brief: { ...brief, gatekeeper } } : {}),
-        ...(stage !== deal.stage ? { stageChangedAt: new Date() } : {}),
-        ...(closed && deal.stage !== "lost" ? { lostReason: note || "Not interested" } : {}),
-      })
-      .where(eq(deals.id, deal.id)),
-    eventInsert({
-      workspaceId: staff.workspaceId,
-      projectId: deal.projectId,
-      actorId: viewer.userId,
-      verb: "deal.call_logged",
-      subjectType: "deal",
-      subjectId: deal.id,
-      payload: {
-        company: deal.company,
-        outcome,
-        ...(note ? { note } : {}),
-        ...(gatekeeper ? { gatekeeper } : {}),
-        ...(followUp ? { followUp } : {}),
-        ...(stage !== deal.stage ? { from: deal.stage, to: stage } : {}),
-      },
-    }),
-  ]);
+  const settled = !!deal.projectId || deal.stage === "won" || deal.stage === "lost";
+  let stage: DealStage = settled || !outcome ? deal.stage : stageAfterCall(deal.stage, outcome);
+  if (advance && !settled) stage = advanceAfterCall(deal.stage, outcome) ?? stage;
+  const moved = stage !== deal.stage;
+  const now = new Date();
+  const writes = [] as Parameters<typeof db.batch>[0][number][];
+
+  if (outcome) {
+    const closed = stage === "outreach_closed";
+    const followUp = closed ? null : followUpAfterCall(outcome, parsed.data.followUp, salesToday());
+    // A typed next step wins, then the one already on the deal, unless a gatekeeper's name makes a better one.
+    const auto = nextStepAfterCall(outcome, gatekeeper);
+    // After a real conversation, only what was typed counts; the old "call back" step is done.
+    const nextStep = !followUp ? null : parsed.data.nextStep || (outcome === "spoke" ? null : outcome === "gatekeeper" && gatekeeper ? auto : deal.nextStep || auto);
+    const brief = readBrief(deal.brief) ?? parseBrief(deal.notes).brief;
+    writes.push(
+      db
+        .update(deals)
+        .set({
+          lastContactedAt: now,
+          stage,
+          nextStepOn: followUp,
+          nextStep,
+          ...(outcome === "bad_number" ? { badNumber: true } : {}),
+          ...(outcome === "gatekeeper" && gatekeeper ? { brief: { ...brief, gatekeeper } } : {}),
+          ...(moved ? { stageChangedAt: now } : {}),
+        })
+        .where(eq(deals.id, deal.id)),
+      eventInsert({
+        workspaceId: staff.workspaceId,
+        projectId: deal.projectId,
+        actorId: viewer.userId,
+        verb: "deal.call_logged",
+        subjectType: "deal",
+        subjectId: deal.id,
+        payload: {
+          company: deal.company,
+          outcome,
+          ...(note ? { note } : {}),
+          ...(gatekeeper ? { gatekeeper } : {}),
+          ...(followUp ? { followUp } : {}),
+          ...(moved ? { from: deal.stage, to: stage } : {}),
+        },
+      }),
+    );
+  } else {
+    if (note) {
+      writes.push(
+        eventInsert({
+          workspaceId: staff.workspaceId,
+          projectId: deal.projectId,
+          actorId: viewer.userId,
+          verb: "deal.note_added",
+          subjectType: "deal",
+          subjectId: deal.id,
+          payload: { company: deal.company, note },
+        }),
+      );
+    }
+    if (moved) {
+      writes.push(
+        db.update(deals).set({ stage, stageChangedAt: now, ...(stage === "outreach_closed" ? { nextStepOn: null, nextStep: null } : {}) }).where(eq(deals.id, deal.id)),
+        eventInsert({
+          workspaceId: staff.workspaceId,
+          actorId: viewer.userId,
+          verb: "deal.stage_changed",
+          subjectType: "deal",
+          subjectId: deal.id,
+          payload: { company: deal.company, from: deal.stage, to: stage },
+        }),
+      );
+    }
+  }
+  if (!writes.length) backWith(back, "notice", "Nothing to save.");
+  await db.batch(writes as [(typeof writes)[number], ...(typeof writes)[number][]]);
   refresh();
-  const message = `${outcomeLabel(outcome)} logged for ${deal.company}${stage !== deal.stage ? ` · moved to ${stage === "lost" ? "Lost" : columnLabel(stage)}` : ""}${outcome === "bad_number" ? " · number flagged" : ""}.`;
+  const what = outcome ? `${outcomeLabel(outcome)} logged` : note ? "Note saved" : "Saved";
+  const message = `${what} for ${deal.company}${moved ? ` · moved to ${stageLabel(stage)}` : ""}${outcome === "bad_number" ? " · number flagged" : ""}.`;
   const nextId = String(formData.get("nextId") ?? "");
-  if (formData.get("intent") === "next" && z.uuid().safeParse(nextId).success) backWith(backTo(formData, { deal: nextId }), "notice", message);
+  if (formData.get("then") === "next" && z.uuid().safeParse(nextId).success) backWith(backTo(formData, { deal: nextId }), "notice", message);
   backWith(back, "notice", message);
 }
 
@@ -584,7 +671,7 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; ow
   const parsed = z
     .object({
       ids: z.array(z.uuid()).min(1).max(500),
-      stage: z.enum(["lead", "initial_outreach", "proposal_sent", "negotiation", "won", "lost"]).optional(),
+      stage: stageKey.optional(),
       ownerEmail: z.string().trim().max(200).optional(),
       nextStepOn: z.union([z.literal(""), z.iso.date()]).optional(),
       repMembershipId: z.union([z.literal(""), z.uuid()]).optional(),
@@ -660,4 +747,16 @@ export async function markDoNotEmail(formData: FormData) {
   ]);
   revalidatePath(BACK);
   backWith(back, "notice", "Marked do not email. No email can be sent to this contact.");
+}
+
+/** The lead panel's stage buttons: the same move as dragging the card, then back to the lead. */
+export async function moveDealStage(formData: FormData) {
+  const dealId = String(formData.get("dealId") ?? "");
+  if (!z.uuid().safeParse(dealId).success) backWith(BACK, "error", "Unknown deal.");
+  const to = stageKey.safeParse(formData.get("to"));
+  const back = backTo(formData, { deal: dealId });
+  if (!to.success) backWith(back, "error", "Pick a stage.");
+  const result = await moveCard("deal", dealId, to.data);
+  if (!result.ok) backWith(back, "error", result.error);
+  backWith(back, "notice", `Moved to ${stageLabel(to.data)}.`);
 }

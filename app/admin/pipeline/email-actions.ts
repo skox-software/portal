@@ -11,6 +11,7 @@ import { eventInsert } from "@/lib/events";
 import { outreachSender } from "@/lib/lead-email";
 import { outreachConfig, sendColdOutreach } from "@/lib/cold-outreach";
 import { previewSentQueries } from "@/lib/preview-open";
+import { linksPreview } from "@/lib/preview-tracking";
 
 const fields = z.object({ dealId: z.uuid(), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20000), to: z.email() });
 
@@ -80,4 +81,53 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   revalidatePath("/admin/pipeline");
   revalidatePath("/admin/inbox");
   return { notice: `Sent from ${sender.fromEmail} to ${parsed.data.to}. Replies go to ${sender.replyTo}.`, status: "sent" as const };
+}
+
+/**
+ * The preview email from the lead's preview card: reviewed in the pop-up,
+ * then sent from the sender's outreach address. Separate from the first cold
+ * email (its draft lives in the brief and is usually already sent). The link
+ * must stay in the body; sending it marks the preview sent.
+ */
+export async function sendPreviewEmail(input: { dealId: string; to: string; subject: string; body: string }) {
+  const { viewer, staff } = await requireStaff();
+  const parsed = fields.safeParse(input);
+  if (!parsed.success) return { error: "Check the recipient, subject and message." };
+  const db = getDb();
+  const where = and(eq(deals.id, parsed.data.dealId), eq(deals.workspaceId, staff.workspaceId));
+  const [deal] = await db.select().from(deals).where(where).limit(1);
+  if (!deal || deal.contactEmail !== parsed.data.to) return { error: "The contact changed. Reload this lead before sending." };
+  if (deal.previewStatus !== "ready" || !deal.previewUrl) return { error: "This preview isn't ready to send. Reload the lead." };
+  if (!linksPreview(parsed.data.body, deal.previewUrl)) return { error: "Put the preview link back in the email before sending." };
+  if (process.env.NODE_ENV !== "production" || !process.env.RESEND_API_KEY) return { error: "Sending works only on the live portal. Nothing was sent." };
+  const optedOut = deal.doNotEmail || (await db.select({ id: deals.id }).from(deals).where(and(eq(deals.workspaceId, staff.workspaceId), sql`lower(${deals.contactEmail}) = ${parsed.data.to.toLowerCase()}`, eq(deals.doNotEmail, true))).limit(1)).length > 0;
+  if (optedOut) return { error: "This contact asked not to be emailed. Nothing was sent." };
+  try { outreachConfig(); } catch (e) {
+    return { error: e instanceof Error ? e.message : "Cold outreach is blocked." };
+  }
+  const sender = outreachSender(viewer.email);
+  let accepted;
+  try {
+    // The same preview link can only go out once (the provider drops a repeat with this key), so a double click sends one email.
+    accepted = await sendColdOutreach({ to: parsed.data.to, subject: parsed.data.subject, body: parsed.data.body, idempotencyKey: `preview/${deal.id}/${deal.previewUrl}`, sender });
+  } catch {
+    return { error: "Delivery couldn't be confirmed. Check the Inbox before trying again." };
+  }
+  if (accepted.error || !accepted.data?.id) return { error: "The email provider didn't accept it. Nothing was sent." };
+  const sentAt = new Date();
+  const threadId = crypto.randomUUID();
+  try {
+    await db.batch([
+      db.insert(emailThreads).values({ id: threadId, workspaceId: staff.workspaceId, dealId: deal.id, clientId: deal.clientId, subject: parsed.data.subject, counterpartEmail: parsed.data.to, counterpartName: deal.contactName, mailbox: sender.replyTo, readAt: sentAt }),
+      db.insert(emailMessages).values({ workspaceId: staff.workspaceId, threadId, direction: "outbound", fromEmail: sender.fromEmail, fromName: sender.name, to: [parsed.data.to], subject: parsed.data.subject, text: accepted.payload.text, providerId: `sent:${accepted.data.id}`, sentBy: viewer.userId, sentAt }),
+      db.update(deals).set({ lastContactedAt: sentAt }).where(where),
+      eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "deal.email_sent", subjectType: "deal", subjectId: deal.id, payload: { to: parsed.data.to, from: sender.fromEmail, replyTo: sender.replyTo, subject: parsed.data.subject, providerId: accepted.data.id, threadId, preview: true } }),
+      ...previewSentQueries(deal, parsed.data.body, viewer.userId, sentAt),
+    ]);
+  } catch {
+    return { error: "The email went out, but saving it failed. Don't resend; check the Inbox." };
+  }
+  revalidatePath("/admin/pipeline");
+  revalidatePath("/admin/inbox");
+  return { notice: `Sent to ${parsed.data.to}.`, status: "sent" as const };
 }

@@ -40,6 +40,10 @@ export function signedByOther(body: string, sender: OutreachSender) {
   return Object.values(KNOWN_SENDERS).find((k) => k.name !== sender.name && body.includes(k.name))?.name ?? null;
 }
 export const SKOX_WEBSITE = "https://www.skoxsoftware.com";
+/** The wordmark for email (480×84 PNG; Gmail drops SVG), shown at 120×21. */
+const SKOX_LOGO = `${SKOX_WEBSITE}/email/skox-logo.png`;
+const SKOX_INK = "#1c201d";
+const SKOX_AMBER = "#e4a907";
 export const OPT_OUT_LINE = "Not interested? Reply 'no thanks' or use this link and we won't email you again";
 
 const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -48,16 +52,26 @@ const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "
 const PREVIEW_LINE = /^https:\/\/previews\.skoxsoftware\.com\/[^\s<>]*$/i;
 
 /**
- * A preview link becomes a button with the domain under it: no long address
- * to squint at, and the real domain in plain sight so it doesn't read as a
- * disguised link. Tables and inline styles so it renders in Outlook too.
+ * A preview link becomes a SKOX-amber button with the domain under it: no
+ * long address to squint at, and the real domain in plain sight so it
+ * doesn't read as a disguised link. Tables and inline styles so it renders
+ * in Outlook too.
  */
 function previewButton(url: string) {
   const href = escapeHtml(url);
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 4px"><tr><td style="background:#1c201d;border-radius:8px">`
-    + `<a href="${href}" style="display:inline-block;padding:12px 22px;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:8px">View your website preview &rarr;</a>`
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 4px"><tr><td style="background:${SKOX_AMBER};border-radius:999px">`
+    + `<a href="${href}" style="display:inline-block;padding:13px 24px;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;line-height:1.2;color:${SKOX_INK};text-decoration:none;border-radius:999px">View your website preview &rarr;</a>`
     + `</td></tr></table><span style="font-size:12px;color:#80868b">previews.skoxsoftware.com</span>`;
 }
+
+/**
+ * In a preview email (the lead asked for it), the signature's last line
+ * ("skoxsoftware.com") becomes the SKOX wordmark, linked to the site. Cold
+ * first emails stay image-free, which keeps them out of spam folders.
+ */
+const SIGNATURE_SITE = /^\s*skoxsoftware\.com\s*$/i;
+const signatureLogo = () =>
+  `<a href="${SKOX_WEBSITE}" style="display:inline-block;margin-top:10px;text-decoration:none"><img src="${SKOX_LOGO}" width="120" height="21" alt="SKOX" style="display:block;border:0;outline:none;width:120px;height:21px"></a>`;
 
 /** What every commercial email needs (CAN-SPAM): our postal address and a working opt-out. */
 export type ComplianceFooter = { postalAddress: string; unsubscribeUrl: string };
@@ -73,8 +87,10 @@ export function leadEmailPayload(to: string, subject: string, body: string, foot
   if (!/^https:\/\/[^\s<>"]+$/i.test(footer.unsubscribeUrl ?? "")) throw new Error("Cold email needs an https unsubscribe link.");
   const url = footer.unsubscribeUrl;
   const lines = body.replace(/\r\n?/g, "\n").split("\n");
+  const branded = lines.some((line) => PREVIEW_LINE.test(line.trim()));
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#202124">${lines.map(line => /^\s*SKOX Software\s*$/i.test(line)
     ? `<a href="${SKOX_WEBSITE}">${escapeHtml(line.trim())}</a>`
+    : branded && SIGNATURE_SITE.test(line) ? signatureLogo()
     : PREVIEW_LINE.test(line.trim()) ? previewButton(line.trim())
     : /^https?:\/\/[^\s<>]+$/i.test(line.trim()) ? `<a href="${escapeHtml(line.trim())}">${escapeHtml(line.trim())}</a>` : escapeHtml(line)).join("<br>\n")}</div>`
     + `\n<p style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#80868b;margin-top:24px">Advertisement from SKOX Software · ${escapeHtml(postalAddress)}<br>\n${escapeHtml(OPT_OUT_LINE)}: <a href="${escapeHtml(url)}" style="color:#80868b">unsubscribe</a></p>`;

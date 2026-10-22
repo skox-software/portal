@@ -10,6 +10,7 @@ import { eventInsert } from "@/lib/events";
 import { callEffect, followUpAfterCall, nextStepAfterCall, OUTCOMES, outcomeLabel, salesToday, type Outcome } from "@/lib/follow-up";
 import { FIRST_STAGE, NOT_INTERESTED_REASONS, previewInFlight } from "@/lib/pipeline";
 import { promotionWrites } from "@/lib/promotion-server";
+import { notifyPreviewRequested } from "@/lib/preview-request";
 import { formatDate } from "@/lib/format";
 import { backWith } from "@/lib/http";
 import { notifyLater, portalLink, staffRecipients } from "@/lib/notify";
@@ -193,6 +194,7 @@ export async function logRepCall(formData: FormData) {
       ? [eventInsert({ workspaceId: rep.workspaceId, actorId: viewer.userId, verb: "deal.preview_updated", subjectType: "deal", subjectId: lead.id, payload: { company: lead.company, from: deal.previewStatus, to: "requested", via: "rep_call" } })]
       : []),
   ]);
+  if (requestPreview) notifyPreviewRequested({ id: lead.id, workspaceId: rep.workspaceId, company: lead.company }, viewer.email, note || null);
   refreshRep(lead.id);
   const nextId = String(formData.get("nextId") ?? "");
   const message = `${outcomeLabel(outcome)} logged for ${lead.company}.`;

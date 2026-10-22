@@ -1,7 +1,7 @@
 import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
-import { closeOutreach, createDeal, decidePreview, demoteDeal, markPreviewSent, moveDealStage, promoteDeal, requestPreview, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
+import { closeOutreach, createDeal, decidePreview, demoteDeal, markPreviewSent, moveDealStage, promoteDeal, requestPreview, savePreviewLink, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
 import { ContactLog } from "@/components/ContactLog";
 import { CopyButton } from "@/components/CopyButton";
 import { EmailDraft } from "@/components/EmailDraft";
@@ -13,6 +13,7 @@ import { getDb } from "@/lib/db";
 import { events, memberships, type Deal } from "@/lib/db/schema";
 import { parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
 import { buildEmailDraft } from "@/lib/email-draft";
+import { buildPreviewPrompt, previewLinkFor } from "@/lib/preview-build-prompt";
 import { outreachSender, senderLine, signedByOther } from "@/lib/lead-email";
 import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 import { loadEmailStatuses } from "@/lib/email-status-data";
@@ -468,6 +469,24 @@ export async function DealPanel({
                   </a>
                 )}
               </p>
+              <div className="lead-preview-row">
+                <span className="small muted">{deal.previewUrl ? "To change it, run the prompt again; it edits the same folder and link." : "Paste this into your AI to build it."}</span>
+                <CopyButton
+                  label="Copy build prompt"
+                  value={buildPreviewPrompt({ id: deal.id, company: deal.company, contactName: deal.contactName, phone: deal.phone, website: deal.website, industry: deal.industry, location: deal.location, notes: deal.notes, callBrief: brief })}
+                  spoken="Build prompt"
+                />
+              </div>
+              <form action={savePreviewLink} className="lead-preview-row">
+                {hidden}
+                <label className="sr-only" htmlFor={`preview-url-${deal.id}`}>
+                  Preview link
+                </label>
+                <input id={`preview-url-${deal.id}`} name="previewUrl" type="url" required defaultValue={deal.previewUrl ?? ""} placeholder={previewLinkFor(deal.company, deal.id)} />
+                <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
+                  Save link
+                </SubmitButton>
+              </form>
               {deal.previewStatus === "ready" && (
                 <form action={markPreviewSent} className="lead-preview-row">
                   {hidden}

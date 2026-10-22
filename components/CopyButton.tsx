@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-/** A small "Copy" button for a phone number or email address. */
-export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
+/** A small "Copy" button for a phone number or email address; `spoken` names a long value for screen readers. */
+export function CopyButton({ value, label = "Copy", spoken }: { value: string; label?: string; spoken?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <>
@@ -23,7 +23,7 @@ export function CopyButton({ value, label = "Copy" }: { value: string; label?: s
         {copied ? "Copied" : label}
       </button>
       <span className="sr-only" role="status">
-        {copied ? `${value} copied.` : ""}
+        {copied ? `${spoken ?? value} copied.` : ""}
       </span>
     </>
   );

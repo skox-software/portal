@@ -40,6 +40,8 @@ import {
   type PromotionSignal,
 } from "@/lib/pipeline";
 import { promotionWrites } from "@/lib/promotion-server";
+import { isPreviewLink } from "@/lib/preview-build-prompt";
+import { notifyPreviewRequested } from "@/lib/preview-request";
 import { attemptCount } from "@/lib/attempts-server";
 import { staffOf } from "@/lib/staff-filter";
 import { after } from "next/server";
@@ -619,6 +621,7 @@ export async function logCall(formData: FormData) {
   const promotion = effect.signal ? promotionWrites(deal, effect.signal, viewer.userId, now, { via: "call" }) : null;
   const moved = stage !== deal.stage;
   const writes = [] as Parameters<typeof db.batch>[0][number][];
+  const requestPreview = outcome === "preview" && !previewInFlight(deal.previewStatus);
 
   if (outcome) {
     const closed = stage === "outreach_closed";
@@ -629,7 +632,6 @@ export async function logCall(formData: FormData) {
     const fresh = outcome === "spoke" || outcome === "interested" || outcome === "preview";
     const nextStep = !followUp ? null : parsed.data.nextStep || (fresh ? (outcome === "spoke" ? null : auto) : outcome === "gatekeeper" && gatekeeper ? auto : deal.nextStep || auto);
     const brief = readBrief(deal.brief) ?? parseBrief(deal.notes).brief;
-    const requestPreview = outcome === "preview" && !previewInFlight(deal.previewStatus);
     writes.push(
       db
         .update(deals)
@@ -696,6 +698,7 @@ export async function logCall(formData: FormData) {
   }
   if (!writes.length) backWith(back, "notice", "Nothing to save.");
   await db.batch(writes as [(typeof writes)[number], ...(typeof writes)[number][]]);
+  if (requestPreview) notifyPreviewRequested(deal, viewer.email, note || null);
   refresh();
   const what = outcome ? `${outcomeLabel(outcome)} logged` : note ? "Note saved" : "Saved";
   const where = promotion ? ` · promoted to the Pipeline (${stageLabel(stage)})` : moved ? ` · moved to ${stageLabel(stage)}` : "";
@@ -791,6 +794,7 @@ export async function promoteDeal(formData: FormData) {
         ]
       : []),
   ]);
+  if (requestPreview) notifyPreviewRequested(deal, viewer.email, note || null);
   refresh();
   backWith(back, "notice", `${deal.company} promoted to the Pipeline · ${stageLabel(promotion.stage)} (${signalLabel(signal.data)}).`);
 }
@@ -872,8 +876,32 @@ export async function requestPreview(formData: FormData) {
     previewEvent(deal, viewer.userId, "requested", { via: "panel" }),
     ...promotion.writes,
   ]);
+  notifyPreviewRequested(deal, viewer.email);
   refresh();
   backWith(back, "notice", `Preview requested for ${deal.company}.${promotion.writes.length ? " Promoted to the Pipeline." : ""}`);
+}
+
+/**
+ * Reiss built the preview with his own AI and published it on the previews
+ * site: the link goes on the lead and it's ready to send. Saving a new link
+ * on a preview that's already out just replaces the link.
+ */
+export async function savePreviewLink(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (!previewInFlight(deal.previewStatus)) backWith(back, "error", "Request a preview first.");
+  const url = String(formData.get("previewUrl") ?? "").trim().replace(/\/$/, "");
+  if (!isPreviewLink(url)) backWith(back, "error", "Paste the link from previews.skoxsoftware.com, like https://previews.skoxsoftware.com/their-name-1a2b.");
+  const out = deal.previewStatus === "sent" || deal.previewStatus === "opened";
+  if (url === deal.previewUrl && (out || deal.previewStatus === "ready")) backWith(back, "notice", "That link is already saved.");
+  const rows = await getDb()
+    .update(deals)
+    .set({ previewUrl: url, ...(out ? {} : { previewStatus: "ready" as const }) })
+    .where(and(eq(deals.id, deal.id), eq(deals.previewStatus, deal.previewStatus)))
+    .returning({ id: deals.id });
+  if (!rows.length) backWith(back, "error", "The preview changed in the meantime. Reload the lead.");
+  await previewEvent(deal, viewer.userId, out ? deal.previewStatus : "ready", { url, via: "link" });
+  refresh();
+  backWith(back, "notice", out ? "Link updated." : "Saved. The preview is ready to send.");
 }
 
 /** Gate A: the go, go-with-changes or no-go on the builder's research brief. */

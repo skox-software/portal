@@ -202,7 +202,7 @@ function SendDialog({ dialog, email }: { dialog: React.RefObject<HTMLDialogEleme
             Message
           </label>
           <textarea id="pv-body" className="pv-body" value={body} onChange={(e) => setBody(e.target.value)} disabled={state === "sending"} />
-          <p className="pv-check" data-ok={linkIn || undefined}>{linkIn ? "Preview link is in the email" : "The preview link is missing. Put it back to send"}</p>
+          <p className="pv-check" data-ok={linkIn || undefined}>{linkIn ? "Preview link is in. They'll see it as a “View your website preview” button" : "The preview link is missing. Put it back to send"}</p>
           {email.blocked && <p className="pv-error">{email.blocked}</p>}
           {error && <p className="pv-error" role="alert">{error}</p>}
           <footer>

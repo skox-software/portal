@@ -35,6 +35,18 @@ test("standalone preview links are clickable and HTML escaped", () => {
   assert.ok(!mail.html.includes('href="javascript:'));
 });
 
+test("a preview-site link shows as a button with only the domain visible; the text version keeps the full link", () => {
+  const url = "https://previews.skoxsoftware.com/foster-rentals-24ff";
+  const mail = leadEmailPayload("lead@example.com", "Preview", `Here it is:\n\n${url}\n\nThanks`, footer);
+  assert.ok(mail.html.includes(`<a href="${url}" style=`));
+  assert.ok(mail.html.includes("View your website preview &rarr;</a>"));
+  assert.ok(mail.html.includes(">previews.skoxsoftware.com</span>"));
+  assert.ok(!mail.html.includes(`>${url}<`), "the long address isn't shown as link text");
+  assert.ok(mail.text.includes(`\n${url}\n`));
+  const tricky = leadEmailPayload("lead@example.com", "Preview", 'https://previews.skoxsoftware.com/x"onmouseover="y', footer);
+  assert.ok(!tricky.html.includes('"onmouseover'));
+});
+
 test("both versions end with the postal address and the opt-out link", () => {
   const mail = leadEmailPayload("lead@example.com", "Preview", "Hello", footer);
   assert.ok(mail.text.endsWith(`SKOX Software · ${footer.postalAddress}\n${OPT_OUT_LINE}: ${footer.unsubscribeUrl}`));

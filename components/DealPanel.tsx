@@ -1,7 +1,7 @@
 import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
-import { closeOutreach, createDeal, decidePreview, demoteDeal, moveDealStage, promoteDeal, saveDeal } from "@/app/admin/pipeline/actions";
+import { closeOutreach, createDeal, decidePreview, demoteDeal, moveDealStage, promoteDeal, requestPreview, saveDeal } from "@/app/admin/pipeline/actions";
 import { ContactLog } from "@/components/ContactLog";
 import { CopyButton } from "@/components/CopyButton";
 import { EmailDraft } from "@/components/EmailDraft";
@@ -371,6 +371,16 @@ export async function DealPanel({
                 </form>
               )}
         </section>
+      )}
+
+      {deal && !linkedProject && !previewInFlight(deal.previewStatus) && (
+        <form action={requestPreview} className="lead-preview-row">
+          {hidden}
+          <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Starting…" title={track === "outreach" ? "Opens the build prompt and promotes the lead to the Pipeline" : "Opens the build prompt"}>
+            Build a preview
+          </SubmitButton>
+          {deal.previewStatus === "archived" && <span className="small muted">The last preview was archived.</span>}
+        </form>
       )}
 
       {deal && <ContactLog key={deal.id} dealId={deal.id} stage={deal.stage as DealStage} base={nav.base} back={nav.back} nextId={nav.nextId} previewInFlight={previewInFlight(deal.previewStatus)} />}

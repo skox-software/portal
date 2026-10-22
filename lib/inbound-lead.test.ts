@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adsTime, channel, companyFor, dealKind, googleAdsCsv, inboundLeadSchema, leadSourceLabel, notesFor } from "./inbound-lead.ts";
+import { adsTime, channel, companyFor, dealKind, googleAdsCsv, inboundLeadSchema, isTeamEmail, leadSourceLabel, notesFor, previewSlugFrom } from "./inbound-lead.ts";
 
 const parse = (o: Record<string, unknown>) => inboundLeadSchema.parse({ status: "submitted", email: "ana@harbor.test", ...o });
 
@@ -60,4 +60,19 @@ test("the Google Ads file keeps only won clicks from the last 90 days, at the fi
     "Parameters:TimeZone=America/New_York\nGoogle Click ID,Conversion Name,Conversion Time,Conversion Value,Conversion Currency\ng1,Won deal,2026-10-01 14:30:00,12500.00,USD\n",
   );
   assert.equal(adsTime(new Date("2026-01-15T05:00:00Z")), "2026-01-15 00:00:00");
+});
+
+test("a preview form's timeline names the lead's preview folder", () => {
+  assert.equal(previewSlugFrom("preview:lebec-inc-2413"), "lebec-inc-2413");
+  assert.equal(previewSlugFrom(" preview:airport-business-center-7ff7 "), "airport-business-center-7ff7");
+  assert.equal(previewSlugFrom("ASAP"), null);
+  assert.equal(previewSlugFrom("preview:../x"), null);
+  assert.equal(previewSlugFrom(undefined), null);
+});
+
+test("only skoxsoftware.com addresses count as the team", () => {
+  assert.equal(isTeamEmail("reiss@skoxsoftware.com"), true);
+  assert.equal(isTeamEmail("Josh@SKOXsoftware.com"), true);
+  assert.equal(isTeamEmail("owner@skoxsoftware.com.evil.test"), false);
+  assert.equal(isTeamEmail("dsantos@airportbusinesscenter.com"), false);
 });

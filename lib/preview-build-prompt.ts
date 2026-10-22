@@ -132,7 +132,7 @@ This is how Reiss gets "they just opened it" alerts. Add nothing else that track
 1. Clone ${REPO} (or git pull if you already have it).
 2. Add or change only public/${slug}/ and research/${slug}/. Never touch vercel.json, package.json, previews.zip or any other folder.
 3. Commit ("Preview: ${lead.company}") and push to main. It goes live by itself in about a minute.
-4. Open ${link} on a phone-sized window and check: it loads, images show, the concept bar is visible, a test form submission says Sent (use your own name and email, and write "test" in the message).
+4. Open ${link} on a phone-sized window and check: it loads, images show, the concept bar is visible, one test form submission says Sent. Send it as name "Reiss", email reiss@skoxsoftware.com, message "test". The portal files that as a test on this lead, not a new lead. Never test with any other email.
 5. Reply with: the link, the working upgrade, anything you left out because you couldn't source it, and the ledger row count.
 
 Then paste ${link} into "Preview link" on the lead in the SKOX portal and press Save. It's marked Ready to send.

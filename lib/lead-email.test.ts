@@ -47,6 +47,15 @@ test("a preview-site link shows as a button with only the domain visible; the te
   assert.ok(!tricky.html.includes('"onmouseover'));
 });
 
+test("in a preview email the signature's skoxsoftware.com line is the SKOX logo, linked; cold emails and the text version keep the words", () => {
+  const sig = "Thanks,\nReiss Skeen\nCo-founder, SKOX Software\nskoxsoftware.com";
+  assert.ok(!leadEmailPayload("lead@example.com", "Hi", sig, footer).html.includes("<img"), "a cold email stays image-free");
+  const mail = leadEmailPayload("lead@example.com", "Hi", `https://previews.skoxsoftware.com/x-1a2b\n\n${sig}`, footer);
+  assert.match(mail.html, /<a href="https:\/\/www.skoxsoftware.com"[^>]*><img src="https:\/\/www.skoxsoftware.com\/email\/skox-logo.png" width="120" height="21" alt="SKOX"/);
+  assert.ok(!mail.html.includes(">skoxsoftware.com<"));
+  assert.match(mail.text, /\nskoxsoftware\.com\n/);
+});
+
 test("both versions end with the postal address and the opt-out link", () => {
   const mail = leadEmailPayload("lead@example.com", "Preview", "Hello", footer);
   assert.ok(mail.text.endsWith(`SKOX Software · ${footer.postalAddress}\n${OPT_OUT_LINE}: ${footer.unsubscribeUrl}`));

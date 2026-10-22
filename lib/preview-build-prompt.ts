@@ -1,6 +1,7 @@
 /**
- * The prompt Reiss copies from a lead's panel and pastes into his own AI
- * (Claude Code) to build that lead's preview site. It is the master prompt
+ * The prompt Reiss copies from a lead's panel and pastes into a coding agent
+ * (Claude Code or Codex, so nothing in it may depend on one of them) to build
+ * that lead's preview site. It is the master prompt
  * (skox repo, scripts/lead-scan/preview-prompt.md) cut down to a static page
  * with SKOX's publishing rules: one folder in skox-software/prospect-previews,
  * live at previews.skoxsoftware.com/<slug>. Pure, so it can be tested alone.
@@ -68,10 +69,25 @@ ${line("link:", link)}
 ${line("deal id:", lead.id)}
 
 If this folder already exists in the repo, this is an EDIT: change only what Reiss asks for, keep everything else, and publish the same way. The link stays the same.
+If the call notes link an earlier preview of this business, open it and use it as your first draft; the rules below still apply.
+
+## BEFORE YOU START (stop if any check fails)
+You are a coding agent in a terminal (Claude Code, Codex or similar). Run these first:
+1. Internet: \`curl -sIL --max-time 15 ${lead.website?.trim() || "https://www.google.com"} | head -5\`
+2. GitHub: \`git ls-remote https://github.com/${REPO} HEAD\`
+3. A headless browser for screenshots: \`npx -y playwright@1 install chromium\` (once per machine)
+If 1 or 2 fails, you are probably sandboxed without network access. Do not build anything offline. Stop and tell Reiss in one line how to restart you with network access (in Codex, \`codex --sandbox danger-full-access\`; in Claude Code, approve the network and git commands when asked). A preview built without their real site, logo and photos is worse than none.
+If 3 fails, carry on, but say in your final reply that you could not screenshot it.
+4. Clone ${REPO} (or \`git pull\` if it's already here) and work inside it from now on.
+
+## RESEARCH (sources in this order)
+1. Their site: every page linked from the home page. Save the logo (prefer SVG, else the largest PNG) and their best photos.
+2. If the site is down, blocked or nearly empty: their Google Business profile, Facebook, Instagram, LinkedIn, chamber of commerce and BBB listings, and the newest good copy on the Wayback Machine (web.archive.org/web/2024*/their-domain).
+3. Write research/${slug}/brief.md: who they are in one sentence, who their customer is, what that customer comes to do, the words customers use in reviews (quote them, with source), and the facts you'll use. Each fact also goes in ledger.md.
 
 ## RULES (no exceptions)
 1. Nothing on the page that you can't source. Every fact (years, licences, reviews, prices, names, hours, service area) comes from their own site or public profiles (Google, Facebook, Yelp, chamber, BBB). Keep a facts ledger (claim, exact wording, source URL, date) in research/${slug}/ledger.md. No source, leave it out. Never invent reviews, awards, team members, prices or numbers.
-2. Their own logo, photos and words first. Stock photos only for backgrounds. Never an AI image of their work.
+2. Their own logo, photos and words first. Stock photos only for backgrounds. Never an AI image of their work. If their photos are few, small or dated, don't stretch them: let type, colour and layout carry the page, use their best one or two photos at the size they hold up (never upscaled past 2x), and give every photo the same crop and grade.
 3. One upgrade actually works, built from their real published data (a quote estimator, booking request, order form, availability check). Everything else is a labelled "in the build" card. Never fake a button.
 4. It must never pass for their live site: a sticky bar at the top reading "Concept built by SKOX for ${lead.company}. Not live.", with a "Book 15 min with Reiss" button to ${BOOK_URL} and an "Ask a question" button.
 5. No SKOX price anywhere. Say "Fixed price and date on a 15-minute call."
@@ -92,10 +108,13 @@ Every preview must look and feel like it was designed from scratch for this one 
 5. UX before decoration. The main task (book, get a quote, call, order) is one tap from the top on a phone, and the button sits where a thumb reaches. Clear hierarchy: one idea per section, scannable headings in their customers' words, short paragraphs. Body text 16px or larger, visible focus states, labelled form fields with errors, respects reduced motion.
 6. Craft: deliberate spacing scale, consistent image crops, real photo grading, no layout shift, fast on a phone (no heavy libraries, images sized).
 7. Banned: gradient blobs, emoji icons, three identical icon cards in a row, rounded cards floating on white, stock handshakes, "Welcome to our website", "Elevate", "Unlock", "Seamless", "Look no further", exclamation marks, fake counters, placeholder testimonials, lorem ipsum.
-8. Before publishing, look at it at phone and desktop width and ask: would the owner say "that's us, only better"? Would it pass for another preview in the repo? Fix it until the answers are yes and no.
+8. Look at it, don't imagine it. Serve the repo locally (\`npx -y serve public -l 4173\`) and screenshot it at phone and desktop width:
+       npx -y playwright@1 screenshot --full-page --viewport-size=390,844 http://localhost:4173/${slug}/ research/${slug}/phone.png
+       npx -y playwright@1 screenshot --full-page --viewport-size=1440,900 http://localhost:4173/${slug}/ research/${slug}/desktop.png
+   Open both images and judge them as the owner would: would they say "that's us, only better"? Is the main task one tap from the top on the phone? Does anything overflow, overlap, look empty or look like a template? Could it pass for another preview in public/? Fix and screenshot again until the answers are yes, yes, no, no. At least two rounds.
 
 ## HOW TO BUILD IT
-- Plain static files only: HTML, CSS and a little JavaScript. No framework, no build step, no npm.
+- Plain static files only: HTML, CSS and a little JavaScript. No framework, no build step, nothing for the page to install. (Running \`npx\` tools to check it is fine.)
 - Everything lives in public/${slug}/ (index.html, style.css, script.js, assets/). Research notes live in research/${slug}/ (ledger.md, brief.md). Never put research inside public/; everything in public/ is on the internet.
 - Use absolute paths for every file: /${slug}/style.css, /${slug}/assets/logo.png. Relative paths break.
 - In <head>: <meta name="robots" content="noindex, nofollow, noarchive">, a title with their business name, and a mobile viewport tag.
@@ -129,11 +148,20 @@ name, email and broken are required. On success show "Sent. Reiss will get back 
 This is how Reiss gets "they just opened it" alerts. Add nothing else that tracks people.
 
 ## PUBLISH
-1. Clone ${REPO} (or git pull if you already have it).
+1. \`git pull\` so you're on the latest main.
 2. Add or change only public/${slug}/ and research/${slug}/. Never touch vercel.json, package.json, previews.zip or any other folder.
 3. Commit ("Preview: ${lead.company}") and push to main. It goes live by itself in about a minute.
-4. Open ${link} on a phone-sized window and check: it loads, images show, the concept bar is visible, a test form submission says Sent (use your own name and email, and write "test" in the message).
-5. Reply with: the link, the working upgrade, anything you left out because you couldn't source it, and the ledger row count.
+4. Check the live page. Always add ?team to the address when you open it yourself, or the owner's "opened it" alert goes to Reiss by mistake:
+       curl -s -o /dev/null -w "%{http_code}" "${link}?team"   (must be 200; retry for up to 3 minutes while it deploys)
+       npx -y playwright@1 screenshot --full-page --viewport-size=390,844 "${link}?team" research/${slug}/live-phone.png
+   Open the screenshot: images show, the concept bar is visible, nothing is broken. Don't submit the forms; Reiss tests one himself.
+5. Reply to Reiss with exactly this:
+   - Link: ${link}
+   - The working upgrade, in one line
+   - Left out because I couldn't source it: (list, or "nothing")
+   - Ledger rows: (count)
+   - Check before sending: open ${link}?team on your phone, try the upgrade once with "test" in the message, then send.
+   - Anything that failed (screenshots, a source that was down)
 
 Then paste ${link} into "Preview link" on the lead in the SKOX portal and press Save. It's marked Ready to send.
 `;

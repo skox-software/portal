@@ -30,6 +30,7 @@ function harness({ email = "reiss@skoxsoftware.com", status = "draft", productio
     "@/lib/db": { getDb: () => db },
     "@/lib/db/schema": { deals: {}, emailMessages: {}, emailThreads: {} },
     "@/lib/events": { eventInsert: () => ({}) },
+    "@/lib/preview-open": { previewSentQueries: () => [] },
     "@/lib/pipeline": pipeline,
     "@/lib/lead-email": {
       outreachSender: (e: string) => ({ name: e.startsWith("reiss@") ? "Reiss Skeen" : "Other", firstName: "X", fromEmail: `${e.split("@")[0]}@outreach.skoxsoftware.com`, replyTo: e, title: "" }),

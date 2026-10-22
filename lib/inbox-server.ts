@@ -1,6 +1,7 @@
 import { isOptOutReply } from "@/lib/reply-opt-out";
 import { sendColdOutreach, suppressOutreach } from "@/lib/cold-outreach";
 import { outreachSender } from "@/lib/lead-email";
+import { previewSentQueries } from "@/lib/preview-open";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { getDb } from "@/lib/db";
@@ -363,5 +364,10 @@ export async function sendThreadReply({
     }),
     db.update(emailThreads).set({ lastMessageAt: now, readAt: now }).where(eq(emailThreads.id, thread.id)),
   ]);
+  // A reply carrying the lead's preview link sends the preview: from here, its views count.
+  if (providerId && thread.dealId) {
+    const [deal] = await db.select().from(deals).where(eq(deals.id, thread.dealId)).limit(1);
+    if (deal) for (const q of previewSentQueries(deal, body, sender.userId, now)) await q.catch((e) => console.error("[preview] mark sent failed", e));
+  }
   return { ok: true as const, sent: !!providerId };
 }

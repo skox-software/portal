@@ -1,7 +1,7 @@
 import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
-import { closeOutreach, createDeal, decidePreview, demoteDeal, moveDealStage, promoteDeal, requestPreview, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
+import { closeOutreach, createDeal, decidePreview, demoteDeal, markPreviewSent, moveDealStage, promoteDeal, requestPreview, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
 import { ContactLog } from "@/components/ContactLog";
 import { CopyButton } from "@/components/CopyButton";
 import { EmailDraft } from "@/components/EmailDraft";
@@ -59,6 +59,8 @@ function describe(verb: string, p: Record<string, unknown>) {
       const decision = PREVIEW_DECISIONS.find((d) => d.value === s("decision"))?.label;
       return decision ? `Preview: ${decision}${s("changes") ? ` · ${s("changes")}` : ""}` : `Preview ${previewLabel(s("to")).toLowerCase()}`;
     }
+    case "deal.preview_viewed":
+      return `${p.first ? "Opened their preview" : "Viewed their preview again"}${s("device") ? ` · ${s("device")}` : ""}`;
     case "deal.note_added":
       return "Note";
     case "deal.email_sent":
@@ -179,6 +181,7 @@ export async function DealPanel({
     const what = describe(e.verb, p);
     return what ? [{ e, p, what }] : [];
   });
+  const views = history.filter((e) => e.verb === "deal.preview_viewed").length;
   const lastReach = history.find((e) => e.verb === "deal.call_logged" || e.verb === "deal.email_sent");
   const attempts = history.filter((e) => isAttempt(e.verb, (e.payload ?? {}) as Record<string, unknown>)).length;
   const lastReachWhat = lastReach ? describe(lastReach.verb, (lastReach.payload ?? {}) as Record<string, unknown>) : null;
@@ -458,12 +461,22 @@ export async function DealPanel({
                   {deal.previewSentAt && ` · sent ${timeAgo(deal.previewSentAt, now)}`}
                   {deal.previewFirstOpenAt ? ` · first opened ${timeAgo(deal.previewFirstOpenAt, now)}` : deal.previewSentAt ? " · not opened yet" : ""}
                 </span>
+                {views > 1 && <span className="small muted">{views} views</span>}
                 {deal.previewUrl && (
-                  <a className="btn btn-ghost btn-small" href={deal.previewUrl} target="_blank" rel="noreferrer">
+                  <a className="btn btn-ghost btn-small" href={`${deal.previewUrl}${deal.previewUrl.includes("?") ? "&" : "?"}team=1`} target="_blank" rel="noreferrer" title="Opens without counting as their view">
                     Open preview ↗
                   </a>
                 )}
               </p>
+              {deal.previewStatus === "ready" && (
+                <form action={markPreviewSent} className="lead-preview-row">
+                  {hidden}
+                  <span className="small muted">Emailing the link from the portal marks it sent. Sent it another way?</span>
+                  <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
+                    Mark sent
+                  </SubmitButton>
+                </form>
+              )}
               {deal.previewStatus === "awaiting_approval" && (
                 <form action={decidePreview} className="gate-a">
                   {hidden}

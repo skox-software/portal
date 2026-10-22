@@ -44,6 +44,21 @@ export const OPT_OUT_LINE = "Not interested? Reply 'no thanks' or use this link 
 
 const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+/** A link to a lead's preview site, on a line of its own. */
+const PREVIEW_LINE = /^https:\/\/previews\.skoxsoftware\.com\/[^\s<>]*$/i;
+
+/**
+ * A preview link becomes a button with the domain under it: no long address
+ * to squint at, and the real domain in plain sight so it doesn't read as a
+ * disguised link. Tables and inline styles so it renders in Outlook too.
+ */
+function previewButton(url: string) {
+  const href = escapeHtml(url);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 4px"><tr><td style="background:#1c201d;border-radius:8px">`
+    + `<a href="${href}" style="display:inline-block;padding:12px 22px;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:8px">View your website preview &rarr;</a>`
+    + `</td></tr></table><span style="font-size:12px;color:#80868b">previews.skoxsoftware.com</span>`;
+}
+
 /** What every commercial email needs (CAN-SPAM): our postal address and a working opt-out. */
 export type ComplianceFooter = { postalAddress: string; unsubscribeUrl: string };
 
@@ -60,6 +75,7 @@ export function leadEmailPayload(to: string, subject: string, body: string, foot
   const lines = body.replace(/\r\n?/g, "\n").split("\n");
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#202124">${lines.map(line => /^\s*SKOX Software\s*$/i.test(line)
     ? `<a href="${SKOX_WEBSITE}">${escapeHtml(line.trim())}</a>`
+    : PREVIEW_LINE.test(line.trim()) ? previewButton(line.trim())
     : /^https?:\/\/[^\s<>]+$/i.test(line.trim()) ? `<a href="${escapeHtml(line.trim())}">${escapeHtml(line.trim())}</a>` : escapeHtml(line)).join("<br>\n")}</div>`
     + `\n<p style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#80868b;margin-top:24px">Advertisement from SKOX Software · ${escapeHtml(postalAddress)}<br>\n${escapeHtml(OPT_OUT_LINE)}: <a href="${escapeHtml(url)}" style="color:#80868b">unsubscribe</a></p>`;
   const text = lines.map(line => /^\s*SKOX Software\s*$/i.test(line) ? `${line.trim()} (${SKOX_WEBSITE})` : line).join("\n")

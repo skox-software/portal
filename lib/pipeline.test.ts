@@ -7,6 +7,7 @@ import {
   closeReasonLabel,
   crossesTracks,
   demotedStage,
+  previewEditable,
   previewInFlight,
   promotionTarget,
   readTrack,
@@ -236,6 +237,8 @@ test("close reasons and previews read in plain words", () => {
   assert.equal(statusAfterDecision("go"), "building");
   assert.equal(statusAfterDecision("go_with_changes"), "building");
   assert.equal(statusAfterDecision("no_go"), "archived");
+  assert.ok(previewEditable("ready") && previewEditable("sent") && previewEditable("opened"));
+  assert.ok(!previewEditable("building") && !previewEditable("awaiting_approval") && !previewEditable("archived"));
 });
 
 test("retiring Emailed (migration 0022): only a reply or a meeting keeps a deal in the Pipeline", () => {

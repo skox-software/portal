@@ -213,7 +213,12 @@ export function previewInFlight(status: string) {
   return status !== "none" && status !== "archived";
 }
 
-/** What the builder still has to do: research a request, or build an approved one. */
+/** A built preview Reiss can send back to the builder with changes; the link stays the same. */
+export function previewEditable(status: string) {
+  return status === "ready" || status === "sent" || status === "opened";
+}
+
+/** What the builder still has to do: research a request, or build an approved one (or apply requested changes). */
 export const PREVIEW_QUEUE: readonly PreviewStatus[] = ["requested", "building"];
 
 /** Gate A, Josh's one tap on the research brief. */

@@ -27,6 +27,7 @@ import {
   OPEN_STAGES,
   PICKABLE_SIGNALS,
   PREVIEW_DECISIONS,
+  previewEditable,
   previewInFlight,
   projectStatusForColumn,
   signalLabel,
@@ -914,6 +915,28 @@ export async function decidePreview(formData: FormData) {
   await previewEvent(deal, viewer.userId, to, { decision, ...(decision === "go_with_changes" ? { changes } : {}) });
   refresh();
   backWith(back, "notice", decision === "no_go" ? "No-go recorded. The preview is archived." : "Approved. The builder picks it up next.");
+}
+
+/**
+ * Sends a built preview back to the builder with changes. It returns to the
+ * queue as an approved build (no second Gate A), keeps its link, and the
+ * builder puts it back to where it was (ready, sent or opened) when done.
+ */
+export async function requestPreviewChanges(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (!previewEditable(deal.previewStatus)) backWith(back, "error", "Only a built preview can be changed.");
+  const changes = String(formData.get("changes") ?? "").trim().slice(0, 2000);
+  if (!changes) backWith(back, "error", "Write what the preview should change.");
+  const value = { decision: "go_with_changes", changes, by: viewer.email, at: new Date().toISOString(), edit: true, returnTo: deal.previewStatus };
+  const rows = await getDb()
+    .update(deals)
+    .set({ previewStatus: "building", previewDecision: value })
+    .where(and(eq(deals.id, deal.id), eq(deals.previewStatus, deal.previewStatus)))
+    .returning({ id: deals.id });
+  if (!rows.length) backWith(back, "error", "The preview changed in the meantime. Reload the lead.");
+  await previewEvent(deal, viewer.userId, "building", { edit: true, changes });
+  refresh();
+  backWith(back, "notice", "Changes sent to the builder. The link stays the same; it's back in a few hours.");
 }
 
 type BulkResult = { ok: true; count: number } | { ok: false; error: string };

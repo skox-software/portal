@@ -1,7 +1,7 @@
 import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
-import { closeOutreach, createDeal, decidePreview, demoteDeal, markPreviewSent, moveDealStage, promoteDeal, requestPreview, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
+import { closeOutreach, createDeal, decidePreview, demoteDeal, markPreviewSent, moveDealStage, promoteDeal, requestPreview, requestPreviewChanges, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
 import { ContactLog } from "@/components/ContactLog";
 import { CopyButton } from "@/components/CopyButton";
 import { EmailDraft } from "@/components/EmailDraft";
@@ -28,6 +28,7 @@ import {
   OUTREACH_STAGES,
   PICKABLE_SIGNALS,
   PREVIEW_DECISIONS,
+  previewEditable,
   previewInFlight,
   previewLabel,
   PROMOTION_SIGNALS,
@@ -475,6 +476,20 @@ export async function DealPanel({
                   <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
                     Mark sent
                   </SubmitButton>
+                </form>
+              )}
+              {previewEditable(deal.previewStatus) && (
+                <form action={requestPreviewChanges} className="gate-a">
+                  {hidden}
+                  <label className="small" htmlFor={`edit-${deal.id}`}>
+                    <strong>Change something?</strong> The builder edits the same link, usually within a few hours.
+                  </label>
+                  <textarea id={`edit-${deal.id}`} name="changes" rows={2} maxLength={2000} required placeholder="e.g. Use the lake photo in the hero; their hours changed to 8–5" />
+                  <div className="gate-a-actions">
+                    <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Sending…">
+                      Request changes
+                    </SubmitButton>
+                  </div>
                 </form>
               )}
               {deal.previewStatus === "awaiting_approval" && (

@@ -10,6 +10,7 @@ import { deals, emailMessages, emailThreads } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
 import { outreachSender } from "@/lib/lead-email";
 import { outreachConfig, sendColdOutreach } from "@/lib/cold-outreach";
+import { previewSentQueries } from "@/lib/preview-open";
 
 const fields = z.object({ dealId: z.uuid(), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20000), to: z.email() });
 
@@ -74,6 +75,8 @@ export async function updateLeadEmail(input: { dealId: string; to: string; subje
   } catch {
     return { error: "The email was accepted for delivery, but its activity could not be saved. Do not resend; check the email provider." };
   }
+  // An email carrying the preview link sends the preview: from here, its views count.
+  for (const q of previewSentQueries(deal, draft.body, viewer.userId, sentAt)) await q.catch((e) => console.error("[preview] mark sent failed", e));
   revalidatePath("/admin/pipeline");
   revalidatePath("/admin/inbox");
   return { notice: `Sent from ${sender.fromEmail} to ${parsed.data.to}. Replies go to ${sender.replyTo}.`, status: "sent" as const };

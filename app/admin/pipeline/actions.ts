@@ -877,6 +877,21 @@ export async function requestPreview(formData: FormData) {
 }
 
 /** Gate A: the go, go-with-changes or no-go on the builder's research brief. */
+/** The preview link went out some other way (Gmail, a text): from now on its views count. */
+export async function markPreviewSent(formData: FormData) {
+  const { viewer, deal, back } = await panelDeal(formData);
+  if (deal.previewStatus !== "ready" && deal.previewStatus !== "building") backWith(back, "error", "Only a ready preview can be marked sent.");
+  const rows = await getDb()
+    .update(deals)
+    .set({ previewStatus: "sent", previewSentAt: new Date() })
+    .where(and(eq(deals.id, deal.id), eq(deals.previewStatus, deal.previewStatus)))
+    .returning({ id: deals.id });
+  if (!rows.length) backWith(back, "error", "The preview changed in the meantime. Reload the lead.");
+  await previewEvent(deal, viewer.userId, "sent", { via: "panel" });
+  refresh();
+  backWith(back, "notice", "Marked sent. You'll get an email the moment they open it.");
+}
+
 export async function decidePreview(formData: FormData) {
   const { viewer, deal, back } = await panelDeal(formData);
   if (deal.previewStatus !== "awaiting_approval") backWith(back, "error", "This preview isn't waiting for a decision.");

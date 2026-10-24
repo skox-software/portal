@@ -8,7 +8,7 @@ import { emailThreads } from "@/lib/db/schema";
 import { signOut } from "@/app/actions";
 import { AdminNav } from "@/components/AdminNav";
 import { MobileTabBar } from "@/components/MobileTabBar";
-import { SidebarToggle } from "@/components/SidebarToggle";
+import { WorkspaceBreadcrumbs } from "@/components/WorkspaceBreadcrumbs";
 import { SkoxLogo } from "@/components/SkoxLogo";
 import "./admin.css";
 
@@ -25,13 +25,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const dueCount = (await dueFollowUps(staff.workspaceId, salesToday())).length;
   return <div className="admin-workspace">
     <a className="admin-skip" href="#admin-content">Skip to content</a>
-    <aside className="admin-sidebar" id="admin-sidebar">
-      <Link className="admin-brand" href="/admin" aria-label="SKOX admin home"><SkoxLogo /><span>WORKSPACE</span></Link>
-      <p className="admin-nav-label">Manage your business</p><AdminNav inboxCount={inboxCount} dueCount={dueCount} />
-      <div className="admin-sidebar-bottom"><div className="admin-team-mark" aria-hidden="true" title={viewer.email}>S</div><div><strong>SKOX team</strong><Link href="/settings">{viewer.email}</Link></div></div>
-      <div className="admin-sidebar-foot"><form action={signOut}><button className="admin-signout" title="Sign out">Sign out ↗</button></form><SidebarToggle /></div>
-    </aside>
-    <div className="admin-body" id="admin-content"><header className="admin-toolbar"><span><i /> Team workspace</span><Link href="/admin/onboard" className="btn btn-primary btn-small">+ New client</Link></header>{children}</div>
+    <header className="workspace-header">
+      <div className="shell workspace-header-top">
+        <Link className="workspace-brand" href="/admin" aria-label="SKOX workspace home"><SkoxLogo /><span>Your workspace</span></Link>
+        <div className="workspace-account"><Link href="/settings">Email preferences</Link><form action={signOut}><button className="btn btn-ghost btn-small">Sign out</button></form></div>
+      </div>
+      <div className="shell"><AdminNav inboxCount={inboxCount} dueCount={dueCount} /></div>
+    </header>
+    <div className="admin-body" id="admin-content" tabIndex={-1}><WorkspaceBreadcrumbs staff />{children}</div>
     <MobileTabBar
       email={viewer.email}
       tabs={[

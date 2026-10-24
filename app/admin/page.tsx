@@ -33,13 +33,13 @@ export default async function Overview({ searchParams }: { searchParams: Promise
 
   return (
     <main className="shell page ov">
-      <div className="page-head">
+      <div className="page-head workspace-welcome">
         <div>
           <p className="eyebrow">{dateLine}</p>
           <h1>
             {greeting(now)}, {myName}
           </h1>
-          <p className="muted">What needs you, what&rsquo;s selling, what&rsquo;s shipping and where the money stands.</p>
+          <p className="muted">Your relationships, projects and next steps, together. Pick up where you left off.</p>
         </div>
         <div className="ov-actions">
           <Link className="btn btn-primary btn-small" href="/admin/clients?new=1">

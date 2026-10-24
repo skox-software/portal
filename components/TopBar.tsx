@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions";
+import { WorkspaceBreadcrumbs } from "@/components/WorkspaceBreadcrumbs";
 import { SkoxLogo } from "@/components/SkoxLogo";
 import type { Viewer } from "@/lib/access";
 import { staffMembershipIn } from "@/lib/permissions";
@@ -16,6 +17,7 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
         <nav className="topnav" aria-label="Main">
           {isStaff ? <Link href="/admin">Admin overview</Link> : <Link href="/">Your projects</Link>}
           {isStaff && <Link href="/admin/billing">Billing</Link>}
+          <Link href="/settings">Settings</Link>
         </nav>
         <div className="who">
           <Link href="/settings" className="who-email" title="Email preferences">
@@ -28,6 +30,7 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
           </form>
         </div>
       </div>
+      <WorkspaceBreadcrumbs staff={isStaff} />
     </header>
   );
 }

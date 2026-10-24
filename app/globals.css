@@ -2793,3 +2793,8 @@ html {
     transform: scale(0.97);
   }
 }
+
+.workspace-breadcrumbs { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding-block: 12px; font-size: 13px; }
+.workspace-breadcrumbs a { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; font-weight: 500; }
+.workspace-breadcrumbs > span { color: var(--muted); }
+@media print { .workspace-breadcrumbs { display: none; } }

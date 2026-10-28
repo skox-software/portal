@@ -1,0 +1,56 @@
+/* Top bar. */
+/* ---- Top bar ---- */
+.topbar {
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 64px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.brand-logo {
+  width: 88px;
+  height: auto;
+}
+.brand-name {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.topnav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.topnav a {
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+.topnav a:hover {
+  background: var(--fog);
+  color: var(--ink);
+}
+.who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.who-email {
+  color: var(--muted);
+  font-size: 13px;
+}

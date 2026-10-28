@@ -1,0 +1,43 @@
+/* Design tokens: every colour, font, radius and easing the portal uses. */
+:root {
+  --canvas: #faf9f6;
+  --fog: #f3f1eb;
+  --paper: #ffffff;
+  --ink: #1c201d;
+  --muted: #5c6157;
+  --label: #676b62;
+  --line: #e4e2d8;
+  /* Form controls need 3:1 against the page (WCAG 1.4.11); dividers keep --line. */
+  --field-border: #8f8c80;
+  --line-soft: #edebe3;
+  --amber: #e4a907;
+  --amber-hover: #f2bc27;
+  --amber-ink: #7a5a05;
+  --blush: #f7e6c4;
+  --blush-ink: #5a3f0a;
+  --ok: #2f6b43;
+  --ok-bg: #e3f1e7;
+  --danger: #a12d1e;
+  --danger-bg: #fbe9e5;
+
+  /* SkoxLogo reads these */
+  --color-ink: var(--ink);
+  --color-amber: var(--amber);
+  --color-paper: var(--canvas);
+
+  --serif: var(--font-instrument), Georgia, "Times New Roman", serif;
+  --sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --radius: 14px;
+  color-scheme: light;
+}
+
+:root {
+  --ring-track: rgba(90, 63, 10, 0.16);
+  --skox: #253041;
+  --skox-bg: #e8ecf2;
+}
+
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}

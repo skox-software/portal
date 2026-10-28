@@ -1,0 +1,146 @@
+/* Documents and files. */
+/* ---- Documents & files ---- */
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.doc-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.doc-row:first-child {
+  border-top: 0;
+}
+.doc-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 48px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--fog);
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+}
+.doc-main {
+  flex: 1;
+  min-width: 0;
+}
+.doc-title {
+  display: block;
+  color: var(--ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+a.doc-title:hover {
+  color: var(--amber-ink);
+}
+.doc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.pdf-frame iframe {
+  width: 100%;
+  height: min(82vh, 1000px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--fog);
+}
+.card-sign {
+  border: 2px solid var(--amber);
+}
+.card-ok {
+  background: var(--ok-bg);
+  border-color: transparent;
+}
+.signature-preview {
+  display: flex;
+  align-items: flex-end;
+  min-height: 70px;
+  padding: 0 6px 8px;
+  border-bottom: 1.5px solid var(--ink);
+  font: italic 400 34px/1 var(--serif);
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.consent span {
+  color: var(--muted);
+}
+.signed-done {
+  text-align: center;
+  display: grid;
+  gap: 8px;
+}
+.signed-check {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--ok);
+  color: #fff;
+  font-size: 28px;
+}
+.signer-pick {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.signer-pick legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.uploader {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.dropzone {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  background: var(--fog);
+  cursor: pointer;
+}
+.dropzone:hover {
+  border-color: var(--amber-ink);
+}
+.dropzone:focus-within {
+  border-color: var(--amber-ink);
+  box-shadow: 0 0 0 3px rgba(228, 169, 7, 0.35);
+}
+.setup-banner :focus-visible,
+.live-panel :focus-visible {
+  outline-color: var(--amber);
+}
+fieldset.q-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.dropzone input {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.dropzone-label {
+  font-size: 13px;
+  color: var(--muted);
+}

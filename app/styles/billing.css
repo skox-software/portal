@@ -1,0 +1,100 @@
+/* Billing and requests. */
+/* ---- Billing ---- */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.stat-value {
+  font: 400 40px/1.1 var(--serif);
+  font-variant-numeric: tabular-nums;
+}
+.invoice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.invoice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0 14px 14px;
+  border-top: 1px solid var(--line-soft);
+  border-left: 3px solid var(--line);
+}
+.invoice:first-child {
+  border-top: 0;
+}
+.invoice[data-status="open"] {
+  border-left-color: var(--amber);
+}
+.invoice[data-status="overdue"] {
+  border-left-color: var(--danger);
+}
+.invoice[data-status="paid"] {
+  border-left-color: var(--ok);
+}
+.invoice-number {
+  font: 500 11px/1.5 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--label);
+}
+.invoice-amount {
+  font: 500 20px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.invoice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---- Requests ---- */
+.request {
+  border-top: 1px solid var(--line-soft);
+}
+.request:first-of-type {
+  border-top: 0;
+}
+.request summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.request summary::-webkit-details-marker {
+  display: none;
+}
+.request-title {
+  font-weight: 500;
+}
+.request-body {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+.message {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fog);
+}
+.message p:last-child {
+  white-space: pre-line;
+}
+.message[data-skox="true"] {
+  background: var(--skox-bg);
+}

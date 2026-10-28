@@ -83,12 +83,12 @@ export async function submitReferral(formData: FormData) {
     cta: { label: "Open mission control", href: portalLink("/admin#referrals") },
   });
   if (firstToday) {
-    // No visitor-typed text here: this lands in the referrer's inbox under SKOX's name.
+    // No visitor-typed text here: this lands in the referrer's inbox under UnBusy's name.
     notifyLater(() => [membership.email], {
       subject: "Thank you for your referral",
       preheader: "We have received an enquiry through your referral link.",
       heading: "Thank you for the referral",
-      paragraphs: ["Thank you for recommending SKOX Software. We have received an enquiry through your referral link and will follow up with them directly. We appreciate your support."],
+      paragraphs: ["Thank you for recommending UnBusy. We have received an enquiry through your referral link and will follow up with them directly. We appreciate your support."],
     });
   }
 

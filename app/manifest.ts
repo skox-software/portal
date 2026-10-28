@@ -5,14 +5,14 @@ import { BASE_PATH } from "@/lib/paths";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: `${BASE_PATH}/`,
-    name: "SKOX Client Portal",
-    short_name: "SKOX",
-    description: "Your SKOX project, in one place.",
+    name: "UnBusy Client Portal",
+    short_name: "UnBusy",
+    description: "Your UnBusy project, in one place.",
     start_url: `${BASE_PATH}/`,
     scope: `${BASE_PATH}/`,
     display: "standalone",
-    background_color: "#faf9f6",
-    theme_color: "#faf9f6",
+    background_color: "#fafaf8",
+    theme_color: "#fafaf8",
     icons: [
       { src: `${BASE_PATH}/icon.png`, sizes: "512x512", type: "image/png", purpose: "any" },
       { src: `${BASE_PATH}/icon-maskable.png`, sizes: "512x512", type: "image/png", purpose: "maskable" },

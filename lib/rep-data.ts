@@ -61,7 +61,7 @@ export async function myLead(rep: Rep, id: string) {
   return row ? shape(row) : null;
 }
 
-/** The rep's own activity on a lead. SKOX's calls and notes stay internal. */
+/** The rep's own activity on a lead. UnBusy's calls and notes stay internal. */
 export async function myLeadHistory(rep: Rep, userId: string, dealId: string) {
   return getDb()
     .select({ verb: events.verb, payload: events.payload, createdAt: events.createdAt })
@@ -132,7 +132,7 @@ const statementColumns = {
   paymentReference: commissionStatements.paymentReference,
 };
 
-/** Drafts are SKOX's working copy; reps see a statement once it's approved. */
+/** Drafts are UnBusy's working copy; reps see a statement once it's approved. */
 export async function myStatements(rep: Rep) {
   return getDb()
     .select(statementColumns)

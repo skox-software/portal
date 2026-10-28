@@ -3,7 +3,8 @@ import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProgressRing } from "@/components/ProgressRing";
-import { SkoxLogo } from "@/components/SkoxLogo";
+import { Logo } from "@/components/Logo";
+import { SITE_URL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import { clients, milestones, projects, shareLinks, updates } from "@/lib/db/schema";
 import { describeDaysUntil, daysUntil, formatDate, formatDateTime, STATUS_LABEL } from "@/lib/format";
@@ -41,7 +42,7 @@ export default async function SharedStatus({ params }: { params: Promise<{ token
   return (
     <main className="shell page share-page">
       <header className="share-head">
-        <SkoxLogo className="brand-logo" />
+        <Logo className="brand-logo" />
         <span className="chip">Read-only status</span>
       </header>
       <p className="eyebrow">{client.name}</p>
@@ -104,7 +105,7 @@ export default async function SharedStatus({ params }: { params: Promise<{ token
         </section>
       </div>
       <p className="small muted share-foot">
-        Built by SKOX Software. <a href="https://skoxsoftware.com">skoxsoftware.com</a>
+        Run by UnBusy. <a href={SITE_URL}>{new URL(SITE_URL).host.replace(/^www\./, "")}</a>
       </p>
     </main>
   );

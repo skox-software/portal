@@ -45,7 +45,7 @@ async function activeRep() {
 export async function createRepLead(formData: FormData) {
   const { viewer, rep, profile, active } = await activeRep();
   const back = "/rep/leads/new";
-  if (!active) backWith(back, "error", "Your account is paused. Talk to SKOX to start submitting leads again.");
+  if (!active) backWith(back, "error", "Your account is paused. Talk to UnBusy to start submitting leads again.");
   const parsed = z
     .object({
       company: z.string().trim().min(2, "Add the business name.").max(160),
@@ -60,7 +60,7 @@ export async function createRepLead(formData: FormData) {
     .safeParse(Object.fromEntries(["company", "contactName", "contactEmail", "phone", "website", "industry", "location", "repNotes"].map((k) => [k, String(formData.get(k) ?? "")])));
   if (!parsed.success) backWith(back, "error", parsed.error.issues[0]?.message ?? "Check the form.");
   const lead = parsed.data;
-  if (!lead.contactEmail && !lead.phone) backWith(back, "error", "Add a phone number or an email so SKOX can reach them.");
+  if (!lead.contactEmail && !lead.phone) backWith(back, "error", "Add a phone number or an email so UnBusy can reach them.");
   if (!(await allow(`replead:${rep.id}`, 40, 86_400_000))) backWith(back, "error", "That's a lot of leads for one day. Try again tomorrow.");
 
   // First to submit wins. Check every lead, client and referral in the workspace.
@@ -74,7 +74,7 @@ export async function createRepLead(formData: FormData) {
   const taken = [...dealRows, ...clientRows, ...referralRows].some((row) => sameLead(keys, leadKeys(row)));
   if (taken) {
     // Never say who has it: just that it's taken.
-    backWith(back, "error", `${lead.company} is already in the SKOX pipeline, so it can't be added. Leads go to whoever submits them first.`);
+    backWith(back, "error", `${lead.company} is already in the UnBusy pipeline, so it can't be added. Leads go to whoever submits them first.`);
   }
 
   const [deal] = await db
@@ -103,7 +103,7 @@ export async function createRepLead(formData: FormData) {
     subject: `New rep lead: ${lead.company}`,
     preheader: `${profile?.name ?? viewer.email} added a lead.`,
     heading: `${profile?.name ?? "A rep"} added ${lead.company}`,
-    paragraphs: ["It's in the pipeline with the rep credited. Assign a SKOX owner when it's ready for a scope call."],
+    paragraphs: ["It's in the pipeline with the rep credited. Assign an UnBusy owner when it's ready for a scope call."],
     details: [
       ...(lead.contactName ? [{ label: "Contact", value: lead.contactName }] : []),
       ...(lead.phone ? [{ label: "Phone", value: lead.phone }] : []),
@@ -155,7 +155,7 @@ export async function logRepCall(formData: FormData) {
     .from(deals)
     .where(eq(deals.id, lead.id))
     .limit(1);
-  // Reps have no stage buttons: what was said moves the lead (lib/follow-up.ts callEffect), as it does for SKOX.
+  // Reps have no stage buttons: what was said moves the lead (lib/follow-up.ts callEffect), as it does for UnBusy.
   const effect = deal.projectId ? { stage: deal.stage, signal: null, closeReason: null } : callEffect(deal.stage, outcome);
   const now = new Date();
   const promotion = effect.signal ? promotionWrites(deal, effect.signal, viewer.userId, now, { via: "rep_call" }) : null;
@@ -202,7 +202,7 @@ export async function logRepCall(formData: FormData) {
   backWith(back, "notice", message);
 }
 
-/** The rep's goal: a scope call on SKOX's calendar. SKOX takes it from there. */
+/** The rep's goal: a scope call on UnBusy's calendar. UnBusy takes it from there. */
 export async function markMeetingBooked(formData: FormData) {
   const { viewer, rep, profile, lead, back } = await workable(formData);
   const parsed = z
@@ -241,7 +241,7 @@ export async function markMeetingBooked(formData: FormData) {
     cta: { label: "Open lead", href: portalLink(`/admin/clients?deal=${lead.id}`) },
   });
   refreshRep(lead.id);
-  backWith(back, "notice", `Call booked for ${when}. SKOX takes it from here, and you'll see the status change.`);
+  backWith(back, "notice", `Call booked for ${when}. UnBusy takes it from here, and you'll see the status change.`);
 }
 
 export async function saveRepNotes(formData: FormData) {

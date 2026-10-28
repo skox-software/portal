@@ -3,13 +3,13 @@ import type { RepStatus } from "@/lib/rep-status";
 const STOPS = [
   { key: "working", label: "Working" },
   { key: "booked", label: "Call booked" },
-  { key: "with_skox", label: "With SKOX" },
+  { key: "with_skox", label: "With UnBusy" },
   { key: "won", label: "Won" },
 ] as const;
 
 /**
  * Where a lead stands, as four stops. Reps see the deal move without ever
- * seeing SKOX's internal stages or prices.
+ * seeing UnBusy's internal stages or prices.
  */
 export function RepTrack({ status, mini = false }: { status: RepStatus; mini?: boolean }) {
   const at = status === "lost" ? -1 : STOPS.findIndex((s) => s.key === status);

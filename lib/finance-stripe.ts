@@ -76,7 +76,7 @@ type V2FinancialAccount = {
 const V2_API_VERSION = "2026-09-30.preview";
 
 /**
- * SKOX's money sits in a Stripe business account (a v2 FinancialAccount of
+ * UnBusy's money sits in a Stripe business account (a v2 FinancialAccount of
  * type `storage`), not the payments balance: "Earnings auto-transfer"
  * sweeps each payment there, so the payments balance reads $0 and no bank
  * payouts exist. This is the balance Josh and Reiss mean by "the account".
@@ -170,7 +170,7 @@ export function stripeInvoiceFee(invoice: { id: string; number: string; intent: 
       const at = Math.floor(invoice.paidAt.getTime() / 1000);
       const page = await stripeClient().charges.list({ created: { gte: at - 86400, lte: at + 86400 }, limit: 100, expand: ["data.balance_transaction"] }, REQUEST);
       const matches = page.data.filter(c => c.paid && c.currency === "usd" && c.amount === invoice.amount &&
-        (c.metadata.invoice_id === invoice.id || c.description?.startsWith(`SKOX invoice ${invoice.number}:`)));
+        (c.metadata.invoice_id === invoice.id || ["UnBusy", "SKOX"].some(brand => c.description?.startsWith(`${brand} invoice ${invoice.number}:`))));
       if (page.has_more || matches.length !== 1) throw new Error("Invoice charge needs reconciliation");
       charge = matches[0];
     }

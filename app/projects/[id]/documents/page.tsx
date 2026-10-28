@@ -108,7 +108,7 @@ export default async function DocumentsPage({
           <section className="card staff-card" aria-labelledby="send-title">
             <div className="card-head">
               <h2 id="send-title">Send a document for signature</h2>
-              <span className="chip chip-skox">SKOX only</span>
+              <span className="chip chip-skox">UnBusy only</span>
             </div>
             <form id="doc-fields" className="stack">
               <div className="form-grid">
@@ -164,7 +164,7 @@ export default async function DocumentsPage({
             <h2 id="all-docs">All documents</h2>
           </div>
           {rest.length === 0 && needsMe.length === 0 ? (
-            <p className="empty">Nothing here yet. When SKOX sends you something to sign, it lands here and in your inbox.</p>
+            <p className="empty">Nothing here yet. When UnBusy sends you something to sign, it lands here and in your inbox.</p>
           ) : rest.length === 0 ? (
             <p className="muted small">Everything else is signed and filed.</p>
           ) : (

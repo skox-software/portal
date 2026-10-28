@@ -34,7 +34,7 @@ export default async function RepEarnings() {
       <section className="rp-hero" aria-label="Earnings">
         <div>
           <p className="rp-kicker">Earnings</p>
-          <p className="rp-money-label">Made with SKOX, all time</p>
+          <p className="rp-money-label">Made with UnBusy, all time</p>
           <p className="rp-bignum"><Money cents={made} /></p>
           <p className="rp-rate"><b>{profile ? formatRate(profile.rateBps) : "—"}</b> of every payment from your clients. Paid monthly.</p>
         </div>
@@ -72,7 +72,7 @@ export default async function RepEarnings() {
             <span>{entries.length} line{entries.length === 1 ? "" : "s"}</span>
           </div>
           {entries.length === 0 ? (
-            <p className="rp-empty">Nothing yet. The day one of your clients pays SKOX, the line appears here.</p>
+            <p className="rp-empty">Nothing yet. The day one of your clients pays UnBusy, the line appears here.</p>
           ) : (
             <ul className="rp-feed">{entries.map((e) => <Receipt key={e.id} line={e} />)}</ul>
           )}
@@ -82,7 +82,7 @@ export default async function RepEarnings() {
             <h2>Statements</h2>
           </div>
           {statements.length === 0 ? (
-            <p className="rp-empty">Your first statement appears after the month closes on the 1st and SKOX approves it.</p>
+            <p className="rp-empty">Your first statement appears after the month closes on the 1st and UnBusy approves it.</p>
           ) : (
             <ul className="rp-statements">
               {statements.map((s) => (
@@ -99,8 +99,8 @@ export default async function RepEarnings() {
           <div className="rp-panel" style={{ marginTop: 24 }}>
             <h2>How pay works</h2>
             <ol className="rp-steps" style={{ marginTop: 16 }}>
-              <li><span><strong>Cash, not promises.</strong> You earn the day SKOX gets paid: deposits, final payments and monthly plans.</span></li>
-              <li><span><strong>Monthly.</strong> Each month closes on the 1st. Once SKOX approves it, payment follows.</span></li>
+              <li><span><strong>Cash, not promises.</strong> You earn the day UnBusy gets paid: deposits, final payments and monthly plans.</span></li>
+              <li><span><strong>Monthly.</strong> Each month closes on the 1st. Once UnBusy approves it, payment follows.</span></li>
               <li><span><strong>Refunds.</strong> If a client is refunded, the same share comes off your next statement.</span></li>
               <li><span><strong>Taxes.</strong> You&apos;re paid as a contractor. Your yearly total is here for your 1099.</span></li>
             </ol>

@@ -14,7 +14,7 @@ import { formatBytes } from "@/lib/storage";
 import { archiveThread, sendReply } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Inbox · SKOX" };
+export const metadata: Metadata = { title: "Inbox" };
 
 const stamp = (d: Date) =>
   `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })} · ${d

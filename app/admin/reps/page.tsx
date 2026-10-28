@@ -49,7 +49,7 @@ export default async function AdminReps({ searchParams }: { searchParams: Promis
     <main className="shell page">
       <div className="page-head">
         <div>
-          <p className="eyebrow">SKOX</p>
+          <p className="eyebrow">UnBusy</p>
           <h1>Team</h1>
           <p className="muted">Founders earn 100% on their own deals. Sales reps earn 20% on deals they close, with 40% going to each founder. Business expenses do not reduce these shares.</p>
         </div>

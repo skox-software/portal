@@ -50,7 +50,7 @@ export default async function FilesPage({
                 {f.name}
               </a>
               <p className="small muted">
-                {formatBytes(f.sizeBytes)} · {f.uploadedByEmail ?? "SKOX"} · {formatDateTime(f.createdAt)}
+                {formatBytes(f.sizeBytes)} · {f.uploadedByEmail ?? "UnBusy"} · {formatDateTime(f.createdAt)}
               </p>
             </div>
             <div className="row">
@@ -91,7 +91,7 @@ export default async function FilesPage({
             purpose="file"
             action={registerFile}
             multiple
-            label="Choose files (up to 50 MB each). Private: only your team and SKOX can see them."
+            label="Choose files (up to 50 MB each). Private: only your team and UnBusy can see them."
             buttonLabel="Upload"
           />
         </section>
@@ -104,7 +104,7 @@ export default async function FilesPage({
           </section>
           <section className="card" aria-labelledby="from-skox">
             <div className="card-head">
-              <h2 id="from-skox">From SKOX</h2>
+              <h2 id="from-skox">From UnBusy</h2>
             </div>
             {table(fromUs, "We'll share designs, exports and handover files here.")}
           </section>

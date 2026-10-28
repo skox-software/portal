@@ -29,9 +29,9 @@ function historyLine(verb: string, payload: Record<string, unknown>) {
 
 const STATUS_NOTE = {
   working: null,
-  booked: "The scope call is on SKOX's calendar. Keep the relationship warm; SKOX takes the call.",
-  with_skox: "SKOX is quoting and closing this one. Nothing for you to do. You'll see it move to Won.",
-  won: "They signed. Every payment they make to SKOX lands in your money feed.",
+  booked: "The scope call is on UnBusy's calendar. Keep the relationship warm; UnBusy takes the call.",
+  with_skox: "UnBusy is quoting and closing this one. Nothing for you to do. You'll see it move to Won.",
+  won: "They signed. Every payment they make to UnBusy lands in your money feed.",
   lost: "This one closed without a deal.",
 } as const;
 
@@ -62,7 +62,7 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
       <Link className="rp-back" href="/rep/leads">← Leads</Link>
       <header className="rp-lead-head">
         <div>
-          <p className="rp-kicker">{lead.repSource === "self" ? "You brought this lead" : "From SKOX"}{[lead.industry, lead.location].filter(Boolean).length ? ` · ${[lead.industry, lead.location].filter(Boolean).join(" · ")}` : ""}</p>
+          <p className="rp-kicker">{lead.repSource === "self" ? "You brought this lead" : "From UnBusy"}{[lead.industry, lead.location].filter(Boolean).length ? ` · ${[lead.industry, lead.location].filter(Boolean).join(" · ")}` : ""}</p>
           <h1 className="rp-title">{lead.company}</h1>
           <RepTrack status={lead.status} />
         </div>
@@ -81,7 +81,7 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
           <div className="rp-book-head">
             <div>
               <h2 id="book-title">{lead.status === "booked" ? "Call booked. Need to move it?" : "Book the scope call"}</h2>
-              <p>Lock in 30 minutes with SKOX while you have them. SKOX runs the call and handles all pricing.</p>
+              <p>Lock in 30 minutes with UnBusy while you have them. UnBusy runs the call and handles all pricing.</p>
             </div>
             {lead.status === "booked" && <span className="rp-stamp" data-status="approved">Booked</span>}
           </div>
@@ -92,10 +92,10 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
             contactName={lead.contactName}
             contactEmail={lead.contactEmail}
             phone={lead.phone}
-            repName={profile?.displayName ?? "your SKOX rep"}
-          /> : <p className="rp-note">SKOX&apos;s calendar link isn&apos;t set yet. Agree a time with them, then record it below.</p>}
+            repName={profile?.displayName ?? "your UnBusy rep"}
+          /> : <p className="rp-note">UnBusy&apos;s calendar link isn&apos;t set yet. Agree a time with them, then record it below.</p>}
           <form action={markMeetingBooked} className="rp-book-confirm">
-            <p className="rp-book-step"><b>3</b> Booked it? Tell SKOX</p>
+            <p className="rp-book-step"><b>3</b> Booked it? Tell UnBusy</p>
             <input type="hidden" name="dealId" value={lead.id} />
             <div className="rp-book-confirm-row">
               <div className="field">
@@ -107,7 +107,7 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
                 <input id="meet-time" name="time" maxLength={40} placeholder="2:30pm" />
               </div>
               <div className="field rp-book-note">
-                <label htmlFor="meet-note">Note for SKOX</label>
+                <label htmlFor="meet-note">Note for UnBusy</label>
                 <input id="meet-note" name="note" maxLength={1000} placeholder="What they want, who'll join" />
               </div>
               <SubmitButton className="btn btn-primary" pendingLabel="Saving…">Mark booked</SubmitButton>
@@ -154,7 +154,7 @@ export default async function RepLeadPage({ params, searchParams }: { params: Pr
           </div>
           <div className="rp-panel">
             <h2>Your notes</h2>
-            <p>Only you and SKOX see these.</p>
+            <p>Only you and UnBusy see these.</p>
             <form action={saveRepNotes} className="rp-form">
               <input type="hidden" name="dealId" value={lead.id} />
               <label className="sr-only" htmlFor="rep-notes">Your notes</label>

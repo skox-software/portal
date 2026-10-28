@@ -97,7 +97,7 @@ export function Runway({
         </figure>
       </ChartTip>
       <ul className="fchart-legend">
-        <li><i style={{ background: "var(--amber)" }} />Balance</li>
+        <li><i style={{ background: "var(--accent)" }} />Balance</li>
         <li><i className="fchart-legend-line frunway-legend-dash" />Expected</li>
         <li><i className="frunway-legend-hatch" />Depends on clients paying</li>
       </ul>

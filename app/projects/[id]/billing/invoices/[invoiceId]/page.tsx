@@ -7,6 +7,7 @@ import { InvoiceOwnerActions } from "@/components/InvoiceOwnerActions";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { SubmitButton } from "@/components/SubmitButton";
 import { canCheckout } from "@/lib/billing-access";
+import { SUPPORT_EMAIL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import { documents, invoices } from "@/lib/db/schema";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
@@ -42,7 +43,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <PrintInvoice />
       </div>
       <article className="billing-document">
-        <div className="billing-document-head"><div><p className="eyebrow">SKOX Software</p><h1>{paid ? "Payment receipt" : "Invoice"}</h1></div><div><p className="label">{invoice.number}</p><span className={`chip ${paid ? "chip-ok" : "chip-amber"}`}>{paid ? "Paid" : invoice.status === "void" ? "Cancelled" : "Payment due"}</span></div></div>
+        <div className="billing-document-head"><div><p className="eyebrow">UnBusy</p><h1>{paid ? "Payment receipt" : "Invoice"}</h1></div><div><p className="label">{invoice.number}</p><span className={`chip ${paid ? "chip-ok" : "chip-amber"}`}>{paid ? "Paid" : invoice.status === "void" ? "Cancelled" : "Payment due"}</span></div></div>
         <div className="billing-document-meta">
           <div><p className="label">Bill to</p><strong>{client.name}</strong><p className="small muted">{project.name}</p></div>
           <div><p className="label">Issued</p><p>{formatDate(invoice.createdAt.toISOString().slice(0, 10))}</p><p className="label" style={{ marginTop: 12 }}>Due</p><p>{formatDate(invoice.dueOn)}</p></div>
@@ -56,7 +57,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           {access.isStaff && <InvoiceOwnerActions invoice={invoice} stripe={stripe} sandbox={sandbox} locked={locked} />}
           {!access.isStaff && canCheckout(access, sandbox) && invoice.status === "open" && !locked && (stripe || invoice.payUrl) && <form action={payInvoice}><input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="invoiceId" value={invoice.id} /><SubmitButton className="btn btn-primary" pendingLabel="Opening…">Pay {formatMoney(invoice.amountCents, invoice.currency)}</SubmitButton></form>}
         </div>
-        <footer className="billing-document-footer"><p>SKOX Software · founder@skoxsoftware.com</p><p className="small">Thank you for building with us.</p></footer>
+        <footer className="billing-document-footer"><p>UnBusy · {SUPPORT_EMAIL}</p><p className="small">Thank you for building with us.</p></footer>
       </article>
     </main>
   </>;

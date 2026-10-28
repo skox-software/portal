@@ -17,9 +17,9 @@ import {
 import { sql } from "drizzle-orm";
 
 /**
- * SKOX Client Portal — phase 1 data model.
+ * UnBusy Client Portal — phase 1 data model.
  *
- * Every table carries `workspace_id`: SKOX is one workspace, and a future
+ * Every table carries `workspace_id`: UnBusy is one workspace, and a future
  * customer of the portal as a product is simply another. Signed-in users live
  * in Neon Auth's own `neon_auth` schema; the portal refers to them by
  * `user_id` (text) and never copies them. What someone may do is decided by
@@ -521,7 +521,7 @@ export const carePlans = pgTable("care_plans", {
   createdAt: createdAt(),
 });
 
-/** "What we could build next": ideas SKOX pitches, clients react to. */
+/** "What we could build next": ideas UnBusy pitches, clients react to. */
 export const ideas = pgTable(
   "ideas",
   {
@@ -629,7 +629,7 @@ export const onboardings = pgTable(
     invitedEmail: text("invited_email").notNull(),
     invitedBy: text("invited_by").notNull(),
     status: onboardingStatus("status").notNull().default("invited"),
-    /** "What we heard on our call", written by SKOX, confirmed by the client. */
+    /** "What we heard on our call", written by UnBusy, confirmed by the client. */
     callRecap: text("call_recap"),
     recapConfirmed: boolean("recap_confirmed"),
     recapFeedback: text("recap_feedback"),
@@ -642,7 +642,7 @@ export const onboardings = pgTable(
     access: jsonb("access").$type<Record<string, { status: string; note?: string }>>().notNull().default({}),
     team: jsonb("team").$type<Record<string, string>>().notNull().default({}),
     kickoff: jsonb("kickoff").$type<Record<string, string>>().notNull().default({}),
-    /** Null while SKOX is still attaching the agreement and deposit. */
+    /** Null while UnBusy is still attaching the agreement and deposit. */
     welcomeSentAt: timestamp("welcome_sent_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -712,13 +712,13 @@ export const deals = pgTable(
     nextStepOn: date("next_step_on"),
     /** Last call, voicemail or email logged against the deal. */
     lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
-    /** The sales rep working this lead (a `rep` membership). Separate from the SKOX owner who closes it. */
+    /** The sales rep working this lead (a `rep` membership). Separate from the UnBusy owner who closes it. */
     repMembershipId: uuid("rep_membership_id").references(() => memberships.id, { onDelete: "set null" }),
-    /** assigned (SKOX gave it to the rep) | self (the rep brought it) */
+    /** assigned (UnBusy gave it to the rep) | self (the rep brought it) */
     repSource: text("rep_source"),
     /** The rep's own notes. Internal `notes` are never shown to reps. */
     repNotes: text("rep_notes"),
-    /** When the rep booked the scope call with SKOX. */
+    /** When the rep booked the scope call with UnBusy. */
     meetingAt: timestamp("meeting_at", { withTimezone: true }),
     /** When and why it left Outreach for the Pipeline (PROMOTION_SIGNALS). Cleared on demotion; the events keep the history. */
     promotedAt: timestamp("promoted_at", { withTimezone: true }),
@@ -751,7 +751,7 @@ export const deals = pgTable(
 export const emailDirection = pgEnum("email_direction", ["inbound", "outbound"]);
 
 /**
- * A conversation with someone outside SKOX. Threads belong to a client or a
+ * A conversation with someone outside UnBusy. Threads belong to a client or a
  * deal once someone (or a matching address) assigns them; until then they
  * wait in the Inbox under "Needs a client".
  */
@@ -764,7 +764,7 @@ export const emailThreads = pgTable(
     /** The outside person this thread is with. */
     counterpartEmail: text("counterpart_email").notNull(),
     counterpartName: text("counterpart_name"),
-    /** The SKOX address the conversation is on, e.g. reiss@skoxsoftware.com. */
+    /** The UnBusy address the conversation is on, e.g. reiss@skoxsoftware.com. */
     mailbox: text("mailbox"),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     dealId: uuid("deal_id").references(() => deals.id, { onDelete: "set null" }),
@@ -833,7 +833,7 @@ export const rateEvents = pgTable(
 /* ---------------------------------------------------------------------------
  * Sales reps and commissions.
  *
- * Reps are 1099 contractors paid a percentage of cash SKOX collects from the
+ * Reps are 1099 contractors paid a percentage of cash UnBusy collects from the
  * clients they bring. The ledger is append-only: a payment adds an `earned`
  * entry, a refund adds a negative `clawback`, corrections are `adjustment`s.
  * Each month's pending entries roll into a statement that the workspace owner
@@ -858,7 +858,7 @@ export const repProfiles = pgTable("rep_profiles", {
   /** active | paused. Paused reps keep their history but earn nothing new. */
   status: text("status").notNull().default("active"),
   phone: text("phone"),
-  /** How SKOX pays them, in words ("Zelle to phone"). Never bank numbers. */
+  /** How UnBusy pays them, in words ("Zelle to phone"). Never bank numbers. */
   payoutNotes: text("payout_notes"),
   w9ReceivedAt: timestamp("w9_received_at", { withTimezone: true }),
   agreementSignedAt: timestamp("agreement_signed_at", { withTimezone: true }),

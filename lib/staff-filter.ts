@@ -3,7 +3,7 @@ import { memberships } from "@/lib/db/schema";
 import { STAFF_ROLES } from "@/lib/permissions";
 
 /**
- * SQL for "this membership row is SKOX staff". A null client alone is not
+ * SQL for "this membership row is UnBusy staff". A null client alone is not
  * enough: sales reps have no client either, and must never pass for staff
  * (deal owners, inbox matching, document signers, staff emails).
  */

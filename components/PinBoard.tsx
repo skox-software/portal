@@ -124,7 +124,7 @@ export function PinBoard({
           )}
           {state.status === "saved" && (
             <span className="muted small" role="status">
-              Sent to SKOX.
+              Sent to UnBusy.
             </span>
           )}
         </div>

@@ -1,0 +1,129 @@
+/* Project overview. */
+/* ---- Overview ---- */
+.hello {
+  margin-bottom: 16px;
+}
+.hello-greet {
+  color: var(--muted);
+}
+.hello-line {
+  font: 700 clamp(26px, 3vw, 34px)/1.15 var(--display);
+  text-wrap: balance;
+}
+.date-main {
+  display: grid;
+  gap: 2px;
+}
+.date-progress {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.ring-text {
+  font: 600 20px/1 var(--body);
+  fill: var(--ink);
+}
+.next-step {
+  font: 700 24px/1.15 var(--display);
+  color: var(--ink);
+}
+.live-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--canvas);
+}
+.live-panel .label {
+  color: var(--field-border);
+}
+.live-panel .date-big {
+  color: var(--canvas);
+}
+.live-panel .btn-ghost {
+  background: transparent;
+  color: var(--canvas);
+  border-color: var(--muted);
+}
+.live-link {
+  color: var(--accent);
+  font: 500 15px/1.4 var(--body);
+}
+.card-todo {
+  border-color: var(--sky-2);
+  box-shadow: 0 1px 0 var(--sky-2);
+}
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.todo-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0 12px 14px;
+  border-top: 1px solid var(--line-soft);
+  border-left: 3px solid var(--accent);
+}
+.todo-list li:first-child {
+  border-top: 0;
+}
+.todo-list li[data-urgent="true"] {
+  border-left-color: var(--danger);
+}
+.todo-title {
+  font-weight: 500;
+}
+.todo-detail {
+  font-size: 13px;
+  color: var(--muted);
+}
+.all-clear {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.since-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.since-list li {
+  display: grid;
+  gap: 2px;
+  padding-left: 14px;
+  position: relative;
+}
+.since-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.since-list .when {
+  font: 400 12px/1.4 var(--body);
+  color: var(--label);
+}
+.card-since {
+  background: var(--fog);
+}
+.share-input {
+  font: 400 13px/1.4 var(--body);
+}

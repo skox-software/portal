@@ -1,25 +1,32 @@
 import type { NextConfig } from "next";
+import { PORTAL_URL, SITE_URL } from "./lib/brand";
 import { BASE_PATH } from "./lib/paths";
+
+// Hosts the portal is served from. Forms post from these, so server actions
+// must accept them. The old SKOX hosts stay listed until every old link is gone.
+const servedFrom = [...new Set([new URL(SITE_URL).host, new URL(PORTAL_URL).host, "www.skoxsoftware.com", "skoxsoftware.com", "portal.skoxsoftware.com"])];
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Served inside the main site at skoxsoftware.com/portal, which forwards
-  // every /portal request here. See lib/paths.ts.
+  // Served inside the main site at <site>/portal, which forwards every
+  // /portal request here. See lib/paths.ts.
   basePath: BASE_PATH,
   // Pin the workspace root: a stray package-lock.json in the home folder would
   // otherwise be taken as the root.
   turbopack: { root: __dirname },
   // The welcome guide PDF reads brand fonts from disk at runtime.
   outputFileTracingIncludes: {
-    "/api/projects/\\[id\\]/welcome-guide": ["./assets/fonts/**/*"],
-    "/api/projects/*/welcome-guide": ["./assets/fonts/**/*"],
+    "/api/projects/\\[id\\]/welcome-guide": ["./assets/fonts/**/*", "./public/brand/**/*"],
+    "/api/projects/*/welcome-guide": ["./assets/fonts/**/*", "./public/brand/**/*"],
+    "/share-image": ["./public/brand/lockup-light.png"],
   },
   // Old bookmarks and emailed links point at portal.skoxsoftware.com with no
-  // /portal prefix. Send them to the address the portal lives at now.
+  // /portal prefix. Send them to the address the portal lives at now
+  // (PORTAL_URL, so the cutover to gounbusy.com is a config change).
   // basePath: false keeps these matching the raw path, so /portal/* (the real
   // app, and what the main site forwards here) is never caught by them.
   async redirects() {
-    const site = "https://www.skoxsoftware.com/portal";
+    const site = PORTAL_URL;
     const moved = [
       "/sign-in",
       "/settings",
@@ -45,7 +52,7 @@ const nextConfig: NextConfig = {
   // origin has to be named or every server action is rejected.
   experimental: {
     serverActions: {
-      allowedOrigins: ["www.skoxsoftware.com", "skoxsoftware.com", "portal.skoxsoftware.com"],
+      allowedOrigins: servedFrom,
     },
   },
   // Files go straight from the browser to private Blob storage, so actions

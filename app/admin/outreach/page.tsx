@@ -7,7 +7,7 @@ import { loadOutreachLog } from "@/lib/outreach-log-data";
 import { withBase } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Email log · SKOX" };
+export const metadata: Metadata = { title: "Email log" };
 
 const STATUS_ORDER: RowStatus[] = ["sent", "delayed", "delivered", "opened", "clicked", "bounced", "complained", "untracked"];
 

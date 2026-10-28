@@ -104,7 +104,7 @@ export async function GET(request: Request) {
   }
 
   // Onboarding: a gentle nudge toward the next step (never "are you still interested?"),
-  // and a heads-up to SKOX when someone has been paused for five days.
+  // and a heads-up to UnBusy when someone has been paused for five days.
   const openOnboardings = await db
     .select({ onboarding: onboardings, project: projects, client: clients })
     .from(onboardings)
@@ -121,7 +121,7 @@ export async function GET(request: Request) {
       const nextTitle = flow.find((s) => s.key === next)?.title ?? "your setup";
       const left = progress(o.steps, flow).minutesLeft;
       await sendEmail(o.invitedEmail, {
-        subject: o.status === "invited" ? `Your SKOX portal is ready for ${project.name}` : `Complete your project setup: ${project.name}`,
+        subject: o.status === "invited" ? `Your UnBusy portal is ready for ${project.name}` : `Complete your project setup: ${project.name}`,
         preheader: `Approximately ${left} minutes remain. Your previous progress has been saved.`,
         heading: o.status === "invited" ? "Your portal is ready when you are" : `Next up: ${nextTitle}`,
         paragraphs: [

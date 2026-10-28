@@ -11,11 +11,11 @@ import { can } from "@/lib/permissions";
 import { projectForAction } from "@/lib/project-access";
 import { projectPrefix, statPrivate } from "@/lib/storage";
 
-/** SKOX posts a round of designs (screenshot) for pinned feedback and, optionally, approval. */
+/** UnBusy posts a round of designs (screenshot) for pinned feedback and, optionally, approval. */
 export async function createReviewRound(formData: FormData): Promise<{ ok: boolean; message: string }> {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok) return ctx;
-  if (!ctx.access.isStaff) return { ok: false, message: "Only SKOX can post designs." };
+  if (!ctx.access.isStaff) return { ok: false, message: "Only UnBusy can post designs." };
   const { project, client, viewer } = ctx;
 
   const parsed = z

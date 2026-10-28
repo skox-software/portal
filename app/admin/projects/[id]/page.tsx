@@ -149,7 +149,7 @@ export default async function ProjectAdmin({
                     <li key={t.id}>
                       <span className={t.doneAt ? "task-done" : undefined}>
                         <span className={t.side === "client" ? "chip chip-amber" : "chip"} style={{ marginRight: 8 }}>
-                          {t.side === "client" ? "Client" : "SKOX"}
+                          {t.side === "client" ? "Client" : "UnBusy"}
                         </span>
                         {t.title}
                         {t.dueOn && <span className="when"> · due {formatDate(t.dueOn)}</span>}
@@ -175,7 +175,7 @@ export default async function ProjectAdmin({
                   <label htmlFor="t-side">Who&apos;s it on</label>
                   <select id="t-side" name="side" defaultValue="client">
                     <option value="client">Client</option>
-                    <option value="skox">SKOX</option>
+                    <option value="skox">UnBusy</option>
                   </select>
                 </div>
                 <div className="field">

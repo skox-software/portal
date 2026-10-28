@@ -159,7 +159,7 @@ export default async function PrepareWelcome({
               <div>
                 <h2>Send the welcome</h2>
                 <p className="small muted">
-                  One email from SKOX: {doc ? "“Review your agreement”" : "“Start your welcome”"}, then the guided setup in the portal.
+                  One email from UnBusy: {doc ? "“Review your agreement”" : "“Start your welcome”"}, then the guided setup in the portal.
                 </p>
               </div>
             </div>

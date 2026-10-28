@@ -88,7 +88,7 @@ export async function replyToRequest(formData: FormData) {
     .limit(1);
   if (!request) return;
 
-  // Clients can reply (which hands it back to SKOX) but only staff set status.
+  // Clients can reply (which hands it back to UnBusy) but only staff set status.
   const nextStatus = access.isStaff ? input.status || request.status : request.status === "waiting_on_client" ? "in_progress" : request.status;
   const ops = [];
   if (input.body) {

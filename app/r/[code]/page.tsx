@@ -2,15 +2,15 @@ import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
-import { SkoxLogo } from "@/components/SkoxLogo";
+import { Logo } from "@/components/Logo";
 import { getDb } from "@/lib/db";
 import { clients, memberships } from "@/lib/db/schema";
 import { submitReferral } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "You were referred to SKOX",
-  description: "Good ideas deserve to be built. Tell SKOX what you want to build.",
+  title: "You were referred to UnBusy",
+  description: "Tell UnBusy which part of your office work you want off your plate.",
   robots: { index: false, follow: false },
 };
 
@@ -35,9 +35,9 @@ export default async function ReferralLanding({
   return (
     <main className="signin">
       <section className="signin-intro">
-        <SkoxLogo className="signin-logo" />
+        <Logo className="signin-logo" />
         <p className="eyebrow">Referred by {row.clientName}</p>
-        <h1>Good ideas deserve to be built.</h1>
+        <h1>Tell us what you need done.</h1>
         <ul className="signin-points">
           <li>Web apps, portals, dashboards and websites</li>
           <li>Built fast, without dev-shop prices</li>
@@ -76,7 +76,7 @@ export default async function ReferralLanding({
                 <textarea id="ref-idea" name="idea" maxLength={3000} placeholder="A sentence or two is plenty" />
               </div>
               <SubmitButton className="btn btn-primary btn-block" pendingLabel="Sending…">
-                Send to SKOX
+                Send to UnBusy
               </SubmitButton>
             </form>
           </>

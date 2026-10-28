@@ -1,0 +1,111 @@
+/* Project shell: band, tabs, staff markers. */
+.project-band {
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  padding-top: 28px;
+}
+.page-head-tight {
+  margin-bottom: 18px;
+}
+.page-intro {
+  max-width: 62ch;
+  margin-top: 8px;
+  color: var(--muted);
+}
+.page-after-band {
+  padding-top: 24px;
+}
+.project-nav {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: -1px;
+}
+.project-nav::-webkit-scrollbar {
+  display: none;
+}
+.project-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.project-nav a:hover {
+  color: var(--ink);
+}
+.project-nav a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.nav-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font: 600 11px/1 var(--body);
+}
+.staff-banner {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--staff);
+}
+.chip-skox {
+  border-color: transparent;
+  background: var(--staff-bg);
+  color: var(--staff);
+}
+.staff-card {
+  border-style: dashed;
+  border-color: var(--sky-2);
+  margin-bottom: 16px;
+}
+.staff-inline {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--sky-2);
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-head h2 {
+  font-size: 30px;
+}
+.split-even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--accent-ink);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.hp {
+  position: absolute;
+  left: -9999px;
+}

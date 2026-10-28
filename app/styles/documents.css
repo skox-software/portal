@@ -22,9 +22,9 @@
   height: 48px;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--fog);
-  font: 600 10px/1 var(--mono);
+  font: 600 10px/1 var(--body);
   color: var(--muted);
 }
 .doc-main {
@@ -38,7 +38,7 @@
   overflow-wrap: anywhere;
 }
 a.doc-title:hover {
-  color: var(--amber-ink);
+  color: var(--accent-ink);
 }
 .doc-layout {
   display: grid;
@@ -54,7 +54,7 @@ a.doc-title:hover {
   background: var(--fog);
 }
 .card-sign {
-  border: 2px solid var(--amber);
+  border: 2px solid var(--accent);
 }
 .card-ok {
   background: var(--ok-bg);
@@ -66,7 +66,7 @@ a.doc-title:hover {
   min-height: 70px;
   padding: 0 6px 8px;
   border-bottom: 1.5px solid var(--ink);
-  font: italic 400 34px/1 var(--serif);
+  font: italic 400 34px/1 var(--display);
   color: var(--ink);
   overflow: hidden;
   white-space: nowrap;
@@ -96,7 +96,7 @@ a.doc-title:hover {
   margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 .signer-pick legend {
   padding: 0 6px;
@@ -113,20 +113,20 @@ a.doc-title:hover {
   gap: 8px;
   padding: 18px;
   border: 1.5px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--fog);
   cursor: pointer;
 }
 .dropzone:hover {
-  border-color: var(--amber-ink);
+  border-color: var(--accent-ink);
 }
 .dropzone:focus-within {
-  border-color: var(--amber-ink);
-  box-shadow: 0 0 0 3px rgba(228, 169, 7, 0.35);
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 3px rgba(11, 92, 255, 0.35);
 }
 .setup-banner :focus-visible,
 .live-panel :focus-visible {
-  outline-color: var(--amber);
+  outline-color: var(--accent);
 }
 fieldset.q-field {
   border: 0;

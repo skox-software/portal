@@ -69,7 +69,7 @@ export async function sendWeeklyDigests(now = new Date()) {
           ? `${clientName}, here's your weekly recap.`
           : `Launch date ${formatDate(project.deliveryDate)} (${describeDaysUntil(days).toLowerCase()}).`;
       await sendEmail(person.email, {
-        subject: `Your week with SKOX: ${project.name}`,
+        subject: `Your week with UnBusy: ${project.name}`,
         preheader: waiting ? `${waiting} item${waiting === 1 ? "" : "s"} requiring your attention` : "Your weekly project progress and next steps.",
         heading: `${project.name}: this week`,
         paragraphs: [

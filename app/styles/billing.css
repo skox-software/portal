@@ -13,7 +13,7 @@
   background: var(--paper);
 }
 .stat-value {
-  font: 400 40px/1.1 var(--serif);
+  font: 700 40px/1.1 var(--display);
   font-variant-numeric: tabular-nums;
 }
 .invoice-list {
@@ -34,7 +34,7 @@
   border-top: 0;
 }
 .invoice[data-status="open"] {
-  border-left-color: var(--amber);
+  border-left-color: var(--accent);
 }
 .invoice[data-status="overdue"] {
   border-left-color: var(--danger);
@@ -43,12 +43,12 @@
   border-left-color: var(--ok);
 }
 .invoice-number {
-  font: 500 11px/1.5 var(--mono);
+  font: 500 11px/1.5 var(--body);
   letter-spacing: 0.06em;
   color: var(--label);
 }
 .invoice-amount {
-  font: 500 20px/1 var(--mono);
+  font: 500 20px/1 var(--body);
   font-variant-numeric: tabular-nums;
 }
 .invoice-actions {
@@ -89,12 +89,12 @@
 }
 .message {
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--fog);
 }
 .message p:last-child {
   white-space: pre-line;
 }
 .message[data-skox="true"] {
-  background: var(--skox-bg);
+  background: var(--staff-bg);
 }

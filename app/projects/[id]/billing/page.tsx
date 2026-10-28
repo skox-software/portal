@@ -108,7 +108,7 @@ export default async function BillingPage({ params, searchParams }: {
           <p className="billing-summary-footnote">Based on invoices issued for this project.</p>
         </section>
       </div>
-      {access.isStaff && <details className="billing-composer" open={sp.new === "1" || list.length === 0} id="new-invoice"><summary><div><span className="eyebrow">SKOX only</span><h2>Create an invoice</h2></div><span aria-hidden="true">＋</span></summary><div className="billing-composer-body"><CreateInvoiceForm projectId={project.id} nextNumber={nextNumber} docs={docs} stripe={stripe} /></div></details>}
+      {access.isStaff && <details className="billing-composer" open={sp.new === "1" || list.length === 0} id="new-invoice"><summary><div><span className="eyebrow">UnBusy only</span><h2>Create an invoice</h2></div><span aria-hidden="true">＋</span></summary><div className="billing-composer-body"><CreateInvoiceForm projectId={project.id} nextNumber={nextNumber} docs={docs} stripe={stripe} /></div></details>}
       <div className="billing-content">
         <div className="billing-ledger">
           <section aria-labelledby="open-invoices"><div className="billing-section-head"><h2 id="open-invoices">Upcoming &amp; unpaid</h2><span className="chip">{open.length}</span></div>

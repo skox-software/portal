@@ -13,7 +13,7 @@ import { followUpState, salesToday } from "@/lib/follow-up";
 import { myEntries, myLeads, myProfile } from "@/lib/rep-data";
 import { REP_STATUSES, repCanWork } from "@/lib/rep-status";
 
-export const metadata = { title: { absolute: "Desk · SKOX Sales Rep Desk" } };
+export const metadata = { title: { absolute: "Desk · UnBusy Sales Rep Desk" } };
 
 function greeting(now = new Date()) {
   const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(now));
@@ -48,11 +48,11 @@ export default async function RepDesk() {
         <div>
           <p className="rp-hello">
             {greeting()}{first ? <>, <strong>{first}</strong></> : null}.
-            {newFromSkox > 0 && <> SKOX sent you <strong>{newFromSkox} new lead{newFromSkox === 1 ? "" : "s"}</strong>.</>}
+            {newFromSkox > 0 && <> UnBusy sent you <strong>{newFromSkox} new lead{newFromSkox === 1 ? "" : "s"}</strong>.</>}
           </p>
-          <p className="rp-money-label">Made with SKOX</p>
+          <p className="rp-money-label">Made with UnBusy</p>
           <p className="rp-bignum"><Money cents={made} /></p>
-          <p className="rp-rate"><b>{rate}</b> of every dollar your clients pay SKOX, for as long as they stay.</p>
+          <p className="rp-rate"><b>{rate}</b> of every dollar your clients pay UnBusy, for as long as they stay.</p>
         </div>
         <div className="rp-tiles">
           <Link className="rp-tile" href="/rep/earnings" data-hot={money.pending + money.approved > 0 ? "" : undefined}>
@@ -81,7 +81,7 @@ export default async function RepDesk() {
         </div>
         {queue.length === 0 ? (
           <p className="rp-empty">
-            {open.length ? "You're caught up. Nothing is due until your next follow-up." : <>No open leads right now. <Link href="/rep/leads/new">Add one you know</Link>, or watch for new ones from SKOX.</>}
+            {open.length ? "You're caught up. Nothing is due until your next follow-up." : <>No open leads right now. <Link href="/rep/leads/new">Add one you know</Link>, or watch for new ones from UnBusy.</>}
           </p>
         ) : (
           <ul className="rp-leads">{queue.map((l) => <LeadRow key={l.id} lead={l} today={today} />)}</ul>
@@ -110,18 +110,18 @@ export default async function RepDesk() {
             <Link href="/rep/earnings">Earnings →</Link>
           </div>
           {entries.length === 0 ? (
-            <p className="rp-empty">The day one of your clients pays SKOX, it shows up here with exactly what you made.</p>
+            <p className="rp-empty">The day one of your clients pays UnBusy, it shows up here with exactly what you made.</p>
           ) : (
             <ul className="rp-feed">{entries.slice(0, 6).map((e) => <Receipt key={e.id} line={e} />)}</ul>
           )}
         </section>
         <aside className="rp-panel" data-accent aria-labelledby="how-title">
           <h2 id="how-title">How you win</h2>
-          <p>Your job is the conversation. SKOX does the rest.</p>
+          <p>Your job is the conversation. UnBusy does the rest.</p>
           <ol className="rp-steps">
-            <li><span><strong>Call your leads.</strong> Work the ones SKOX sends and add your own. First to add a business owns it.</span></li>
-            <li><span><strong>Book the scope call.</strong> Put it on SKOX&apos;s calendar and mark it booked.</span></li>
-            <li><span><strong>SKOX closes.</strong> Watch the lead move to With SKOX, then Won.</span></li>
+            <li><span><strong>Call your leads.</strong> Work the ones UnBusy sends and add your own. First to add a business owns it.</span></li>
+            <li><span><strong>Book the scope call.</strong> Put it on UnBusy&apos;s calendar and mark it booked.</span></li>
+            <li><span><strong>UnBusy closes.</strong> Watch the lead move to With UnBusy, then Won.</span></li>
             <li><span><strong>Get paid on every payment.</strong> {rate} of each deposit, final payment and monthly plan. Statements close on the 1st.</span></li>
           </ol>
         </aside>

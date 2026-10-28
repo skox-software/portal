@@ -18,7 +18,7 @@ export type StepDef = {
 // Order matters: the agreement comes right after the welcome. A signed,
 // paid client is a committed client; the longer questions come after.
 const ALL: StepDef[] = [
-  { key: "welcome", title: "Welcome to SKOX", short: "Welcome", minutes: 1, required: true },
+  { key: "welcome", title: "Welcome to UnBusy", short: "Welcome", minutes: 1, required: true },
   { key: "agreement", title: "Your agreement", short: "Agreement", minutes: 2, required: false },
   { key: "you", title: "A little about you", short: "You", minutes: 2, required: true },
   { key: "team", title: "Your team", short: "Team", minutes: 1, required: false },

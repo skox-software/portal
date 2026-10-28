@@ -28,7 +28,7 @@ export function Confetti({ fire }: { fire: number }) {
 
     const scope = el.closest("[data-theme]") ?? document.documentElement;
     const css = getComputedStyle(scope);
-    const colors = ["--amber", "--amber", "--ok", "--ink"].map((v) => css.getPropertyValue(v).trim() || "#e4a907");
+    const colors = ["--accent", "--accent", "--ok", "--ink"].map((v) => css.getPropertyValue(v).trim() || "#0b5cff");
     // Thrown up and out from the top third of the screen, then falling.
     const pieces = Array.from({ length: COUNT }, () => {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;

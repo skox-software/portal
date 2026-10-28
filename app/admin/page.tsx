@@ -12,7 +12,7 @@ import { loadOverview } from "@/lib/overview-data";
 import { parseWho } from "@/lib/overview-math";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Overview · SKOX" };
+export const metadata: Metadata = { title: "Overview" };
 
 /**
  * The team's home: what needs the signed-in person today, then the sales

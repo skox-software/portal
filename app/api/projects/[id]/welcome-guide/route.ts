@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getViewer } from "@/lib/access";
+import { PORTAL_URL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import { clients, onboardings, projects, workspaces } from "@/lib/db/schema";
 import { formatDate, kindLabel } from "@/lib/format";
@@ -57,13 +58,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/projects/[id
     goal: typeof goal === "string" && goal ? goal : null,
     teamIntro: workspace.teamIntro,
     schedulingUrl: workspace.schedulingUrl,
-    portalUrl: process.env.PORTAL_URL ?? "https://portal.skoxsoftware.com",
+    portalUrl: PORTAL_URL,
     hasAgreement: agreement.hasAgreement,
     checklist,
     preparedOn: new Date(),
   });
 
-  const fileName = `SKOX Welcome Guide - ${companyName}.pdf`;
+  const fileName = `UnBusy Welcome Guide - ${companyName}.pdf`;
   const download = new URL(request.url).searchParams.get("download") === "1";
   return new Response(Buffer.from(bytes), {
     headers: {

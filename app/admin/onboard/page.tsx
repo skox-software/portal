@@ -132,7 +132,7 @@ export default async function OnboardPage({
                     <span className="hint">They&apos;ll confirm it or correct it. It&apos;s the fastest way to be aligned on day one.</span>
                   </div>
                   <div className="field">
-                    <label htmlFor="ob-notes">Internal notes (SKOX only)</label>
+                    <label htmlFor="ob-notes">Internal notes (UnBusy only)</label>
                     <textarea id="ob-notes" name="internalNotes" maxLength={4000} rows={3} defaultValue={deal?.notes ?? ""} placeholder="Budget, decision-maker, objections…" />
                   </div>
                 </div>

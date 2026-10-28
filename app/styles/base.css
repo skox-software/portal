@@ -12,11 +12,13 @@ body {
 body {
   background: var(--canvas);
   color: var(--ink);
-  font: 400 15px/1.55 var(--sans);
+  font: 400 15px/1.55 var(--body);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 a {
-  color: var(--amber-ink);
+  color: var(--ink);
+  text-decoration-color: var(--accent);
   text-underline-offset: 3px;
 }
 h1,
@@ -27,9 +29,9 @@ p {
 }
 h1,
 h2 {
-  font-family: var(--serif);
-  font-weight: 400;
-  letter-spacing: -0.012em;
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.025em;
   text-wrap: balance;
 }
 h3 {
@@ -38,7 +40,7 @@ h3 {
   letter-spacing: -0.005em;
 }
 :focus-visible {
-  outline: 2px solid var(--amber-ink);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 .sr-only {
@@ -60,9 +62,7 @@ h3 {
 }
 .eyebrow,
 .label {
-  font: 500 11px/1.6 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font: 500 13px/1.5 var(--body);
   color: var(--label);
 }
 .stack {

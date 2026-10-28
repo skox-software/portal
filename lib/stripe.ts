@@ -64,7 +64,7 @@ export async function createEmbeddedCheckout(input: {
       metadata: { invoice_id: input.invoiceId },
       payment_intent_data: {
         metadata: { invoice_id: input.invoiceId },
-        description: `SKOX invoice ${input.number}: ${input.title}`,
+        description: `UnBusy invoice ${input.number}: ${input.title}`,
       },
       line_items: [
         {

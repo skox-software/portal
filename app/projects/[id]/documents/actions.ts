@@ -18,11 +18,11 @@ export type ActionResult = { ok: boolean; message: string };
 
 const KINDS = Object.keys(DOCUMENT_KIND_LABEL) as [keyof typeof DOCUMENT_KIND_LABEL, ...(keyof typeof DOCUMENT_KIND_LABEL)[]];
 
-/** SKOX uploads a PDF and sends it to the chosen people for signature. */
+/** UnBusy uploads a PDF and sends it to the chosen people for signature. */
 export async function sendDocument(formData: FormData): Promise<ActionResult> {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok) return ctx;
-  if (!ctx.access.isStaff) return { ok: false, message: "Only SKOX can send documents." };
+  if (!ctx.access.isStaff) return { ok: false, message: "Only UnBusy can send documents." };
   const { project, client, viewer } = ctx;
 
   const parsed = z
@@ -51,7 +51,7 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
   const stat = await statPrivate(input.pathname);
   if (!stat || stat.contentType !== "application/pdf") return { ok: false, message: "Upload a PDF." };
 
-  // Signers must be people with access to this project (client people or SKOX).
+  // Signers must be people with access to this project (client people or UnBusy).
   const allowed = await getDb()
     .select({ email: memberships.email })
     .from(memberships)
@@ -59,7 +59,7 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
       and(
         eq(memberships.workspaceId, project.workspaceId),
         inArray(memberships.email, input.signers),
-        // This project's client, or SKOX staff: people from another client could never open it.
+        // This project's client, or UnBusy staff: people from another client could never open it.
         or(eq(memberships.clientId, project.clientId), staffRow()),
       ),
     );
@@ -110,7 +110,7 @@ export async function sendDocument(formData: FormData): Promise<ActionResult> {
     preheader: `${client.name} · ${DOCUMENT_KIND_LABEL[input.kind]} ready for your signature`,
     heading: `${input.title} is ready for your signature`,
     paragraphs: [
-      input.message || `SKOX sent a ${DOCUMENT_KIND_LABEL[input.kind].toLowerCase()} for ${project.name}.`,
+      input.message || `UnBusy sent a ${DOCUMENT_KIND_LABEL[input.kind].toLowerCase()} for ${project.name}.`,
       "Open it in your portal, read it through, and sign in under a minute. No printing, no scanning.",
     ],
     cta: { label: "Review and sign", href: portalLink(`/projects/${project.id}/documents/${id}`) },
@@ -138,7 +138,7 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
   const { viewer, project, client } = ctx;
 
   const signers = await db.select().from(documentSigners).where(eq(documentSigners.documentId, doc.id));
-  // Identity comes from the address SKOX invited (the membership), never from
+  // Identity comes from the address UnBusy invited (the membership), never from
   // the account's current email, which a user might be able to change.
   const invitedAs = new Set(viewer.memberships.filter((m) => m.workspaceId === doc.workspaceId).map((m) => m.email));
   const mine = signers.find((s) => invitedAs.has(s.email));
@@ -157,7 +157,7 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
   // The file must still be exactly what was sent.
   const bytes = await readPrivateBytes(doc.storageKey);
   if (!bytes || sha256(bytes) !== doc.sha256) {
-    return { status: "error", message: "This document changed after it was sent, so it can't be signed. SKOX has been told." };
+    return { status: "error", message: "This document changed after it was sent, so it can't be signed. UnBusy has been told." };
   }
 
   const { ip, userAgent } = await requestFingerprint();
@@ -185,7 +185,7 @@ export async function signDocument(_prev: SignState, formData: FormData): Promis
     .returning({ id: documentSigners.id });
   if (updated.length === 0) {
     const [now] = await db.select({ status: documents.status }).from(documents).where(eq(documents.id, doc.id)).limit(1);
-    if (now?.status === "void") return { status: "error", message: "SKOX cancelled this document, so there's nothing to sign." };
+    if (now?.status === "void") return { status: "error", message: "UnBusy cancelled this document, so there's nothing to sign." };
     // Already signed: if an earlier finish was interrupted, complete it now.
     const result = now?.status === "out_for_signature" ? await finalizeDocument(doc.id, viewer.userId) : null;
     return { status: "signed", complete: Boolean(result), next: result?.next };

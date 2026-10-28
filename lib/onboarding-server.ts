@@ -37,25 +37,25 @@ export function welcomeEmail(input: {
 }): EmailContent {
   const hello = input.firstName ? `Hi ${input.firstName},` : "Hello,";
   return {
-    subject: `Welcome to SKOX: ${input.projectName} starts here`,
+    subject: `Welcome to UnBusy: ${input.projectName} starts here`,
     preheader: input.hasAgreement
       ? "Your agreement is ready. Everything for your project lives in one place."
       : "Everything for your project lives in one place. Here's your first step.",
-    heading: "Welcome to SKOX Software",
+    heading: "Welcome to UnBusy",
     paragraphs: [
       hello,
-      `Thank you for choosing SKOX. From today, everything for ${input.projectName} lives in your own client portal: ${input.hasAgreement ? "your agreement, " : ""}updates, designs to review, files and invoices, all in one place.`,
+      `Thank you for choosing UnBusy. From today, everything for ${input.projectName} lives in your own client portal: ${input.hasAgreement ? "your agreement, " : ""}updates, designs to review, files and invoices, all in one place.`,
       input.hasAgreement
         ? "Please review and sign your agreement in the portal, then pay the deposit. Next, complete the project setup questions about your goals, brand and access requirements. Your progress is saved automatically."
         : "Start by completing your project setup and scheduling your kickoff meeting. Allow approximately 15 minutes to share your goals, brand materials and access requirements. Your progress is saved automatically.",
       `Sign in with this email address (${input.email}). We'll send you a 6-digit code, no password needed.`,
     ],
     cta: { label: input.hasAgreement ? "Review your agreement" : "Complete project setup", href: welcomeLink(input.email) },
-    footnote: input.teamIntro ? `${input.teamIntro}, SKOX · Please reply to this email if you have any questions.` : "Please reply to this email if you have any questions.",
+    footnote: input.teamIntro ? `${input.teamIntro}, UnBusy · Please reply to this email if you have any questions.` : "Please reply to this email if you have any questions.",
   };
 }
 
-/** The agreement + deposit linked to this project, if SKOX attached them. */
+/** The agreement + deposit linked to this project, if UnBusy attached them. */
 export async function agreementState(projectId: string, projectStatus: Parameters<typeof startSteps>[0]["projectStatus"]) {
   const db = getDb();
   const [deposit] = await db
@@ -129,10 +129,10 @@ export async function addClientPerson(input: {
   ]);
   notifyLater(() => [input.email], {
     subject: `${input.invitedByLabel} added you to ${input.projectName}`,
-    preheader: `${input.companyName} is working with SKOX. Follow along in the portal.`,
+    preheader: `${input.companyName} is working with UnBusy. Follow along in the portal.`,
     heading: `You're on the ${input.projectName} team`,
     paragraphs: [
-      `${input.invitedByLabel} added you to ${input.companyName}'s project portal with SKOX, where designs, updates, files and approvals live.`,
+      `${input.invitedByLabel} added you to ${input.companyName}'s project portal with UnBusy, where designs, updates, files and approvals live.`,
       `Sign in with this email address (${input.email}). We'll send a 6-digit code, no password needed.`,
     ],
     cta: { label: "Open the portal", href: welcomeLink(input.email) },
@@ -148,7 +148,7 @@ const SKIPPED_TODO: Partial<Record<StepKey, { title: string; completesOn?: "file
 };
 
 /**
- * Onboarding finished: skipped steps become the client's to-dos, SKOX gets its
+ * Onboarding finished: skipped steps become the client's to-dos, UnBusy gets its
  * own to-dos, and both sides get an email. Safe to call twice (it checks status).
  */
 export async function completeOnboarding(onboarding: Onboarding, actorUserId: string) {
@@ -245,6 +245,6 @@ export async function completeOnboarding(onboarding: Onboarding, actorUserId: st
       "Your project information is available in the portal. We will notify you when your input or approval is required.",
     ],
     cta: { label: "Go to your project", href: portalLink(`/projects/${project.id}`) },
-    footnote: workspace.teamIntro ? `${workspace.teamIntro}, SKOX` : undefined,
+    footnote: workspace.teamIntro ? `${workspace.teamIntro}, UnBusy` : undefined,
   });
 }

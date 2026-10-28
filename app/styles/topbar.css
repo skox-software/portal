@@ -18,15 +18,14 @@
   text-decoration: none;
 }
 .brand-logo {
-  width: 88px;
+  display: block;
+  width: 112px;
   height: auto;
 }
 .brand-name {
   padding-left: 12px;
   border-left: 1px solid var(--line);
-  font: 500 12px/1 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font: 500 12px/1 var(--body);
   color: var(--muted);
 }
 .topnav {
@@ -36,7 +35,7 @@
 }
 .topnav a {
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   text-decoration: none;
   font-weight: 500;

@@ -41,7 +41,7 @@
 }
 .project-nav a[aria-current="page"] {
   color: var(--ink);
-  border-bottom-color: var(--amber);
+  border-bottom-color: var(--accent);
 }
 .nav-count {
   display: inline-grid;
@@ -49,30 +49,30 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: var(--amber);
-  color: var(--ink);
-  font: 600 11px/1 var(--mono);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font: 600 11px/1 var(--body);
 }
 .staff-banner {
   margin-top: 14px;
   font-size: 13px;
-  color: var(--skox);
+  color: var(--staff);
 }
 .chip-skox {
   border-color: transparent;
-  background: var(--skox-bg);
-  color: var(--skox);
+  background: var(--staff-bg);
+  color: var(--staff);
 }
 .staff-card {
   border-style: dashed;
-  border-color: #c9d1dd;
+  border-color: var(--sky-2);
   margin-bottom: 16px;
 }
 .staff-inline {
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px dashed #c9d1dd;
+  border-top: 1px dashed var(--sky-2);
 }
 .section-head {
   display: flex;
@@ -100,7 +100,7 @@
   height: 18px;
   margin-top: 2px;
   flex: none;
-  accent-color: var(--amber-ink);
+  accent-color: var(--accent-ink);
 }
 .num {
   font-variant-numeric: tabular-nums;

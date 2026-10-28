@@ -17,11 +17,12 @@ export type SignatureRecord = {
 };
 
 export const CONSENT_TEXT =
-  "I agree that typing my name and selecting Sign is my electronic signature, that it is as legally binding as a handwritten signature, and that I consent to do business electronically with SKOX Software.";
+  "I agree that typing my name and selecting Sign is my electronic signature, that it is as legally binding as a handwritten signature, and that I consent to do business electronically with UnBusy.";
 
-const INK = rgb(0.11, 0.125, 0.114);
-const MUTED = rgb(0.36, 0.38, 0.34);
-const AMBER = rgb(0.894, 0.663, 0.027);
+// The brand ink, ink-2 and rule (lib/brand.ts), as pdf-lib colours.
+const INK = rgb(0x15 / 255, 0x18 / 255, 0x1d / 255);
+const MUTED = rgb(0x5b / 255, 0x61 / 255, 0x68 / 255);
+const RULE = rgb(0xdc / 255, 0xdd / 255, 0xdc / 255);
 
 function stamp(date: Date) {
   return `${date.toISOString().replace("T", " ").slice(0, 19)} UTC`;
@@ -65,7 +66,7 @@ export async function buildSignedPdf(input: {
 
   for (const page of pdf.getPages()) {
     const { width } = page.getSize();
-    const text = safe(`Signed electronically via SKOX Client Portal · Document ${input.documentId}`);
+    const text = safe(`Signed electronically via UnBusy Client Portal · Document ${input.documentId}`);
     page.drawText(text, { x: 24, y: 14, size: 7, font: sans, color: MUTED, maxWidth: width - 48 });
   }
 
@@ -82,8 +83,7 @@ export async function buildSignedPdf(input: {
     y -= opts.gap ?? size + 6;
   };
 
-  page.drawText("SKO", { x: left, y, size: 20, font: bold, color: INK });
-  page.drawText("X", { x: left + bold.widthOfTextAtSize("SKO", 20), y, size: 20, font: bold, color: AMBER });
+  page.drawText("UnBusy", { x: left, y, size: 20, font: bold, color: INK });
   y -= 36;
   line("Signature certificate", { size: 22, font: bold, gap: 30 });
   line(`Document: ${input.title}`, { size: 11 });
@@ -94,7 +94,7 @@ export async function buildSignedPdf(input: {
   line(input.originalSha256, { size: 9, gap: 26 });
 
   for (const s of input.signatures) {
-    page.drawLine({ start: { x: left, y: y + 8 }, end: { x: 556, y: y + 8 }, thickness: 0.5, color: rgb(0.89, 0.886, 0.847) });
+    page.drawLine({ start: { x: left, y: y + 8 }, end: { x: 556, y: y + 8 }, thickness: 0.5, color: RULE });
     y -= 10;
     line(s.typedName, { size: 24, font: script, gap: 30 });
     line(`${s.typedName} <${s.email}>`, { size: 10, font: bold });
@@ -110,12 +110,12 @@ export async function buildSignedPdf(input: {
   for (const l of wrap(CONSENT_TEXT, 105)) line(l, { size: 8, color: MUTED, gap: 11 });
   y -= 8;
   for (const l of wrap(
-    "Each signer was signed in to the SKOX Client Portal with an email address verified by a one-time code at the time of signing. Changing the document after it was sent would change its fingerprint and invalidate these signatures.",
+    "Each signer was signed in to the UnBusy Client Portal with an email address verified by a one-time code at the time of signing. Changing the document after it was sent would change its fingerprint and invalidate these signatures.",
     105,
   ))
     line(l, { size: 8, color: MUTED, gap: 11 });
 
   pdf.setTitle(`${input.title} (signed)`);
-  pdf.setProducer("SKOX Client Portal");
+  pdf.setProducer("UnBusy Client Portal");
   return pdf.save();
 }

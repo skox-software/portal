@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /**
- * SKOX's calendar, inside the rep's lead page. The rep books the scope call
+ * UnBusy's calendar, inside the rep's lead page. The rep books the scope call
  * while the prospect is still on the phone: copy their details into Google's
  * form in one tap each, or send them the link to pick a time themselves.
  */
@@ -51,7 +51,7 @@ export function BookCall({
   repName: string;
 }) {
   const first = contactName?.split(" ")[0] ?? "there";
-  const message = `Hi ${first}, it's ${repName} with SKOX. Here's the link to grab a 30-minute call with our team about ${company}'s website: ${openUrl}`;
+  const message = `Hi ${first}, it's ${repName} with UnBusy. Here's the link to grab a 30-minute call with our team about ${company}'s website: ${openUrl}`;
   const smsTo = phone ? phone.replace(/[^\d+]/g, "") : "";
   return (
     <div className="rp-book">
@@ -67,7 +67,7 @@ export function BookCall({
           <span>Or let them pick:</span>
           {phone && <a className="rp-btn" href={`sms:${smsTo}?&body=${encodeURIComponent(message)}`}>Text them the link</a>}
           {contactEmail && (
-            <a className="rp-btn" href={`mailto:${contactEmail}?subject=${encodeURIComponent(`Quick call with SKOX about ${company}`)}&body=${encodeURIComponent(message)}`}>
+            <a className="rp-btn" href={`mailto:${contactEmail}?subject=${encodeURIComponent(`Quick call with UnBusy about ${company}`)}&body=${encodeURIComponent(message)}`}>
               Email them the link
             </a>
           )}
@@ -77,11 +77,11 @@ export function BookCall({
       <p className="rp-book-step"><b>2</b> Pick a time with them</p>
       {embedUrl ? (
         <div className="rp-book-frame">
-          <iframe src={embedUrl} title="SKOX scope call booking" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" />
+          <iframe src={embedUrl} title="UnBusy scope call booking" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" />
         </div>
       ) : (
         <p className="rp-note">
-          <a href={openUrl} target="_blank" rel="noreferrer">Open SKOX&apos;s calendar ↗</a>
+          <a href={openUrl} target="_blank" rel="noreferrer">Open UnBusy&apos;s calendar ↗</a>
         </p>
       )}
       <p className="rp-note rp-book-fallback">

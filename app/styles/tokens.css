@@ -1,43 +1,80 @@
-/* Design tokens: every colour, font, radius and easing the portal uses. */
+/*
+ * Design tokens: every colour, font, radius and easing the portal uses.
+ *
+ * The brand values come from the UnBusy site (skox-software/skox,
+ * docs/brand/site-concept/DESIGN.md §2–§5): ink, paper and one blue, the blue
+ * used as punctuation only (the active tab, a count, a dot, focus). Buttons
+ * are ink. Components read the role tokens below, never the brand values.
+ */
 :root {
-  --canvas: #faf9f6;
-  --fog: #f3f1eb;
+  /* Brand */
+  --ub-ink: #15181d;
+  --ub-ink-2: #5b6168;
+  --ub-paper: #fafaf8;
+  --ub-paper-2: #f1f1ee;
+  --ub-blue: #0b5cff;
+  --ub-blue-deep: #0845c2;
+  --ub-sky: #e9f0ff;
+  --ub-sky-2: #d6e3ff;
+
+  /* Roles: light surfaces */
+  --canvas: var(--ub-paper);
+  --fog: var(--ub-paper-2);
   --paper: #ffffff;
-  --ink: #1c201d;
-  --muted: #5c6157;
-  --label: #676b62;
-  --line: #e4e2d8;
+  --ink: var(--ub-ink);
+  --muted: var(--ub-ink-2);
+  --label: var(--ub-ink-2);
+  --line: #e2e3e0;
+  --line-soft: #ececea;
   /* Form controls need 3:1 against the page (WCAG 1.4.11); dividers keep --line. */
-  --field-border: #8f8c80;
-  --line-soft: #edebe3;
-  --amber: #e4a907;
-  --amber-hover: #f2bc27;
-  --amber-ink: #7a5a05;
-  --blush: #f7e6c4;
-  --blush-ink: #5a3f0a;
+  --field-border: #8a8e94;
+  --accent: var(--ub-blue);
+  --accent-hover: var(--ub-blue-deep);
+  /* Blue as text: links, small labels on sky. AA on paper and on sky. */
+  --accent-ink: var(--ub-blue-deep);
+  --sky: var(--ub-sky);
+  --sky-2: var(--ub-sky-2);
+  /* The one highlighted panel per page (the launch date, the first metric). */
+  --highlight: var(--ub-sky);
+  --highlight-ink: var(--ub-ink);
+  --highlight-line: var(--ub-sky-2);
+  /* Primary buttons are ink; blue never fills a button. */
+  --btn: var(--ub-ink);
+  --btn-hover: #2a2f36;
+  --btn-ink: var(--ub-paper);
+  /* Status. Functional colours, kept quiet; never decoration. */
   --ok: #2f6b43;
-  --ok-bg: #e3f1e7;
+  --ok-bg: #e6f1e9;
+  --ok-line: #c9dfcf;
   --danger: #a12d1e;
   --danger-bg: #fbe9e5;
+  --danger-line: #eec4bb;
 
-  /* SkoxLogo reads these */
-  --color-ink: var(--ink);
-  --color-amber: var(--amber);
-  --color-paper: var(--canvas);
+  /* Roles: the dark surfaces (admin sidebar, rep desk, finance wall) */
+  --night: var(--ub-ink);
+  --night-2: #1d2127;
+  --night-3: #262b32;
+  --night-line: #30363e;
+  --night-field: #4a5059;
+  --night-muted: #a7acb3;
+  --night-soft: #c9ccd1;
+  --night-text: var(--ub-paper);
 
-  --serif: var(--font-instrument), Georgia, "Times New Roman", serif;
-  --sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --radius: 14px;
-  color-scheme: light;
-}
+  /* "UnBusy only" markers that clients never see */
+  --staff: var(--ub-blue-deep);
+  --staff-bg: var(--ub-sky);
+  --ring-track: rgba(21, 24, 29, 0.12);
 
-:root {
-  --ring-track: rgba(90, 63, 10, 0.16);
-  --skox: #253041;
-  --skox-bg: #e8ecf2;
-}
+  /* Type: Bricolage Grotesque for display, IBM Plex Sans for everything else
+     (app/layout.tsx loads both). No monospace: figures use tabular nums. */
+  --display: var(--font-display), "Bricolage Grotesque", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --body: var(--font-body), "IBM Plex Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
-:root {
+  /* Radius: panels 8px, controls 6px, small marks 4px. No pills. */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-xs: 4px;
+
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  color-scheme: light;
 }

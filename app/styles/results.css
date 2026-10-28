@@ -14,11 +14,11 @@
   background: var(--paper);
 }
 .metric-value {
-  font: 400 40px/1.05 var(--serif);
+  font: 700 40px/1.05 var(--display);
   font-variant-numeric: tabular-nums;
 }
 .delta {
-  font: 500 12px/1.4 var(--mono);
+  font: 500 12px/1.4 var(--body);
   color: var(--label);
 }
 .delta-up {
@@ -46,29 +46,29 @@
   border-top: 0;
 }
 .plan-name {
-  font: 400 26px/1.1 var(--serif);
+  font: 700 26px/1.1 var(--display);
 }
 .meter {
   height: 8px;
   margin-top: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--fog);
   overflow: hidden;
 }
 .meter span {
   display: block;
   height: 100%;
-  background: var(--amber);
+  background: var(--accent);
 }
 .card-refer {
-  background: var(--blush);
+  background: var(--highlight);
   border-color: transparent;
-  color: var(--blush-ink);
+  color: var(--highlight-ink);
 }
 
 .start-card {
   margin-bottom: 20px;
-  border: 2px solid var(--amber);
+  border: 2px solid var(--accent);
 }
 .start-steps {
   list-style: none;
@@ -84,11 +84,11 @@
   align-items: center;
   gap: 12px;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--fog);
 }
 .start-steps li[data-state="current"] {
-  background: var(--blush);
+  background: var(--highlight);
 }
 .start-steps li[data-state="locked"] {
   opacity: 0.6;
@@ -102,7 +102,7 @@
   border-radius: 50%;
   border: 2px solid var(--line);
   background: var(--paper);
-  font: 600 13px/1 var(--mono);
+  font: 600 13px/1 var(--body);
 }
 .start-steps li[data-state="current"] .start-num {
   border-color: var(--ink);
@@ -120,7 +120,7 @@
   position: relative;
   margin-top: 16px;
   aspect-ratio: 16 / 9;
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
   background: var(--ink);
 }
@@ -164,7 +164,7 @@
   gap: 12px;
   padding: 10px 0 10px 12px;
   border-top: 1px solid var(--line-soft);
-  border-left: 3px solid var(--amber);
+  border-left: 3px solid var(--accent);
 }
 .attention-list li:first-child {
   border-top: 0;
@@ -176,7 +176,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: 500 12px/1 var(--mono);
+  font: 500 12px/1 var(--body);
 }
 .health::before {
   content: "";
@@ -189,7 +189,7 @@
   color: var(--ok);
 }
 .health[data-level="watch"] {
-  color: var(--amber-ink);
+  color: var(--accent-ink);
 }
 .health[data-level="risk"] {
   color: var(--danger);
@@ -203,11 +203,11 @@
 .kpi {
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--paper);
 }
 .kpi-value {
-  font: 400 32px/1.1 var(--serif);
+  font: 700 32px/1.1 var(--display);
   font-variant-numeric: tabular-nums;
 }
 

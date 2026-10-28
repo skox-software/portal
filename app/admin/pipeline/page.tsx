@@ -4,7 +4,7 @@ import { readTrack } from "@/lib/pipeline";
 import { SalesBoardPage } from "./board";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Pipeline · SKOX" };
+export const metadata: Metadata = { title: "Pipeline" };
 
 /** The Pipeline: real opportunities, from Interested to Won. Outreach lives at /admin/leads. */
 export default async function PipelinePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

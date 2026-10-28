@@ -35,10 +35,10 @@ export async function saveWelcomeStep(formData: FormData) {
   const db = getDb();
   const [o] = await db.select().from(onboardings).where(eq(onboardings.projectId, project.id)).limit(1);
   if (!o) redirect(`/projects/${project.id}`);
-  // Setup belongs to the client's approvers (and SKOX). Teammates can look, not edit,
-  // and once it's finished only SKOX can change the answers.
+  // Setup belongs to the client's approvers (and UnBusy). Teammates can look, not edit,
+  // and once it's finished only UnBusy can change the answers.
   if (!access.isStaff && (!can.approve(access) || o.status === "completed")) {
-    backWith(`${base}?step=${step}`, "notice", o.status === "completed" ? "Setup is finished. Ask SKOX if something needs changing." : "Your approver handles setup. You can look around.");
+    backWith(`${base}?step=${step}`, "notice", o.status === "completed" ? "Setup is finished. Ask UnBusy if something needs changing." : "Your approver handles setup. You can look around.");
   }
 
   const text = (key: string, max = 4000) => String(formData.get(key) ?? "").trim().slice(0, max);

@@ -7,7 +7,7 @@ export type BarSeries = { key: string; label: string; value: number; tip: string
 /** One bar per item, a single color token. */
 export function BarChart({
   series,
-  color = "var(--amber)",
+  color = "var(--accent)",
   label,
   format = axisMoney,
 }: {

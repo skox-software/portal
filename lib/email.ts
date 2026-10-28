@@ -1,10 +1,11 @@
 import { Resend } from "resend";
+import { BRAND, EMAIL_LOGO_URL, MAIL_FROM, SUPPORT_EMAIL } from "./brand.ts";
 
 /**
  * Branded transactional email. Every message uses one layout so the portal
- * always looks like SKOX: wordmark, warm paper background, one clear button.
- * Email clients ignore web fonts and most CSS, so the layout is inline-styled
- * tables with system-font fallbacks.
+ * always looks like UnBusy: the logo, paper background, one ink button. Email
+ * clients ignore web fonts and most CSS, so the layout is inline-styled tables
+ * with system-font fallbacks.
  */
 
 export type EmailContent = {
@@ -19,11 +20,10 @@ export type EmailContent = {
   footnote?: string;
 };
 
-const INK = "#1c201d";
-const MUTED = "#5c6157";
-const AMBER = "#e4a907";
-const CANVAS = "#faf9f6";
-const LINE = "#e4e2d8";
+const INK = BRAND.ink;
+const MUTED = BRAND.ink2;
+const CANVAS = BRAND.paper;
+const LINE = BRAND.ruleSolid;
 
 export function escapeHtml(value: string) {
   return value
@@ -46,8 +46,8 @@ export function renderEmail(content: EmailContent) {
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;border-top:1px solid ${LINE}">${content.details.map(({ label, value }) => `<tr><td width="32%" valign="top" style="padding:10px 12px 10px 0;border-bottom:1px solid ${LINE};font:500 13px/1.5 ${font};color:${MUTED}">${escapeHtml(label)}</td><td valign="top" style="padding:10px 0;border-bottom:1px solid ${LINE};font:500 14px/1.5 ${font};color:${INK};overflow-wrap:anywhere;word-break:break-word">${escapeHtml(value)}</td></tr>`).join("")}</table>`
     : "";
   const cta = content.cta
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px"><tr><td style="border-radius:999px;background:${AMBER}">
-         <a href="${escapeHtml(content.cta.href)}" style="display:inline-block;padding:14px 26px;font:600 15px/1 ${font};color:${INK};text-decoration:none;border-radius:999px">${escapeHtml(content.cta.label)}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px"><tr><td style="border-radius:4px;background:${INK}">
+         <a href="${escapeHtml(content.cta.href)}" style="display:inline-block;padding:14px 24px;font:600 15px/1 ${font};color:${CANVAS};text-decoration:none;border-radius:4px">${escapeHtml(content.cta.label)}</a>
        </td></tr></table>`
     : "";
   const footnote = content.footnote
@@ -61,16 +61,16 @@ export function renderEmail(content: EmailContent) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CANVAS}"><tr><td align="center" style="padding:32px 16px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
     <tr><td style="padding:0 4px 20px">
-      <span style="font:800 22px/1 ${font};letter-spacing:0.14em;color:${INK}">SKO<span style="color:${AMBER}">X</span></span>
-      <span style="font:500 11px/1 ${font};letter-spacing:0.12em;text-transform:uppercase;color:${MUTED};padding-left:10px">Client Portal</span>
+      <img src="${EMAIL_LOGO_URL}" width="120" height="29" alt="UnBusy" style="display:inline-block;vertical-align:middle;border:0;outline:none;text-decoration:none">
+      <span style="font:500 13px/1 ${font};color:${MUTED};padding-left:10px;vertical-align:middle">Client portal</span>
     </td></tr>
-    <tr><td style="background:#ffffff;border:1px solid ${LINE};border-radius:16px;padding:32px 28px">
-      <h1 style="margin:0 0 16px;font:700 24px/1.25 Georgia,'Times New Roman',serif;color:${INK}">${escapeHtml(content.heading)}</h1>
+    <tr><td style="background:#ffffff;border:1px solid ${LINE};border-radius:8px;padding:32px 28px">
+      <h1 style="margin:0 0 16px;font:700 24px/1.25 ${font};letter-spacing:-0.01em;color:${INK}">${escapeHtml(content.heading)}</h1>
       ${paragraphs}${details}${cta}${footnote}
     </td></tr>
     <tr><td style="padding:20px 4px 0;font:400 12px/1.6 ${font};color:${MUTED}">
-      SKOX Software · Good ideas deserve to be built.<br>
-      This notification relates to your work with SKOX Software. If you have any questions, reply to this email to contact our team.
+      UnBusy<br>
+      This notification relates to your work with UnBusy. If you have any questions, reply to this email to contact our team.
     </td></tr>
   </table>
 </td></tr></table>
@@ -84,7 +84,7 @@ export function renderEmail(content: EmailContent) {
     ...(content.cta ? ["", `${content.cta.label}: ${content.cta.href}`] : []),
     ...(content.footnote ? ["", content.footnote] : []),
     "",
-    "SKOX Software · Reply to this email to reach the team.",
+    "UnBusy · Reply to this email to reach the team.",
   ].join("\n");
 
   return { html, text };
@@ -115,8 +115,8 @@ export async function sendEmail(to: string | string[], content: EmailContent) {
     const results = await Promise.all(
       recipients.map(async (address) => {
         const { error } = await resend!.emails.send({
-          from: process.env.EMAIL_FROM ?? "SKOX Software <portal@skoxsoftware.com>",
-          replyTo: process.env.EMAIL_REPLY_TO ?? "founder@skoxsoftware.com",
+          from: MAIL_FROM,
+          replyTo: process.env.EMAIL_REPLY_TO || SUPPORT_EMAIL,
           to: address,
           subject: content.subject,
           html,

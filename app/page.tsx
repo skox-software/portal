@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { requireViewer } from "@/lib/access";
+import { SUPPORT_EMAIL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import { clients, onboardings, projects } from "@/lib/db/schema";
 import { describeDaysUntil, daysUntil, formatDate, kindLabel, STATUS_LABEL } from "@/lib/format";
@@ -50,12 +51,12 @@ export default async function Home() {
           <div className="card stack">
             <h2>No projects here yet</h2>
             <p className="muted">
-              Your account isn&apos;t linked to a project. If SKOX invited you, sign in with the
+              Your account isn&apos;t linked to a project. If UnBusy invited you, sign in with the
               exact address the invitation went to, or ask us to add{" "}
               <strong>{viewer.email}</strong>.
             </p>
             <p>
-              <a href="mailto:founder@skoxsoftware.com">founder@skoxsoftware.com</a>
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
             </p>
           </div>
         ) : (

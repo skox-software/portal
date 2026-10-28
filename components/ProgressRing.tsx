@@ -46,9 +46,9 @@ export function Sparkline({ values, width = 120, height = 36 }: { values: (numbe
   const [lx, ly] = xy[xy.length - 1];
   return (
     <svg className="spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <path d={area} fill="var(--blush)" />
-      <path d={line} fill="none" stroke="var(--amber-ink)" strokeWidth="2" />
-      <circle cx={lx} cy={ly} r="3" fill="var(--amber-ink)" />
+      <path d={area} fill="var(--highlight)" />
+      <path d={line} fill="none" stroke="var(--accent-ink)" strokeWidth="2" />
+      <circle cx={lx} cy={ly} r="3" fill="var(--accent-ink)" />
     </svg>
   );
 }

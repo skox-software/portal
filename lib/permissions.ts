@@ -74,7 +74,7 @@ export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-/** The staff membership for a workspace, if the person is on the SKOX team. */
+/** The staff membership for a workspace, if the person is on the UnBusy team. */
 export function staffMembershipIn<T extends MembershipLike>(
   memberships: T[],
   workspaceId?: string,

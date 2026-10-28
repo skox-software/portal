@@ -58,7 +58,7 @@ export async function emailAssignedLeads(repId: string, dealIds: string[]) {
   const rows = await db.select({ company: deals.company }).from(deals).where(inArray(deals.id, dealIds)).limit(25);
   const n = dealIds.length;
   await sendEmail([rep.email], {
-    subject: n === 1 ? `New lead: ${rows[0]?.company ?? "from SKOX"}` : `${n} new leads from SKOX`,
+    subject: n === 1 ? `New lead: ${rows[0]?.company ?? "from UnBusy"}` : `${n} new leads from UnBusy`,
     preheader: "They're in your portal, ready to call.",
     heading: n === 1 ? "You have a new lead" : `You have ${n} new leads`,
     paragraphs: [rows.map((r) => r.company).join(", ") + (n > rows.length ? ` and ${n - rows.length} more` : "") + "."],

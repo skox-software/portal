@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireStaff } from "@/lib/access";
 import { ensureAuthAccount } from "@/lib/auth/accounts";
+import { PORTAL_URL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import {
   clients,
@@ -31,7 +32,7 @@ import { readRepField } from "@/lib/rep-assign";
 import { salesToday } from "@/lib/follow-up";
 
 /*
- * Every action re-checks that the caller is SKOX staff and that the thing it
+ * Every action re-checks that the caller is UnBusy staff and that the thing it
  * touches belongs to the caller's workspace, then records an event in the
  * same batch as the change.
  */
@@ -281,7 +282,7 @@ export async function inviteMember(formData: FormData) {
     }),
   ]);
   revalidatePath(back);
-  backWith(back, "notice", `Added ${parsed.data.email}. Tell them to sign in at portal.skoxsoftware.com with that email.`);
+  backWith(back, "notice", `Added ${parsed.data.email}. Tell them to sign in at ${PORTAL_URL.replace(/^https?:\/\//, "")} with that email.`);
 }
 
 export async function removeMember(formData: FormData) {

@@ -38,7 +38,7 @@ test("quoted history is trimmed from replies", () => {
   assert.equal(snippet("a ".repeat(100), 20).length, 20);
 });
 
-test("mail from SKOX is outbound, with the outside recipient as the counterpart", () => {
+test("mail from UnBusy is outbound, with the outside recipient as the counterpart", () => {
   const isStaff = (e: string) => e.endsWith("@skoxsoftware.com");
   const out = counterpartOf({ email: "reiss@skoxsoftware.com", name: "Reiss" }, [{ email: "crm@inbox.skoxsoftware.com", name: null }, { email: "dana@harbor.test", name: "Dana" }], isStaff, ["crm@inbox.skoxsoftware.com"]);
   assert.deepEqual(out, { direction: "outbound", counterpart: { email: "dana@harbor.test", name: "Dana" } });

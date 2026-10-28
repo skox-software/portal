@@ -1,15 +1,15 @@
 /**
- * What a sales rep sees of a deal. Reps never see SKOX's internal stages,
+ * What a sales rep sees of a deal. Reps never see UnBusy's internal stages,
  * prices or notes: just whether the lead is theirs to work, booked, with
- * SKOX, or closed.
+ * UnBusy, or closed.
  */
 
 import type { DealStage } from "./pipeline.ts";
 
 export const REP_STATUSES = [
   { value: "working", label: "Working", hint: "Yours to call" },
-  { value: "booked", label: "Call booked", hint: "Scope call set with SKOX" },
-  { value: "with_skox", label: "With SKOX", hint: "SKOX is quoting and closing" },
+  { value: "booked", label: "Call booked", hint: "Scope call set with UnBusy" },
+  { value: "with_skox", label: "With UnBusy", hint: "UnBusy is quoting and closing" },
   { value: "won", label: "Won", hint: "Client signed. You earn on every payment" },
   { value: "lost", label: "Closed", hint: "Not moving forward" },
 ] as const;

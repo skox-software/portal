@@ -9,7 +9,7 @@ import { signOut } from "@/app/actions";
 import { AdminNav } from "@/components/AdminNav";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { WorkspaceBreadcrumbs } from "@/components/WorkspaceBreadcrumbs";
-import { SkoxLogo } from "@/components/SkoxLogo";
+import { Logo } from "@/components/Logo";
 import "./admin.css";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <a className="admin-skip" href="#admin-content">Skip to content</a>
     <header className="workspace-header">
       <div className="shell workspace-header-top">
-        <Link className="workspace-brand" href="/admin" aria-label="SKOX workspace home"><SkoxLogo /><span>Your workspace</span></Link>
+        <Link className="workspace-brand" href="/admin" aria-label="UnBusy workspace home"><Logo /><span>Your workspace</span></Link>
         <div className="workspace-account"><Link href="/settings">Email preferences</Link><form action={signOut}><button className="btn btn-ghost btn-small">Sign out</button></form></div>
       </div>
       <div className="shell"><AdminNav inboxCount={inboxCount} dueCount={dueCount} /></div>

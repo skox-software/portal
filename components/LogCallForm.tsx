@@ -93,7 +93,7 @@ export function LogCallForm({
           ) : (
             <SubmitButton key={o.value} className="logcall-btn" name="outcome" value={o.value} data-tone={tone} data-shortcut={i + 1} pendingLabel="Saving…">
               <span>{o.label}</span>
-              <small>{o.value === "bad_number" ? "Flags the number" : o.value === "preview" ? "SKOX builds a preview" : `Follow up ${due}`}</small>
+              <small>{o.value === "bad_number" ? "Flags the number" : o.value === "preview" ? "UnBusy builds a preview" : `Follow up ${due}`}</small>
               <kbd>{i + 1}</kbd>
             </SubmitButton>
           );

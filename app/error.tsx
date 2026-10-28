@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { SUPPORT_EMAIL } from "@/lib/brand";
 
 export default function PortalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -14,7 +15,7 @@ export default function PortalError({ error, reset }: { error: Error & { digest?
       <h1>This page didn&apos;t load.</h1>
       <p className="lede">
         Nothing you saved has been lost. Try again in a moment. If it keeps happening, email{" "}
-        <a href="mailto:founder@skoxsoftware.com">founder@skoxsoftware.com</a>
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
         {error.digest ? ` and mention reference ${error.digest}` : ""}.
       </p>
       <div className="row" style={{ marginTop: 24 }}>

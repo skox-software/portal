@@ -39,7 +39,7 @@
 .empty {
   padding: 18px;
   border: 1px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   color: var(--muted);
   font-size: 14px;
 }
@@ -67,19 +67,19 @@
   margin-bottom: 20px;
   padding: 22px 24px;
   border-radius: var(--radius);
-  background: var(--blush);
-  color: var(--blush-ink);
+  background: var(--highlight);
+  color: var(--highlight-ink);
 }
 .date-panel .label {
-  color: var(--blush-ink);
+  color: var(--highlight-ink);
 }
 .date-big {
   margin-top: 4px;
-  font: 400 clamp(38px, 5vw, 56px)/1 var(--serif);
+  font: 700 clamp(38px, 5vw, 56px)/1 var(--display);
   color: var(--ink);
 }
 .date-countdown {
-  font: 500 14px/1.4 var(--mono);
+  font: 500 14px/1.4 var(--body);
 }
 .date-history {
   margin-top: 10px;
@@ -112,15 +112,15 @@
   transform: translateY(1px);
 }
 .timeline [data-state="in_progress"] .dot {
-  border-color: var(--amber);
-  background: var(--blush);
+  border-color: var(--accent);
+  background: var(--highlight);
 }
 .timeline [data-state="done"] .dot {
   border-color: var(--ok);
   background: var(--ok);
 }
 .timeline .when {
-  font: 400 12px/1.4 var(--mono);
+  font: 400 12px/1.4 var(--body);
   color: var(--label);
   white-space: nowrap;
 }
@@ -141,7 +141,7 @@
   border-top: 0;
 }
 .task-list .when {
-  font: 400 12px/1.6 var(--mono);
+  font: 400 12px/1.6 var(--body);
   color: var(--label);
   white-space: nowrap;
 }
@@ -192,9 +192,7 @@ td {
 }
 thead th {
   border-top: 0;
-  font: 500 11px/1.5 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font: 500 11px/1.5 var(--body);
   color: var(--label);
 }
 td.num {
@@ -229,7 +227,8 @@ td.num {
   padding: 48px 0;
 }
 .signin-logo {
-  width: 132px;
+  display: block;
+  width: 160px;
   height: auto;
   margin-bottom: 36px;
 }
@@ -253,7 +252,7 @@ td.num {
   height: 6px;
   margin-right: 12px;
   border-radius: 50%;
-  background: var(--amber);
+  background: var(--accent);
   transform: translateY(-2px);
 }
 .signin-card {
@@ -261,7 +260,7 @@ td.num {
   gap: 8px;
   padding: 32px;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius);
   background: var(--paper);
 }
 .signin-card h2 {
@@ -271,7 +270,7 @@ td.num {
   margin-top: 14px;
 }
 .code-input {
-  font: 500 24px/1 var(--mono);
+  font: 500 24px/1 var(--body);
   letter-spacing: 0.3em;
   text-align: center;
 }

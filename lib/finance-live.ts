@@ -14,7 +14,7 @@ import type { LiveEvent } from "@/lib/live-feed";
  */
 export type LiveSnapshot = {
   at: string;
-  /** Business account cash when SKOX has one, otherwise the payments balance. */
+  /** Business account cash when UnBusy has one, otherwise the payments balance. */
   balanceCents: number | null;
   balanceSource: "business" | "payments" | null;
   paymentsBalanceCents: number | null;

@@ -76,7 +76,7 @@ export function snippet(text: string, max = 110) {
 }
 
 /**
- * Who a message is with. Mail from a SKOX address is outbound, and the
+ * Who a message is with. Mail from an UnBusy address is outbound, and the
  * conversation is with its first outside recipient; anything else is inbound
  * from the sender. `ignore` holds the inbox's own copy address.
  */

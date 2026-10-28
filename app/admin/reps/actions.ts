@@ -59,12 +59,12 @@ export async function inviteRep(formData: FormData) {
     eventInsert({ workspaceId: staff.workspaceId, actorId: viewer.userId, verb: "rep.invited", subjectType: "membership", subjectId: membershipId, payload: { email, displayName, rateBps } }),
   ]);
   await sendEmail([email], {
-    subject: "Your SKOX sales rep account is ready",
+    subject: "Your UnBusy sales rep account is ready",
     preheader: `You earn ${formatRate(rateBps)} of every payment from clients you bring.`,
     heading: `Welcome, ${displayName.split(" ")[0]}`,
     paragraphs: [
-      "Your SKOX sales rep account is set up. It's where you'll find the leads we assign you, submit your own, book scope calls, and track every dollar you earn.",
-      `You earn ${formatRate(rateBps)} of every payment SKOX collects from clients you bring in, for as long as they stay a client.`,
+      "Your UnBusy sales rep account is set up. It's where you'll find the leads we assign you, submit your own, book scope calls, and track every dollar you earn.",
+      `You earn ${formatRate(rateBps)} of every payment UnBusy collects from clients you bring in, for as long as they stay a client.`,
       "Sign in with this email address. We'll send you a 6-digit code; there's no password.",
     ],
     cta: { label: "Sign in", href: portalLink("/sign-in") },
@@ -132,7 +132,7 @@ export async function updateRep(formData: FormData) {
 }
 
 /**
- * Gives someone on the SKOX team a share of what they close (100% on their own deals; 40% each on rep deals).
+ * Gives someone on the UnBusy team a share of what they close (100% on their own deals; 40% each on rep deals).
  * It's a commission profile on their existing staff membership, so earnings,
  * statements and payouts work exactly as for a rep, on the full invoice
  * amount. They keep staff access; no invite or welcome email is sent.
@@ -151,7 +151,7 @@ export async function addFounderShare(formData: FormData) {
     .leftJoin(repProfiles, eq(repProfiles.membershipId, memberships.id))
     .where(and(eq(memberships.id, membershipId), eq(memberships.workspaceId, staff.workspaceId), isNull(memberships.clientId)))
     .limit(1);
-  if (!member || !isStaffRole(member.role)) backWith(BACK, "error", "Founder earnings are for existing SKOX founder accounts. Invite sales reps separately.");
+  if (!member || !isStaffRole(member.role)) backWith(BACK, "error", "Founder earnings are for existing UnBusy founder accounts. Invite sales reps separately.");
   if (member.profile) backWith(BACK, "error", `${member.email} already has a commission profile. Edit it below.`);
   const rateBps = rateFrom(formData, member.role);
   if (rateBps === null) backWith(BACK, "error", `The share must be ${rateRange(member.role)}.`);

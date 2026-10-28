@@ -13,7 +13,7 @@ import { welcomeLink } from "@/lib/onboarding-server";
 import { projectForAction } from "@/lib/project-access";
 import { allow } from "@/lib/rate-limit";
 
-/** Approvers (and SKOX) add teammates from the client's side. */
+/** Approvers (and UnBusy) add teammates from the client's side. */
 export async function inviteTeammate(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok) return;
@@ -33,7 +33,7 @@ export async function inviteTeammate(formData: FormData) {
     .limit(1);
   if (existing) backWith(back, "notice", `${parsed.data.email} already has access.`);
   if (!access.isStaff && !(await allow(`invite:${viewer.userId}`, 15, 24 * 60 * 60_000))) {
-    backWith(back, "error", "You've invited a lot of people today. Ask SKOX to add the rest.");
+    backWith(back, "error", "You've invited a lot of people today. Ask UnBusy to add the rest.");
   }
 
   const id = crypto.randomUUID();
@@ -58,11 +58,11 @@ export async function inviteTeammate(formData: FormData) {
   ]);
 
   notifyLater(() => [parsed.data.email], {
-    subject: `You're invited to ${project.name} on the SKOX portal`,
-    preheader: `Follow ${project.name} with SKOX: progress, designs, documents and more.`,
+    subject: `You're invited to ${project.name} on the UnBusy portal`,
+    preheader: `Follow ${project.name} with UnBusy: progress, designs, documents and more.`,
     heading: `You're invited to ${project.name}`,
     paragraphs: [
-      `${viewer.email} added you to ${client.name}'s project portal with SKOX.`,
+      `${viewer.email} added you to ${client.name}'s project portal with UnBusy.`,
       `Sign in with this email address (${parsed.data.email}). We'll send you a 6-digit code, no password needed.`,
     ],
     cta: { label: "Open the portal", href: welcomeLink(parsed.data.email) },
@@ -94,8 +94,8 @@ export async function removeTeammate(formData: FormData) {
     .where(and(eq(memberships.id, membershipId), eq(memberships.clientId, client.id)))
     .limit(1);
   if (!row) return;
-  if (row.email === viewer.email) backWith(back, "error", "You can't remove yourself. Ask SKOX.");
-  if (!access.isStaff && row.role === "client_approver") backWith(back, "error", "Ask SKOX to remove an approver.");
+  if (row.email === viewer.email) backWith(back, "error", "You can't remove yourself. Ask UnBusy.");
+  if (!access.isStaff && row.role === "client_approver") backWith(back, "error", "Ask UnBusy to remove an approver.");
   await db.batch([
     db.delete(memberships).where(eq(memberships.id, row.id)),
     eventInsert({
@@ -112,7 +112,7 @@ export async function removeTeammate(formData: FormData) {
   backWith(back, "notice", `${row.email} no longer has access.`);
 }
 
-/** A client ticks off something on their to-do list; SKOX hears about it. */
+/** A client ticks off something on their to-do list; UnBusy hears about it. */
 export async function completeClientTask(formData: FormData) {
   const ctx = await projectForAction(formData.get("projectId"));
   if (!ctx.ok) return;

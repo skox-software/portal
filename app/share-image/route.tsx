@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { ImageResponse } from "next/og";
 
 /**
@@ -7,7 +9,9 @@ import { ImageResponse } from "next/og";
  */
 const size = { width: 1200, height: 630 };
 
-export function GET() {
+export async function GET() {
+  // The lockup is 886×214; drawn at 330 wide.
+  const logo = await readFile(path.join(process.cwd(), "public/brand/lockup-light.png"));
   return new ImageResponse(
     <div
       style={{
@@ -16,80 +20,33 @@ export function GET() {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        backgroundColor: "#faf9f6",
-        // One soft amber glow from the top left, painted on the card itself
-        // (an oversized absolute circle gets clipped into a hard-edged box).
-        backgroundImage:
-          "radial-gradient(circle at 18% 12%, rgba(228,169,7,0.28) 0%, rgba(228,169,7,0.10) 32%, rgba(228,169,7,0) 58%)",
+        backgroundColor: "#fafaf8",
         padding: 72,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <svg
-          width="230"
-          height="36"
-          viewBox="0 0 1959 309"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M134 2L471 3L414 59L132 59L106 67L92 87L95 113L103 121L115 125L391 125L413 129L430 137L454 161L466 196L465 234L458 255L448 271L431 287L411 298L371 307L0 307L59 250L364 250L381 245L394 229L394 200L384 188L372 184L99 184L66 176L46 164L33 149L21 114L22 80L32 52L49 31L71 16L101 6ZM540 2L610 2L612 132L695 132L862 2L972 3L771 151L957 308L848 308L696 184L612 184L610 308L536 308L536 3Z"
-            fill="#1c201d"
-          />
-          <path
-            d="M1091 6H1359A80 66 0 0 1 1439 72V241A80 66 0 0 1 1359 307H1091A80 66 0 0 1 1011 241V72A80 66 0 0 1 1091 6ZM1105 90H1348A28 28 0 0 1 1376 118V189A28 28 0 0 1 1348 217H1105A28 28 0 0 1 1077 189V118A28 28 0 0 1 1105 90Z"
-            fill="#e4a907"
-            fillRule="evenodd"
-          />
-          <path
-            d="M1480 0L1579 1L1936 308L1835 308L1525 43L1478 1ZM1647 169L1694 211L1573 308L1478 308ZM1861 0L1958 1L1776 147L1730 106Z"
-            fill="#e4a907"
-          />
-        </svg>
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element -- ImageResponse renders plain img only */}
+      <img src={`data:image/png;base64,${logo.toString("base64")}`} width={330} height={80} alt="UnBusy" />
 
       <div style={{ display: "flex", flexDirection: "column" }}>
         <div
           style={{
             display: "flex",
-            fontSize: 66,
-            color: "#1c201d",
-            lineHeight: 1.05,
+            fontSize: 72,
+            fontWeight: 700,
+            color: "#15181d",
+            lineHeight: 1.02,
             letterSpacing: -2,
             maxWidth: 940,
           }}
         >
-          Your project, in one place.
+          Your work, in one place.
         </div>
-        <div
-          style={{
-            display: "flex",
-            marginTop: 28,
-            fontSize: 26,
-            color: "#5c6157",
-          }}
-        >
-          The SKOX Client Portal
-        </div>
+        <div style={{ display: "flex", marginTop: 28, fontSize: 28, color: "#5b6168" }}>The UnBusy Client Portal</div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          fontSize: 22,
-          color: "#7a5a05",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            width: 40,
-            height: 2,
-            background: "#e4a907",
-          }}
-        />
-        Follow the build · approve · sign · pay
+      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 24, color: "#15181d" }}>
+        <div style={{ display: "flex", width: 12, height: 12, borderRadius: 6, background: "#0b5cff" }} />
+        Follow the work, approve, sign, pay
       </div>
     </div>,
     size,

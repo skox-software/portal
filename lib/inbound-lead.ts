@@ -175,3 +175,14 @@ export function googleAdsCsv(rows: WonDeal[], now = new Date()): { csv: string; 
   ];
   return { csv: lines.join("\n") + "\n", count: usable.length };
 }
+
+/** A form on a lead's preview site sends `timeline: "preview:<slug>"`; this reads the slug back. */
+export function previewSlugFrom(timeline: string | undefined): string | null {
+  const m = /^preview:([a-z0-9][a-z0-9-]{0,80})$/.exec(timeline?.trim() ?? "");
+  return m ? m[1] : null;
+}
+
+/** Our own addresses: a preview form sent from one is a team test, never a new lead. */
+export function isTeamEmail(email: string) {
+  return /@skoxsoftware\.com$/i.test(email.trim());
+}

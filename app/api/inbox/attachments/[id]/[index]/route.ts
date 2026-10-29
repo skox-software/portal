@@ -6,7 +6,7 @@ import { emailMessages } from "@/lib/db/schema";
 import { staffMembershipIn } from "@/lib/permissions";
 import { blobResponse } from "@/lib/storage";
 
-/** An attachment from an Inbox email. SKOX staff of that workspace only. */
+/** An attachment from an Inbox email. UnBusy staff of that workspace only. */
 export async function GET(request: Request, ctx: RouteContext<"/api/inbox/attachments/[id]/[index]">) {
   const { id, index } = await ctx.params;
   const viewer = await getViewer();

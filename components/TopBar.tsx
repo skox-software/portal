@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions";
-import { SkoxLogo } from "@/components/SkoxLogo";
+import { WorkspaceBreadcrumbs } from "@/components/WorkspaceBreadcrumbs";
+import { Logo } from "@/components/Logo";
 import type { Viewer } from "@/lib/access";
 import { staffMembershipIn } from "@/lib/permissions";
 
@@ -9,13 +10,14 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
   return (
     <header className="topbar">
       <div className="shell topbar-inner">
-        <Link href="/" className="brand" aria-label="SKOX Client Portal home">
-          <SkoxLogo className="brand-logo" />
+        <Link href="/" className="brand" aria-label="UnBusy Client Portal home">
+          <Logo className="brand-logo" />
           <span className="brand-name">Client Portal</span>
         </Link>
         <nav className="topnav" aria-label="Main">
           {isStaff ? <Link href="/admin">Admin overview</Link> : <Link href="/">Your projects</Link>}
           {isStaff && <Link href="/admin/billing">Billing</Link>}
+          <Link href="/settings">Settings</Link>
         </nav>
         <div className="who">
           <Link href="/settings" className="who-email" title="Email preferences">
@@ -28,6 +30,7 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
           </form>
         </div>
       </div>
+      <WorkspaceBreadcrumbs staff={isStaff} />
     </header>
   );
 }

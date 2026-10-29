@@ -36,7 +36,7 @@ export function PulseStrip({ pulse }: { pulse: Overview["pulse"] }) {
         </Link>
       )}
       <Link className="admin-metric" href={p.owed.overdueCount ? "/admin/billing?status=overdue" : "/admin/billing?status=open"}>
-        <span>Owed to SKOX</span>
+        <span>Owed to UnBusy</span>
         <strong>{formatMoney(p.owed.openCents)}</strong>
         <small className={p.owed.overdueCount ? "ov-warn" : undefined}>{p.owed.overdueCount ? `${p.owed.overdueCount} overdue · ${formatMoney(p.owed.overdueCents)}` : `${p.owed.openCount} unpaid, none overdue`}</small>
       </Link>

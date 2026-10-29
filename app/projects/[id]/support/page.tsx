@@ -56,7 +56,7 @@ export default async function SupportPage({
             <p>{r.body}</p>
           </div>
           {messages.map((m) => (
-            <div key={m.id} className="message" data-skox={m.authorId.endsWith("@skoxsoftware.com") ? "true" : undefined}>
+            <div key={m.id} className="message" data-skox={/@(skoxsoftware|gounbusy)\.com$/.test(m.authorId) ? "true" : undefined}>
               <p className="small muted">
                 {m.authorId} · {formatDateTime(m.createdAt)}
               </p>

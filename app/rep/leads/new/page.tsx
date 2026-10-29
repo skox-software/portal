@@ -18,7 +18,7 @@ export default async function NewRepLead({ searchParams }: { searchParams: Promi
         <div>
           <p className="rp-kicker">Bring your own</p>
           <h1 className="rp-title">Add a lead</h1>
-          <p className="rp-lede">A business you know that needs a better website or web app. If nobody has added it yet, it&apos;s yours, and so is {profile ? formatRate(profile.rateBps) : "your cut"} of everything they ever pay SKOX.</p>
+          <p className="rp-lede">A business you know that needs a better website or web app. If nobody has added it yet, it&apos;s yours, and so is {profile ? formatRate(profile.rateBps) : "your cut"} of everything they ever pay UnBusy.</p>
           <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
           <form action={createRepLead} className="rp-panel rp-form" style={{ marginTop: 28 }}>
             <div className="field">
@@ -64,7 +64,7 @@ export default async function NewRepLead({ searchParams }: { searchParams: Promi
         <aside className="rp-panel" data-accent style={{ marginTop: 8 }}>
           <h2>The rules</h2>
           <ol className="rp-steps" style={{ marginTop: 16 }}>
-            <li><span><strong>First to add wins.</strong> We check every business SKOX already knows by name, phone, email and website.</span></li>
+            <li><span><strong>First to add wins.</strong> We check every business UnBusy already knows by name, phone, email and website.</span></li>
             <li><span><strong>A phone or an email.</strong> We need at least one way to reach them.</span></li>
             <li><span><strong>It&apos;s yours for good.</strong> If they become a client, you earn on every payment they make.</span></li>
           </ol>

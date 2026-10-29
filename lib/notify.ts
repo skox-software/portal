@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { after } from "next/server";
+import { PORTAL_URL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import { memberships } from "@/lib/db/schema";
 import { sendEmail, type EmailContent } from "@/lib/email";
@@ -62,6 +63,5 @@ export function notifyLater(recipients: () => Promise<string[]> | string[], cont
 }
 
 export function portalLink(path: string) {
-  const base = (process.env.PORTAL_URL ?? "https://portal.skoxsoftware.com").replace(/\/$/, "");
-  return `${base}${path}`;
+  return `${PORTAL_URL}${path}`;
 }

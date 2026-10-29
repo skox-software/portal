@@ -9,7 +9,7 @@
 
 export const PREVIEWS_HOST = "https://previews.skoxsoftware.com";
 const REPO = "skox-software/prospect-previews";
-const BOOK_URL = "https://www.skoxsoftware.com/#scope";
+const BOOK_URL = "https://gounbusy.com/review";
 
 /** The lead's folder and link name: the company in kebab case plus the deal id's first 4 characters, so a rebuild or edit lands in the same place. */
 export function previewSlug(company: string, dealId: string) {
@@ -31,7 +31,7 @@ export function previewLinkFor(company: string, dealId: string) {
 
 /** A link saved on the lead must be on the previews site, in its own folder. */
 export function isPreviewLink(url: string) {
-  return /^https:\/\/previews\.skoxsoftware\.com\/[a-z0-9][a-z0-9-]{0,80}\/?$/.test(url.trim());
+  return /^https:\/\/previews\.(?:skoxsoftware|gounbusy)\.com\/[a-z0-9][a-z0-9-]{0,80}\/?$/.test(url.trim());
 }
 
 export type PreviewPromptLead = {
@@ -154,14 +154,14 @@ This is how Reiss gets "they just opened it" alerts. Add nothing else that track
 4. Check the live page. Always add ?team to the address when you open it yourself, or the owner's "opened it" alert goes to Reiss by mistake:
        curl -s -o /dev/null -w "%{http_code}" "${link}?team"   (must be 200; retry for up to 3 minutes while it deploys)
        npx -y playwright@1 screenshot --full-page --viewport-size=390,844 "${link}?team" research/${slug}/live-phone.png
-   Open the screenshot: images show, the concept bar is visible, nothing is broken. Don't submit the forms; Reiss tests one himself.
+   Open the screenshot: images show, the concept bar is visible, nothing is broken. Then send one test form submission: name "Reiss", email reiss@skoxsoftware.com, message "test". The portal files that as a test on this lead, not a new lead. Never test with any other email.
 5. Reply to Reiss with exactly this:
    - Link: ${link}
    - The working upgrade, in one line
    - Left out because I couldn't source it: (list, or "nothing")
    - Ledger rows: (count)
-   - Check before sending: open ${link}?team on your phone, try the upgrade once with "test" in the message, then send.
-   - Anything that failed (screenshots, a source that was down)
+   - Check before sending: open ${link}?team on your phone, then send.
+   - Anything that failed (screenshots, a source that was down, the test submission)
 
 Then paste ${link} into "Preview link" on the lead in the SKOX portal and press Save. It's marked Ready to send.
 `;

@@ -15,7 +15,7 @@ import { daysSince, PRESALE, searchText, STAGE_LABEL, STALL_DAYS, type Card, typ
 import { loadPipeline } from "@/lib/pipeline-data";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Clients · SKOX" };
+export const metadata: Metadata = { title: "Clients" };
 
 type Stage = ColumnKey | "lost" | "none";
 

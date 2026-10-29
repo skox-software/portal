@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { SkoxLogo } from "@/components/SkoxLogo";
+import { Logo } from "@/components/Logo";
 import { getViewer } from "@/lib/access";
 import { SignInForm } from "./SignInForm";
 import { billingDestination } from "@/lib/sign-in-destination";
@@ -21,7 +21,7 @@ export default async function SignInPage({
   return (
     <main className="signin">
       <section className="signin-intro">
-        <SkoxLogo className="signin-logo" />
+        <Logo className="signin-logo" />
         <p className="eyebrow">Client Portal</p>
         <h1>Your project, in one place.</h1>
         <ul className="signin-points">

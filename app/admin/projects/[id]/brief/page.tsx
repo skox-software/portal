@@ -93,7 +93,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
               </ul>
               {o.internalNotes && (
                 <div className="brief-internal">
-                  <p className="label">Internal notes (SKOX only)</p>
+                  <p className="label">Internal notes (UnBusy only)</p>
                   <p className="pre">{o.internalNotes}</p>
                 </div>
               )}

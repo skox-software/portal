@@ -87,7 +87,7 @@ export default async function DocumentPage({
           <aside className="stack">
             {doc.message && (
               <section className="card">
-                <p className="label">Message from SKOX</p>
+                <p className="label">Message from UnBusy</p>
                 <p style={{ whiteSpace: "pre-line", marginTop: 6 }}>{doc.message}</p>
               </section>
             )}
@@ -123,7 +123,7 @@ export default async function DocumentPage({
             {doc.status === "void" && (
               <section className="card">
                 <h2 style={{ fontSize: 24 }}>Cancelled</h2>
-                <p className="small muted">SKOX cancelled this document. Nothing to sign.</p>
+                <p className="small muted">UnBusy cancelled this document. Nothing to sign.</p>
               </section>
             )}
 

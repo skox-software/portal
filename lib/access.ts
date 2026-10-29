@@ -63,7 +63,7 @@ export async function requireViewer() {
   return viewer;
 }
 
-/** SKOX team only. Everyone else gets a 404 rather than a hint the page exists. */
+/** UnBusy team only. Everyone else gets a 404 rather than a hint the page exists. */
 export async function requireStaff() {
   const viewer = await requireViewer();
   const staff = staffMembershipIn(viewer.memberships);

@@ -28,7 +28,7 @@ test("staff can see and manage any project in their workspace", () => {
   const a = accessToProject([staff], project);
   assert.deepEqual(a, { isStaff: true, clientRole: null });
   assert.equal(can.manageProject(a!), true);
-  assert.equal(can.approve(a!), false, "SKOX requests approvals, it never gives them");
+  assert.equal(can.approve(a!), false, "UnBusy requests approvals, it never gives them");
 });
 
 test("staff of another workspace get nothing", () => {
@@ -89,7 +89,7 @@ test("clients raise requests and react to ideas; staff run billing and share lin
   const ap = accessToProject([approver], project)!;
   const m = accessToProject([member], project)!;
   assert.equal(can.requestSupport(m), true);
-  assert.equal(can.requestSupport(s), false, "SKOX doesn't file requests to itself");
+  assert.equal(can.requestSupport(s), false, "UnBusy doesn't file requests to itself");
   assert.equal(can.createShareLink(ap), true);
   assert.equal(can.createShareLink(m), false);
   assert.equal(can.uploadFiles(m), true);

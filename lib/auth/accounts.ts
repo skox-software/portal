@@ -15,10 +15,10 @@ function isAlreadyExists(error: AuthError) {
 /**
  * Makes sure a sign-in account exists for an invited email before they first
  * sign in. Signing in with an emailed code would also create it; doing it at
- * invite time surfaces auth problems to SKOX instead of to the client.
+ * invite time surfaces auth problems to UnBusy instead of to the client.
  *
  * The account has no password: people always sign in with an emailed code.
- * Creating it requires the caller to hold Neon Auth's admin role (SKOX does).
+ * Creating it requires the caller to hold Neon Auth's admin role (UnBusy does).
  */
 export async function ensureAuthAccount(email: string) {
   const { error } = await getAuth().admin.createUser({ email, name: email });

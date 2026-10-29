@@ -42,7 +42,7 @@ test("normalized suppression persists independently of any deal and blocks new s
   const h=setup();await h.suppress(" LEAD@EXAMPLE.COM ");await assert.rejects(h.send,/asked not/);assert.equal(h.sent.length,0);
 });
 test("gateway sends advertising disclosure, address and stable signed opt-out using outreach identity",async()=>{
-  const h=setup();await h.send();const mail=h.sent[0];assert.equal(mail.from,"Reiss Skeen <reiss@outreach.skoxsoftware.com>");assert.match(mail.text,/Advertisement from SKOX Software/);assert.match(mail.html,/123 Registered St/);
+  const h=setup();await h.send();const mail=h.sent[0];assert.equal(mail.from,"Reiss Skeen <reiss@outreach.skoxsoftware.com>");assert.match(mail.text,/Advertisement from UnBusy \(formerly SKOX Software\)/);assert.match(mail.html,/123 Registered St/);
   const token=mail.headers['List-Unsubscribe'].slice(1,-1).split('/').pop()!;
   assert.ok(verifyUnsubscribeToken(token,["lead@example.com"],"test-secret"));
   await h.suppress("lead@example.com");await assert.rejects(h.send);assert.equal(h.sent.length,1);

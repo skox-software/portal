@@ -21,12 +21,12 @@ test("a saved personalized draft takes precedence over generated copy", () => {
   assert.deepEqual(buildEmailDraft({ company: "Example", brief: { why: "Old site", emailDraft: saved } }), { subject: saved.subject, body: saved.body });
 });
 
-test("signature links to SKOX while user content stays escaped", () => {
-  const mail = leadEmailPayload("lead@example.com", "Preview", "Hi A&B,<script>bad</script>\n\nBest,\nReiss Skeen\nSKOX Software\n904-792-0720", footer);
-  assert.match(mail.html, /<a href="https:\/\/www.skoxsoftware.com">SKOX Software<\/a>/);
+test("signature links to UnBusy while user content stays escaped", () => {
+  const mail = leadEmailPayload("lead@example.com", "Preview", "Hi A&B,<script>bad</script>\n\nBest,\nReiss Skeen\nUnBusy\n904-792-0720", footer);
+  assert.match(mail.html, /<a href="https:\/\/gounbusy.com">UnBusy<\/a>/);
   assert.match(mail.html, /A&amp;B,&lt;script&gt;bad&lt;\/script&gt;/);
   assert.doesNotMatch(mail.html, /<script>/);
-  assert.match(mail.text, /SKOX Software \(https:\/\/www.skoxsoftware.com\)/);
+  assert.match(mail.text, /UnBusy \(https:\/\/gounbusy.com\)/);
 });
 
 test("standalone preview links are clickable and HTML escaped", () => {
@@ -35,9 +35,31 @@ test("standalone preview links are clickable and HTML escaped", () => {
   assert.ok(!mail.html.includes('href="javascript:'));
 });
 
+test("a preview-site link shows as a button with only the domain visible; the text version keeps the full link", () => {
+  const url = "https://previews.skoxsoftware.com/foster-rentals-24ff";
+  const mail = leadEmailPayload("lead@example.com", "Preview", `Here it is:\n\n${url}\n\nThanks`, footer);
+  assert.ok(mail.html.includes(`<a href="${url}" style=`));
+  assert.ok(mail.html.includes("View your website preview &rarr;</a>"));
+  assert.ok(mail.html.includes(">previews.skoxsoftware.com</span>"));
+  assert.ok(leadEmailPayload("lead@example.com", "Preview", "https://previews.gounbusy.com/x-1a2b", footer).html.includes(">previews.gounbusy.com</span>"));
+  assert.ok(!mail.html.includes(`>${url}<`), "the long address isn't shown as link text");
+  assert.ok(mail.text.includes(`\n${url}\n`));
+  const tricky = leadEmailPayload("lead@example.com", "Preview", 'https://previews.skoxsoftware.com/x"onmouseover="y', footer);
+  assert.ok(!tricky.html.includes('"onmouseover'));
+});
+
+test("in a preview email the signature's site line is the UnBusy logo, linked; cold emails and the text version keep the words", () => {
+  const sig = "Thanks,\nReiss Skeen\nCo-founder, UnBusy (formerly SKOX Software)\ngounbusy.com";
+  assert.ok(!leadEmailPayload("lead@example.com", "Hi", sig, footer).html.includes("<img"), "a cold email stays image-free");
+  const mail = leadEmailPayload("lead@example.com", "Hi", `https://previews.skoxsoftware.com/x-1a2b\n\n${sig}`, footer);
+  assert.match(mail.html, /<a href="https:\/\/gounbusy.com"[^>]*><img src="https:\/\/gounbusy.com\/email\/unbusy-logo.png" width="120" height="29" alt="UnBusy"/);
+  assert.ok(!mail.html.includes(">gounbusy.com<"));
+  assert.match(mail.text, /\ngounbusy\.com\n/);
+});
+
 test("both versions end with the postal address and the opt-out link", () => {
   const mail = leadEmailPayload("lead@example.com", "Preview", "Hello", footer);
-  assert.ok(mail.text.endsWith(`SKOX Software · ${footer.postalAddress}\n${OPT_OUT_LINE}: ${footer.unsubscribeUrl}`));
+  assert.ok(mail.text.endsWith(`UnBusy (formerly SKOX Software) · ${footer.postalAddress}\n${OPT_OUT_LINE}: ${footer.unsubscribeUrl}`));
   assert.ok(mail.html.includes(footer.postalAddress));
   assert.ok(mail.html.includes(`${OPT_OUT_LINE.replace(/'/g, "&#39;")}: <a href="${footer.unsubscribeUrl}"`));
   assert.deepEqual(mail.headers, { "List-Unsubscribe": `<${footer.unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
@@ -85,9 +107,9 @@ test("each founder sends from the outreach domain; replies go to their own inbox
 });
 
 test("a generated draft is written and signed as whoever sends it", () => {
-  const draft = buildEmailDraft({ company: "Acme", brief: null, author: { name: "Josh Fox", firstName: "Josh", title: "Co-founder, SKOX Software" } });
-  assert.match(draft.body, /I'm Josh with SKOX Software/);
-  assert.match(draft.body, /Josh Fox\nCo-founder, SKOX Software/);
+  const draft = buildEmailDraft({ company: "Acme", brief: null, author: { name: "Josh Fox", firstName: "Josh", title: "Co-founder, UnBusy (formerly SKOX Software)" } });
+  assert.match(draft.body, /I'm Josh with UnBusy, formerly SKOX Software/);
+  assert.match(draft.body, /Josh Fox\nCo-founder, UnBusy \(formerly SKOX Software\)\ngounbusy\.com/);
 });
 
 

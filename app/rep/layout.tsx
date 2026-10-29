@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { signOut } from "@/app/actions";
 import { MobileTabBar } from "@/components/MobileTabBar";
-import { SkoxLogo } from "@/components/SkoxLogo";
+import { Logo } from "@/components/Logo";
 import { RepNav } from "@/components/rep/RepNav";
 import { requireRep } from "@/lib/access";
 import { getDb } from "@/lib/db";
@@ -11,12 +11,12 @@ import { repProfiles } from "@/lib/db/schema";
 import "./rep.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: { default: "Sales Rep Desk", template: "%s · SKOX Sales Rep Desk" } };
+export const metadata: Metadata = { title: { default: "Sales Rep Desk", template: "%s · UnBusy Sales Rep Desk" } };
 
 /**
  * The sales rep's desk. A world of its own: separate from /admin and from
  * client projects, with its own look. Reps see their leads and their money,
- * never how SKOX builds.
+ * never how UnBusy builds.
  */
 export default async function RepLayout({ children }: { children: React.ReactNode }) {
   const { viewer, rep } = await requireRep();
@@ -30,9 +30,9 @@ export default async function RepLayout({ children }: { children: React.ReactNod
     <div className="rp">
       <a className="rp-skip" href="#rp-main">Skip to content</a>
       <header className="rp-bar">
-        <Link className="rp-brand" href="/rep" aria-label="SKOX Sales Rep Desk home">
-          <SkoxLogo />
-          <span>SALES REP</span>
+        <Link className="rp-brand" href="/rep" aria-label="UnBusy Sales Rep Desk home">
+          <Logo variant="dark" />
+          <span>Sales rep</span>
         </Link>
         <RepNav />
         {profile?.status === "paused" && <span className="rp-paused">Paused</span>}

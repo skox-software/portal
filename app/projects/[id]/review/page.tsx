@@ -76,7 +76,7 @@ export default async function ReviewPage({
           <section className="card staff-card" aria-labelledby="new-round">
             <div className="card-head">
               <h2 id="new-round">Post designs for review</h2>
-              <span className="chip chip-skox">SKOX only</span>
+              <span className="chip chip-skox">UnBusy only</span>
             </div>
             <form id="round-fields" className="form-grid" onSubmit={undefined}>
               <div className="field">

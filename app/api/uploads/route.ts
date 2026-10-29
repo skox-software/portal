@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         const [project] = await getDb().select().from(projects).where(eq(projects.id, projectId)).limit(1);
         const access = project ? accessToProject(viewer.memberships, project) : null;
         if (!access) throw new Error("No access to this project.");
-        if (purpose !== "file" && !access.isStaff) throw new Error("Only SKOX can upload that.");
+        if (purpose !== "file" && !access.isStaff) throw new Error("Only UnBusy can upload that.");
         if (!pathname.startsWith(`${projectPrefix(projectId)}${purpose}/`) || pathname.includes("..")) {
           throw new Error("Bad upload path.");
         }

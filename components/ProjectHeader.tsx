@@ -61,7 +61,7 @@ export function ProjectHeader({
       {access.isStaff && (
         <div className="shell">
           <p className="staff-banner">
-            You&apos;re viewing this as SKOX. Controls marked <span className="chip chip-skox">SKOX only</span> are
+            You&apos;re viewing this as UnBusy. Controls marked <span className="chip chip-skox">UnBusy only</span> are
             hidden from the client.
           </p>
         </div>

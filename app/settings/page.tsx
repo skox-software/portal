@@ -45,7 +45,7 @@ export default async function SettingsPage({
               <label key={m.id} className="check" style={{ padding: "6px 0" }}>
                 <input type="checkbox" name="emailUpdates" value={m.id} defaultChecked={m.emailUpdates} />
                 <span>
-                  <strong style={{ fontWeight: 500 }}>{m.clientId ? nameOf.get(m.clientId) ?? "Client" : "SKOX team"}</strong>
+                  <strong style={{ fontWeight: 500 }}>{m.clientId ? nameOf.get(m.clientId) ?? "Client" : "UnBusy team"}</strong>
                   <span className="muted small"> · {ROLE_LABEL[m.role]}</span>
                   <br />
                   <span className="small muted">

@@ -87,8 +87,8 @@ export async function registerFile(formData: FormData): Promise<{ ok: boolean; m
   } else {
     notifyLater(() => clientRecipients(client.id), {
       subject: `New file for ${project.name}: ${fileName}`,
-      preheader: "SKOX shared a file with you",
-      heading: "SKOX shared a file",
+      preheader: "UnBusy shared a file with you",
+      heading: "UnBusy shared a file",
       paragraphs: [`${fileName} is ready in your portal.`],
       cta: { label: "Open files", href: link },
     });

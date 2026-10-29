@@ -1,7 +1,7 @@
 import { outreachConfig } from "@/lib/cold-outreach";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
-import { closeOutreach, createDeal, decidePreview, demoteDeal, markPreviewSent, moveDealStage, promoteDeal, requestPreview, savePreviewLink, saveDeal, saveDealValue } from "@/app/admin/pipeline/actions";
+import { closeOutreach, createDeal, decidePreview, demoteDeal, moveDealStage, promoteDeal, requestPreview, saveDeal } from "@/app/admin/pipeline/actions";
 import { ContactLog } from "@/components/ContactLog";
 import { CopyButton } from "@/components/CopyButton";
 import { EmailDraft } from "@/components/EmailDraft";
@@ -12,8 +12,11 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { getDb } from "@/lib/db";
 import { events, memberships, type Deal } from "@/lib/db/schema";
 import { parseBrief, readBrief, type CallBrief } from "@/lib/call-brief";
-import { buildEmailDraft } from "@/lib/email-draft";
+import { buildEmailDraft, greetingName } from "@/lib/email-draft";
 import { buildPreviewPrompt, previewLinkFor } from "@/lib/preview-build-prompt";
+import { buildPreviewEmail } from "@/lib/preview-email";
+import { HistoryMore } from "@/components/HistoryMore";
+import { PreviewFlow } from "@/components/PreviewFlow";
 import { outreachSender, senderLine, signedByOther } from "@/lib/lead-email";
 import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 import { loadEmailStatuses } from "@/lib/email-status-data";
@@ -99,6 +102,9 @@ function describe(verb: string, p: Record<string, unknown>) {
 /** "Moved to X" lines for a call that also moved the lead, or a promotion or demotion. */
 const movedBy = (verb: string, p: Record<string, unknown>) =>
   ["deal.call_logged", "deal.promoted", "deal.demoted"].includes(verb) && typeof p.to === "string" ? stageLabel(p.to) : null;
+
+/** History shows this many recent events; "Show earlier" reveals the rest. */
+const RECENT_HISTORY = 8;
 
 /** A call with an outcome, or a cold email sent or scheduled: one outreach attempt. */
 const isAttempt = (verb: string, p: Record<string, unknown>) =>
@@ -213,7 +219,7 @@ export async function DealPanel({
         <div>
           {nav.position && <p className="eyebrow">{nav.position}</p>}
           <h2 id="deal-form-title">{deal ? deal.company : "New lead"}</h2>
-          {deal?.contactName && <p className="muted small">{deal.contactName}</p>}
+          {deal && (deal.contactName || deal.location) && <p className="muted small">{[deal.contactName, deal.location].filter(Boolean).join(" · ")}</p>}
         </div>
         <div className="lead-panel-nav">
           {nav.prevHref && (
@@ -240,7 +246,7 @@ export async function DealPanel({
             <i aria-hidden="true" />
             {track && TRACK_LABEL[track]} · {stageLabel(deal.stage)}
           </span>
-          {track === "outreach" && (
+          {track === "outreach" && attempts > 0 && (
             <span className="small" title="Calls logged with an outcome, plus cold emails sent or scheduled">
               <strong>{attempts}</strong> attempt{attempts === 1 ? "" : "s"}
             </span>
@@ -255,6 +261,11 @@ export async function DealPanel({
               ) : (
                 <span className="muted">In the Pipeline from before signals were recorded</span>
               )}
+            </span>
+          )}
+          {track === "active" && deal.valueCents != null && (
+            <span className="small">
+              <strong>{formatMoney(deal.valueCents)}</strong>
             </span>
           )}
           <span className="small">
@@ -277,6 +288,28 @@ export async function DealPanel({
         </p>
       )}
 
+      {!deal && <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={false} nav={nav} newTrack={newTrack} />}
+
+      {deal && (
+        <div className="lead-reach">
+          {tel ? (
+            <a className="reach-btn reach-call" href={tel} data-reach="call" title="Call (C)">
+              <span className="reach-label">Call</span>
+              <span className="reach-value">{deal.phone}</span>
+            </a>
+          ) : (
+            <span className="reach-btn reach-missing">No phone yet</span>
+          )}
+          {draft && <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} delivery={emailStatus && { ...emailStatus, when: new Date(emailStatus.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) }} canSend fromLine={senderLine(sender)} signedBy={draft ? signedByOther(draft.body, sender) : null} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />}
+          {deal.website && (
+            <a className="reach-btn" href={deal.website} target="_blank" rel="noreferrer" data-reach="site" title="Website (W)">
+              <span className="reach-label">Website ↗</span>
+            </a>
+          )}
+          {deal.badNumber && <span className="lead-flag" title="The last call found this number dead or wrong. Change it in Details to clear the flag.">Bad number</span>}
+        </div>
+      )}
+
       {deal && track === "outreach" && (brief?.askFor || brief?.opener) && (
         <dl className="lead-opener">
           {brief.askFor && (
@@ -294,43 +327,72 @@ export async function DealPanel({
         </dl>
       )}
 
-      {deal && track === "active" && !linkedProject && (
-        <form action={saveDealValue} className="deal-summary" aria-label="Deal">
+      {deal && !linkedProject && previewInFlight(deal.previewStatus) && (
+        <section className="lead-preview" aria-label="Preview site">
+              <PreviewFlow
+                status={deal.previewStatus}
+                url={deal.previewUrl}
+                linkPlaceholder={previewLinkFor(deal.company, deal.id)}
+                prompt={buildPreviewPrompt({ id: deal.id, company: deal.company, contactName: deal.contactName, phone: deal.phone, website: deal.website, industry: deal.industry, location: deal.location, notes: deal.notes, callBrief: brief })}
+                hidden={hidden}
+                opened={!!deal.previewFirstOpenAt}
+                sentLine={
+                  deal.previewSentAt
+                    ? `Sent ${timeAgo(deal.previewSentAt, now)}${deal.previewFirstOpenAt ? ` · opened ${timeAgo(deal.previewFirstOpenAt, now)}` : " · not opened yet"}${views > 1 ? ` · ${views} views` : ""}`
+                    : "Sent"
+                }
+                email={{
+                  dealId: deal.id,
+                  to: deal.contactEmail,
+                  firstName: greetingName(deal.contactName) ?? greetingName(brief?.askFor) ?? deal.company,
+                  ...(deal.previewUrl ? buildPreviewEmail({ company: deal.company, contactName: deal.contactName, askFor: brief?.askFor, url: deal.previewUrl, author: sender }) : { subject: "", body: "" }),
+                  fromLine: senderLine(sender),
+                  blocked: deal.doNotEmail ? "This contact asked not to be emailed." : outreachBlocked ?? null,
+                }}
+              />
+              {deal.previewStatus === "awaiting_approval" && (
+                <form action={decidePreview} className="gate-a">
+                  {hidden}
+                  <p className="small">
+                    <strong>Gate A.</strong> The builder researched this business. Go builds the preview; No-go archives it.
+                  </p>
+                  {deal.previewBrief ? <div className="gate-a-brief">{deal.previewBrief}</div> : <p className="small muted">The builder hasn&apos;t attached its brief yet.</p>}
+                  <label className="sr-only" htmlFor={`changes-${deal.id}`}>
+                    Changes for the build
+                  </label>
+                  <textarea id={`changes-${deal.id}`} name="changes" rows={2} maxLength={2000} placeholder="Changes for the build (needed for Go with changes)" />
+                  <div className="gate-a-actions">
+                    {PREVIEW_DECISIONS.map((d) => (
+                      <SubmitButton key={d.value} className={d.value === "go" ? "btn btn-primary btn-small" : "btn btn-ghost btn-small"} name="decision" value={d.value} pendingLabel="Saving…">
+                        {d.label}
+                      </SubmitButton>
+                    ))}
+                  </div>
+                </form>
+              )}
+        </section>
+      )}
+
+      {deal && !linkedProject && !previewInFlight(deal.previewStatus) && (
+        <form action={requestPreview} className="lead-preview-row">
           {hidden}
-          <div>
-            <label htmlFor={`value-${deal.id}`}>Value</label>
-            <input id={`value-${deal.id}`} name="value" inputMode="decimal" defaultValue={deal.valueCents != null ? String(deal.valueCents / 100) : ""} placeholder="USD, not set" />
-          </div>
-          <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
-            Save value
+          <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Starting…" title={track === "outreach" ? "Opens the build prompt and promotes the lead to the Pipeline" : "Opens the build prompt"}>
+            Build a preview
           </SubmitButton>
-          <p className="small muted">
-            {deal.stage === "proposal_sent"
-              ? `Proposal out since ${formatDate(deal.stageChangedAt.toISOString().slice(0, 10))}`
-              : deal.stage === "won"
-                ? `Won${deal.wonAt ? ` ${formatDate(deal.wonAt.toISOString().slice(0, 10))}` : ""}${deal.valueCents ? ` · ${formatMoney(deal.valueCents)}` : ""}`
-                : `${stageLabel(deal.stage)} since ${formatDate(deal.stageChangedAt.toISOString().slice(0, 10))}`}
-            {" · "}
-            {deal.nextStep ? `Next: ${deal.nextStep}` : "No next step: set one with Remind"}
-          </p>
+          {deal.previewStatus === "archived" && <span className="small muted">The last preview was archived.</span>}
         </form>
       )}
 
-      <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} tel={tel} newTrack={newTrack} />
+      {deal && <ContactLog key={deal.id} dealId={deal.id} stage={deal.stage as DealStage} base={nav.base} back={nav.back} nextId={nav.nextId} previewInFlight={previewInFlight(deal.previewStatus)} />}
 
-      {deal && draft && (
-        <div className="lead-email">
-          <EmailDraft key={deal.id} dealId={deal.id} to={deal.contactEmail} draft={draft} base={nav.base} back={nav.back} initiallyOpen={emailOpen} saved={brief?.emailDraft} delivery={emailStatus && { ...emailStatus, when: new Date(emailStatus.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) }} canSend fromLine={senderLine(sender)} signedBy={draft ? signedByOther(draft.body, sender) : null} doNotEmail={deal.doNotEmail} outreachBlocked={outreachBlocked} />
-        </div>
-      )}
-
-      {deal && linkedProject && (
-        <p className="small muted">
-          Onboarded as <Link href={`/admin/projects/${linkedProject.id}`}>{linkedProject.name}</Link>. Its stage follows the project&apos;s status.
-        </p>
-      )}
 
       {deal && !linkedProject && (
+        <details className="lead-section" open={closeOpen || deal.stage === "outreach_closed" || undefined}>
+          <summary>
+            <span className="lead-section-title">Stage</span>
+            <span className="lead-section-value">{stageLabel(deal.stage)}</span>
+            <span className="lead-section-hint">{track === "outreach" ? "Move, promote or close" : canDemote(deal.stage) ? "Move or send back" : "Move"}</span>
+          </summary>
         <div className="stage-bar" aria-label="Stage">
           <form action={moveDealStage} className="stage-bar-row" role="group" aria-label={TRACK_LABEL[track!]}>
             {hidden}
@@ -438,90 +500,24 @@ export async function DealPanel({
             </div>
           )}
         </div>
+        </details>
       )}
 
-      {deal && !linkedProject && deal.stage !== "lost" && (
-        <section className="lead-preview" aria-labelledby={`preview-${deal.id}`}>
-          <h3 id={`preview-${deal.id}`}>Preview site</h3>
-          {!previewInFlight(deal.previewStatus) ? (
-            <form action={requestPreview} className="lead-preview-row">
-              {hidden}
-              <span className="small muted">{deal.previewStatus === "archived" ? "The last preview was archived." : "None yet."}</span>
-              <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Requesting…" title={track === "outreach" ? "Queues a preview and promotes the lead to the Pipeline" : "Queues a preview"}>
-                Preview requested
-              </SubmitButton>
-            </form>
-          ) : (
-            <>
-              <p className="lead-preview-row">
-                <span className="preview-chip" data-status={deal.previewStatus}>
-                  {previewLabel(deal.previewStatus)}
-                </span>
-                <span className="small muted">
-                  {deal.previewRequestedAt && `Asked ${timeAgo(deal.previewRequestedAt, now)}`}
-                  {deal.previewSentAt && ` · sent ${timeAgo(deal.previewSentAt, now)}`}
-                  {deal.previewFirstOpenAt ? ` · first opened ${timeAgo(deal.previewFirstOpenAt, now)}` : deal.previewSentAt ? " · not opened yet" : ""}
-                </span>
-                {views > 1 && <span className="small muted">{views} views</span>}
-                {deal.previewUrl && (
-                  <a className="btn btn-ghost btn-small" href={`${deal.previewUrl}${deal.previewUrl.includes("?") ? "&" : "?"}team=1`} target="_blank" rel="noreferrer" title="Opens without counting as their view">
-                    Open preview ↗
-                  </a>
-                )}
-              </p>
-              <div className="lead-preview-row">
-                <span className="small muted">{deal.previewUrl ? "To change it, run the prompt again; it edits the same folder and link." : "Paste this into your AI to build it."}</span>
-                <CopyButton
-                  label="Copy build prompt"
-                  value={buildPreviewPrompt({ id: deal.id, company: deal.company, contactName: deal.contactName, phone: deal.phone, website: deal.website, industry: deal.industry, location: deal.location, notes: deal.notes, callBrief: brief })}
-                  spoken="Build prompt"
-                />
-              </div>
-              <form action={savePreviewLink} className="lead-preview-row">
-                {hidden}
-                <label className="sr-only" htmlFor={`preview-url-${deal.id}`}>
-                  Preview link
-                </label>
-                <input id={`preview-url-${deal.id}`} name="previewUrl" type="url" required defaultValue={deal.previewUrl ?? ""} placeholder={previewLinkFor(deal.company, deal.id)} />
-                <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
-                  Save link
-                </SubmitButton>
-              </form>
-              {deal.previewStatus === "ready" && (
-                <form action={markPreviewSent} className="lead-preview-row">
-                  {hidden}
-                  <span className="small muted">Emailing the link from the portal marks it sent. Sent it another way?</span>
-                  <SubmitButton className="btn btn-ghost btn-small" pendingLabel="Saving…">
-                    Mark sent
-                  </SubmitButton>
-                </form>
-              )}
-              {deal.previewStatus === "awaiting_approval" && (
-                <form action={decidePreview} className="gate-a">
-                  {hidden}
-                  <p className="small">
-                    <strong>Gate A.</strong> The builder researched this business. Go builds the preview; No-go archives it.
-                  </p>
-                  {deal.previewBrief ? <div className="gate-a-brief">{deal.previewBrief}</div> : <p className="small muted">The builder hasn&apos;t attached its brief yet.</p>}
-                  <label className="sr-only" htmlFor={`changes-${deal.id}`}>
-                    Changes for the build
-                  </label>
-                  <textarea id={`changes-${deal.id}`} name="changes" rows={2} maxLength={2000} placeholder="Changes for the build (needed for Go with changes)" />
-                  <div className="gate-a-actions">
-                    {PREVIEW_DECISIONS.map((d) => (
-                      <SubmitButton key={d.value} className={d.value === "go" ? "btn btn-primary btn-small" : "btn btn-ghost btn-small"} name="decision" value={d.value} pendingLabel="Saving…">
-                        {d.label}
-                      </SubmitButton>
-                    ))}
-                  </div>
-                </form>
-              )}
-            </>
-          )}
-        </section>
+      {deal && (
+        <details className="lead-section">
+          <summary>
+            <span className="lead-section-title">Details</span>
+            <span className="lead-section-hint">Contact, phone, email, website, owner, value</span>
+          </summary>
+          <DealForm deal={deal} owners={owners} reps={reps} me={me} linked={!!linkedProject} nav={nav} newTrack={newTrack} />
+        </details>
       )}
 
-      {deal && <ContactLog key={deal.id} dealId={deal.id} stage={deal.stage as DealStage} base={nav.base} back={nav.back} nextId={nav.nextId} previewInFlight={previewInFlight(deal.previewStatus)} />}
+      {deal && linkedProject && (
+        <p className="small muted">
+          Onboarded as <Link href={`/admin/projects/${linkedProject.id}`}>{linkedProject.name}</Link>. Its stage follows the project&apos;s status.
+        </p>
+      )}
 
       {deal && (
         <section className="lead-history" aria-label="History">
@@ -530,13 +526,13 @@ export async function DealPanel({
             <p className="muted small">Nothing yet. Calls, emails, notes and stage moves show up here.</p>
           ) : (
             <ol>
-              {lines.map(({ e, p, what }) => {
+              {lines.map(({ e, p, what }, i) => {
                 const note = typeof p.note === "string" ? p.note : null;
                 const changed = e.verb === "deal.updated" && Array.isArray(p.changed) ? (p.changed as { field: string; from: string | null; to: string | null }[]) : [];
                 const moved = movedBy(e.verb, p);
                 const by = who(e.actorId);
                 return (
-                  <li key={e.id} data-kind={e.verb === "deal.call_logged" ? "call" : e.verb === "deal.note_added" ? "note" : e.verb.startsWith("deal.email") ? "email" : undefined}>
+                  <li key={e.id} hidden={i >= RECENT_HISTORY || undefined} data-kind={e.verb === "deal.call_logged" ? "call" : e.verb === "deal.note_added" ? "note" : e.verb.startsWith("deal.email") ? "email" : undefined}>
                     <strong>{what}</strong>
                     {moved && <span> · moved to {moved}</span>}
                     {note && <p>{note}</p>}
@@ -553,13 +549,14 @@ export async function DealPanel({
                 );
               })}
               {fromNotes.rest && (
-                <li data-kind="note">
+                <li data-kind="note" hidden={lines.length > RECENT_HISTORY || undefined}>
                   <strong>Earlier notes</strong>
                   <p className="lead-earlier-notes">{fromNotes.rest}</p>
                 </li>
               )}
             </ol>
           )}
+          {lines.length > RECENT_HISTORY && <HistoryMore count={lines.length - RECENT_HISTORY + (fromNotes.rest ? 1 : 0)} />}
         </section>
       )}
     </div>
@@ -574,7 +571,6 @@ function DealForm({
   me,
   linked,
   nav,
-  tel,
   newTrack,
 }: {
   newTrack: Track;
@@ -584,7 +580,6 @@ function DealForm({
   me: string;
   linked: boolean;
   nav: PanelNav;
-  tel: string | null;
 }) {
   const f = (id: string) => `deal-${id}`;
   return (
@@ -603,31 +598,15 @@ function DealForm({
       <div className="lead-contact-row">
         <label htmlFor={f("phone")}>Phone</label>
         <input id={f("phone")} name="phone" type="tel" maxLength={40} defaultValue={deal?.phone ?? ""} placeholder="Add a phone number" />
-        {tel && (
-          <a className="btn btn-primary btn-small" href={tel} data-reach="call" title="Call (C)">
-            Call
-          </a>
-        )}
-        {deal?.badNumber && <span className="lead-flag" title="The last call found this number dead or wrong. Change it to clear the flag.">Bad number</span>}
       </div>
       <div className="lead-contact-row">
         <label htmlFor={f("contactEmail")}>Email</label>
         <input id={f("contactEmail")} name="contactEmail" type="email" defaultValue={deal?.contactEmail ?? ""} placeholder="Add an email" />
         {deal?.contactEmail && <CopyButton value={deal.contactEmail} />}
-        {deal?.contactEmail && (
-          <a className="btn btn-ghost btn-small" href={`mailto:${deal.contactEmail}`} title="Open in your mail app">
-            Mail ↗
-          </a>
-        )}
       </div>
       <div className="lead-contact-row">
         <label htmlFor={f("website")}>Website</label>
         <input id={f("website")} name="website" type="url" defaultValue={deal?.website ?? ""} placeholder="https://" />
-        {deal?.website && (
-          <a className="btn btn-ghost btn-small" href={deal.website} target="_blank" rel="noreferrer" data-reach="site" title="Website (W)">
-            Open ↗
-          </a>
-        )}
       </div>
 
       {!deal && (
@@ -643,7 +622,7 @@ function DealForm({
         </div>
       )}
 
-      <details className="lead-more">
+      <details className="lead-more" open={!!deal || undefined}>
         <summary>More</summary>
         <div className="form-grid">
           <div className="field">

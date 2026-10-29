@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { deals } from "@/lib/db/schema";
 import { eventInsert } from "@/lib/events";
@@ -9,9 +9,12 @@ import {
   companyFor,
   dealKind,
   inboundLeadSchema,
+  isTeamEmail,
   leadSourceLabel,
   notesFor,
+  previewSlugFrom,
 } from "@/lib/inbound-lead";
+import { PREVIEWS_HOST, previewSlug } from "@/lib/preview-build-prompt";
 import { workspaceForAddresses } from "@/lib/inbox-server";
 import { normalizeEmail } from "@/lib/permissions";
 
@@ -36,6 +39,21 @@ function authorised(request: Request): boolean {
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
+/** The lead a preview folder was built for: its saved link, or the folder name the build prompt gave it. */
+async function dealForPreview(workspaceId: string, slug: string) {
+  const prefix = slug.slice(-4);
+  const rows = await getDb()
+    .select()
+    .from(deals)
+    .where(
+      and(
+        eq(deals.workspaceId, workspaceId),
+        or(sql`rtrim(${deals.previewUrl}, '/') = ${`${PREVIEWS_HOST}/${slug}`}`, sql`replace(${deals.id}::text, '-', '') like ${`${prefix}%`}`),
+      ),
+    );
+  return rows.find((d) => d.previewUrl?.replace(/\/$/, "") === `${PREVIEWS_HOST}/${slug}`) ?? rows.find((d) => previewSlug(d.company, d.id) === slug) ?? null;
+}
+
 export async function POST(request: Request) {
   if (!process.env.LEADS_INGEST_SECRET) return new Response("Lead intake not configured", { status: 503 });
   if (!authorised(request)) return new Response("Unauthorised", { status: 401 });
@@ -55,18 +73,41 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const now = new Date();
-  const [existing] = await db
-    .select()
-    .from(deals)
-    .where(
-      and(
-        eq(deals.workspaceId, workspaceId),
-        sql`lower(${deals.contactEmail}) = ${lead.email}`,
-        inArray(deals.stage, [...OPEN]),
-      ),
-    )
-    .orderBy(desc(deals.createdAt))
-    .limit(1);
+
+  // A form on a lead's preview site belongs to that lead, whoever typed it.
+  const slug = previewSlugFrom(lead.timeline);
+  const previewDeal = slug ? await dealForPreview(workspaceId, slug) : null;
+  if (slug && isTeamEmail(lead.email)) {
+    // Our own test of the preview's forms: a note on the lead, never a new deal or a stage change.
+    if (previewDeal && lead.status === "submitted") {
+      await db.batch([
+        eventInsert({
+          workspaceId,
+          actorId: ACTOR,
+          verb: "deal.note_added",
+          subjectType: "deal",
+          subjectId: previewDeal.id,
+          payload: { company: previewDeal.company, note: `Preview form test from ${lead.email} went through.` },
+        }),
+      ]);
+    }
+    return Response.json({ ok: true, deal: previewDeal?.id ?? null, updated: false, test: true });
+  }
+
+  const [existing] = previewDeal
+    ? [previewDeal]
+    : await db
+        .select()
+        .from(deals)
+        .where(
+          and(
+            eq(deals.workspaceId, workspaceId),
+            sql`lower(${deals.contactEmail}) = ${lead.email}`,
+            inArray(deals.stage, [...OPEN]),
+          ),
+        )
+        .orderBy(desc(deals.createdAt))
+        .limit(1);
 
   if (existing) {
     const wasUnfinished = existing.source === "website" && existing.leadSource?.startsWith("Unfinished");

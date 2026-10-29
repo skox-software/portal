@@ -1,0 +1,150 @@
+/* Buttons, forms and chips. */
+/* ---- Buttons & forms ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: 500 14px/1 var(--body);
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.btn-primary {
+  background: var(--btn);
+  color: var(--btn-ink);
+}
+.btn-primary:hover {
+  background: var(--btn-hover);
+}
+.btn-ghost {
+  border-color: var(--line);
+  background: var(--paper);
+}
+.btn-ghost:hover {
+  border-color: var(--ink);
+}
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.btn-danger:hover {
+  background: var(--danger);
+  color: var(--paper);
+}
+.btn-small {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-link {
+  min-height: 0;
+  padding: 0;
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.field .hint {
+  font-size: 12px;
+  color: var(--label);
+}
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1.4 var(--body);
+}
+textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 3px rgba(11, 92, 255, 0.22);
+}
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.notice {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+.notice-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.notice-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+/* ---- Chips ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--fog);
+  color: var(--muted);
+  font: 500 11px/1.8 var(--body);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.chip-amber {
+  border-color: transparent;
+  background: var(--highlight);
+  color: var(--highlight-ink);
+}
+.chip-ok {
+  border-color: transparent;
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.chip-danger {
+  border-color: transparent;
+  background: var(--danger-bg);
+  color: var(--danger);
+}

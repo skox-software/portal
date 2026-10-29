@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { SubmitButton } from "@/components/SubmitButton";
 import { BookingEmbed } from "@/components/BookingEmbed";
+import { SUPPORT_EMAIL } from "@/lib/brand";
 import { safeBookingUrl } from "@/lib/meetings";
 import { BrandStudio } from "@/components/BrandStudio";
 import { Notice, readMessage } from "@/components/Notice";
@@ -166,7 +167,7 @@ export default async function WelcomePage({
           <span />
         )}
         <div className="row">
-          <span className="muted small">{complete ? "Setup is finished. Ask SKOX if something needs changing." : "Your approver fills this in."}</span>
+          <span className="muted small">{complete ? "Setup is finished. Ask UnBusy if something needs changing." : "Your approver fills this in."}</span>
           {nav.next && (
             <Link className="btn btn-ghost" href={`${base}?step=${nav.next}`}>
               Next →
@@ -236,7 +237,7 @@ export default async function WelcomePage({
         <section className="welcome-main">
           {access.isStaff && (
             <p className="staff-banner" style={{ marginTop: 0, marginBottom: 14 }}>
-              Preview as SKOX: this is what {client.name} sees. Saving here fills it in for them.
+              Preview as UnBusy: this is what {client.name} sees. Saving here fills it in for them.
             </p>
           )}
           <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
@@ -301,7 +302,7 @@ export default async function WelcomePage({
                   />
                   {workspace.welcomeVideoUrl && (
                     <Reveal>
-                      <VideoEmbed url={workspace.welcomeVideoUrl} title="A welcome from SKOX" />
+                      <VideoEmbed url={workspace.welcomeVideoUrl} title="A welcome from UnBusy" />
                     </Reveal>
                   )}
                   <Reveal className="promise-grid">
@@ -319,7 +320,7 @@ export default async function WelcomePage({
                   </Reveal>
                   <Reveal>
                     <div className="card note-card">
-                      <p className="label">A note from {workspace.teamIntro || "the SKOX team"}</p>
+                      <p className="label">A note from {workspace.teamIntro || "the UnBusy team"}</p>
                       <p>
                         Thank you for trusting us with this. Here&apos;s how we work: a clear plan, an update every week, and one place for
                         everything. If anything is ever unclear, reply to any of our emails and a founder answers.
@@ -582,7 +583,7 @@ export default async function WelcomePage({
                   <div className="card safe-card">
                     <p className="label">Safe and simple</p>
                     <p>
-                      Never send us passwords. For each account, invite <strong>founder@skoxsoftware.com</strong> as a user or admin. Not sure
+                      Never send us passwords. For each account, invite <strong>{SUPPORT_EMAIL}</strong> as a user or admin. Not sure
                       how, or don&apos;t know where it lives? Choose &ldquo;I need help&rdquo; and we&apos;ll sort it together at kickoff.
                     </p>
                   </div>

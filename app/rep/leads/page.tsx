@@ -34,7 +34,7 @@ export default async function RepLeads({ searchParams }: { searchParams: Promise
     <>
       <p className="rp-kicker">Your pipeline</p>
       <h1 className="rp-title">Leads</h1>
-      <p className="rp-lede">Every business SKOX handed you and every one you brought. Tap a name to log a call or book the scope call.</p>
+      <p className="rp-lede">Every business UnBusy handed you and every one you brought. Tap a name to log a call or book the scope call.</p>
       <Notice error={readMessage(sp.error)} notice={readMessage(sp.notice)} />
 
       <div className="rp-tools">
@@ -58,7 +58,7 @@ export default async function RepLeads({ searchParams }: { searchParams: Promise
 
       {groups.length === 0 ? (
         <p className="rp-empty">
-          {leads.length === 0 ? <>No leads yet. <Link href="/rep/leads/new">Add one you know</Link>, or watch for new ones from SKOX.</> : "Nothing matches that."}
+          {leads.length === 0 ? <>No leads yet. <Link href="/rep/leads/new">Add one you know</Link>, or watch for new ones from UnBusy.</> : "Nothing matches that."}
         </p>
       ) : (
         groups.map((g) => (

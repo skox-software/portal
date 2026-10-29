@@ -1,7 +1,7 @@
 /**
  * Commission arithmetic and statement periods. Pure, so it can be tested alone.
  *
- * Commission is the rep's rate times cash SKOX actually collects. Rates are
+ * Commission is the rep's rate times cash UnBusy actually collects. Rates are
  * basis points (1500 = 15%). Amounts round half up to the cent; clawbacks use
  * the same rate as the payment they reverse and are negative.
  */

@@ -12,7 +12,7 @@ export type DayNet = { date: string; activity: number; moved: number };
 export type BalancePoint = { date: string; cents: number };
 
 /**
- * Money moving between SKOX's own balances (payouts to the bank, sweeps into
+ * Money moving between UnBusy's own balances (payouts to the bank, sweeps into
  * the business account, top-ups), as opposed to activity that earns or costs.
  */
 const MOVED = new Set([

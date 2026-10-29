@@ -25,7 +25,7 @@ export const metadata: Metadata = { title: "Finance" };
 
 /**
  * Where the money stands: Stripe's balance and payouts, cash collected by
- * period, what's owed to SKOX, deals won and who is owed commission. Portal
+ * period, what's owed to UnBusy, deals won and who is owed commission. Portal
  * numbers come from the database; Stripe numbers are read live and, if
  * Stripe is slow or the key lacks a permission, the Stripe cards say so
  * instead of failing the page. Both staff roles see everything here.
@@ -158,7 +158,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                     <StackedBars
                       label={`Revenue by ${range.bucket}`}
                       series={revenue}
-                      colors={["var(--amber)", "var(--danger)"]}
+                      colors={["var(--accent)", "var(--danger)"]}
                       legend={["Collected, kept", "Refunded"]}
                       line={activity.ok ? { values: activity.data.buckets.map((b) => b.net), label: "Stripe net", color: "var(--ink)" } : undefined}
                     />
@@ -229,14 +229,14 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                 </section>
 
                 <section className="admin-panel" aria-labelledby="owed-title">
-                  <div className="admin-panel-head"><div><h2 id="owed-title">Owed to SKOX</h2><p>Open invoices now, and the pipeline weighted by stage.</p></div></div>
+                  <div className="admin-panel-head"><div><h2 id="owed-title">Owed to UnBusy</h2><p>Open invoices now, and the pipeline weighted by stage.</p></div></div>
                   <div className="finance-body">
                     {owed.openCents > 0 ? (
                       <Donut
                         caption="outstanding"
                         center={formatMoney(owed.openCents)}
                         parts={[
-                          { label: "Not yet due", value: notDue, color: "var(--amber)", tip: `Not yet due ${formatMoney(notDue)}` },
+                          { label: "Not yet due", value: notDue, color: "var(--accent)", tip: `Not yet due ${formatMoney(notDue)}` },
                           { label: "Overdue", value: owed.overdueCents, color: "var(--danger)", tip: `Overdue ${formatMoney(owed.overdueCents)} (${owed.overdueCount})` },
                         ]}
                       />
@@ -268,7 +268,7 @@ export default async function AdminFinance({ searchParams }: { searchParams: Pro
                   <Link href="/admin/pipeline">Pipeline</Link>
                 </div>
                 <div className="finance-body">
-                  <StackedBars label={`Deals won by ${range.bucket}`} series={wonSeries} colors={[...top.map((_, i) => (i === 0 ? "var(--amber)" : "var(--ink)")), "var(--muted)"]} legend={groups} format={axisCount} />
+                  <StackedBars label={`Deals won by ${range.bucket}`} series={wonSeries} colors={[...top.map((_, i) => (i === 0 ? "var(--accent)" : "var(--ink)")), "var(--muted)"]} legend={groups} format={axisCount} />
                 </div>
               </section>
 

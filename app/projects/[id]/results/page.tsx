@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { readMessage } from "@/components/Notice";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { Sparkline } from "@/components/ProgressRing";
+import { PORTAL_URL } from "@/lib/brand";
 import { getDb } from "@/lib/db";
 import { carePlans, ideas, reports, resources, supportRequests, workspaces } from "@/lib/db/schema";
 import { formatMonth, IDEA_STATUS_LABEL, percentChange, RESOURCE_KIND_LABEL } from "@/lib/format";
@@ -54,7 +55,7 @@ export default async function ResultsPage({
   const [latest, previous] = history;
   const chrono = [...history].reverse();
   const membership = viewer.memberships.find((m) => m.clientId === project.clientId);
-  const referralLink = membership?.referralCode ? `${process.env.PORTAL_URL ?? ""}/r/${membership.referralCode}` : null;
+  const referralLink = membership?.referralCode ? `${PORTAL_URL}/r/${membership.referralCode}` : null;
   const launched = project.status === "launched";
   const hoursPct = plan && latest?.hoursUsed != null && plan.hoursIncluded > 0 ? Math.min(100, (latest.hoursUsed / plan.hoursIncluded) * 100) : null;
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -171,7 +172,7 @@ export default async function ResultsPage({
                 <form action={postIdea} className="stack staff-inline">
                   {hidden}
                   <p className="label">
-                    Pitch an idea <span className="chip chip-skox">SKOX only</span>
+                    Pitch an idea <span className="chip chip-skox">UnBusy only</span>
                   </p>
                   <input name="title" required minLength={3} maxLength={120} placeholder="e.g. Online booking with deposits" aria-label="Idea title" />
                   <textarea name="pitch" required maxLength={3000} placeholder="What it is and what it would do for them" aria-label="Pitch" />
@@ -251,7 +252,7 @@ export default async function ResultsPage({
                   </div>
                   <div>
                     <button className="btn btn-ghost" type="submit">
-                      Add <span className="chip chip-skox">SKOX only</span>
+                      Add <span className="chip chip-skox">UnBusy only</span>
                     </button>
                   </div>
                 </form>
@@ -298,7 +299,7 @@ export default async function ResultsPage({
               {access.isStaff && (
                 <details className="staff-inline">
                   <summary className="small">
-                    {plan ? "Edit care plan" : "Set up a care plan"} <span className="chip chip-skox">SKOX only</span>
+                    {plan ? "Edit care plan" : "Set up a care plan"} <span className="chip chip-skox">UnBusy only</span>
                   </summary>
                   <form action={saveCarePlan} className="stack" style={{ marginTop: 10 }}>
                     {hidden}
@@ -348,7 +349,7 @@ export default async function ResultsPage({
               <section className="card staff-card" aria-labelledby="report-form-title">
                 <div className="card-head">
                   <h2 id="report-form-title">Monthly report</h2>
-                  <span className="chip chip-skox">SKOX only</span>
+                  <span className="chip chip-skox">UnBusy only</span>
                 </div>
                 <form action={saveReport} className="stack">
                   {hidden}

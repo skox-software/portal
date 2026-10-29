@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne } from "drizzle-orm";
+import { PORTAL_URL } from "@/lib/brand";
 import { startSteps } from "@/lib/onboarding";
 import { progress, stepsFor } from "@/lib/onboarding-flow";
 import type { Metadata } from "next";
@@ -191,7 +192,7 @@ export default async function ProjectHome({
       })),
     ...newIdeas.map((i) => ({
       key: `idea-${i.id}`,
-      title: `New idea from SKOX: ${i.title}`,
+      title: `New idea from UnBusy: ${i.title}`,
       detail: "Interested or not now? One click.",
       href: `${base}/results#ideas`,
       cta: "Take a look",
@@ -523,7 +524,7 @@ export default async function ProjectHome({
                 {shareToken ? (
                   <div className="stack">
                     <p className="small muted">Copy this now. For security we can&apos;t show it again.</p>
-                    <input readOnly className="share-input" value={`${process.env.PORTAL_URL ?? ""}/s/${shareToken}`} aria-label="Status link" />
+                    <input readOnly className="share-input" value={`${PORTAL_URL}/s/${shareToken}`} aria-label="Status link" />
                   </div>
                 ) : (
                   <p className="small muted">

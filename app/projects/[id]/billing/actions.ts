@@ -160,7 +160,7 @@ export async function emailInvoice(formData: FormData) {
   if (!recipients.length) backWith(back, "error", "Add a client contact to this project before emailing an invoice.");
   const sandbox = stripeSandbox();
   const sent = await sendEmail(recipients, {
-    subject: `${sandbox ? "[Sandbox] " : ""}Invoice ${invoice.number} from SKOX: ${formatMoney(invoice.amountCents, invoice.currency)}`,
+    subject: `${sandbox ? "[Sandbox] " : ""}Invoice ${invoice.number} from UnBusy: ${formatMoney(invoice.amountCents, invoice.currency)}`,
     preheader: `${invoice.title} · due ${formatDate(invoice.dueOn)}`,
     heading: `Invoice ${invoice.number}: ${formatMoney(invoice.amountCents, invoice.currency)}`,
     paragraphs: [

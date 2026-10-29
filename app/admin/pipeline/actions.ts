@@ -317,7 +317,7 @@ export async function createDeal(formData: FormData) {
   const input = parsed.data;
   if (input.stage === "outreach_closed") backWith(`${BACK}?new=1`, "error", "Add the lead to an attempt, then close it with a reason.");
   const owners = await staffEmails(staff.workspaceId);
-  if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(`${BACK}?new=1`, "error", "The owner must be on the SKOX team.");
+  if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(`${BACK}?new=1`, "error", "The owner must be on the UnBusy team.");
   const repField = await readRepField(formData, staff.workspaceId);
   if (!repField.ok) backWith(`${BACK}?new=1`, "error", "Pick a sales rep from the list.");
 
@@ -387,7 +387,7 @@ export async function saveDeal(formData: FormData) {
   if (!parsed.success) backWith(back, "error", "Give the deal a company name. Emails, websites and preview links must be valid.");
   const input = parsed.data;
   const owners = await staffEmails(staff.workspaceId);
-  if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(back, "error", "The owner must be on the SKOX team.");
+  if (input.ownerEmail && !owners.has(input.ownerEmail)) backWith(back, "error", "The owner must be on the UnBusy team.");
   const repField = await readRepField(formData, staff.workspaceId);
   if (!repField.ok) backWith(back, "error", "Pick a sales rep from the list.");
   const repChanged = repField.value !== undefined && repField.value !== deal.repMembershipId;
@@ -511,7 +511,7 @@ export async function bulkAddDeals(formData: FormData) {
   const stage = z.enum(OPEN_STAGES as [DealStage, ...DealStage[]]).catch(FIRST_STAGE).parse(formData.get("stage"));
   const ownerEmail = normalizeEmail(String(formData.get("ownerEmail") ?? ""));
   if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) {
-    backWith(back, "error", "The owner must be on the SKOX team.");
+    backWith(back, "error", "The owner must be on the UnBusy team.");
   }
 
   const { drafts, skipped, truncated } = parseLeadSources(fileText, pasted);
@@ -963,7 +963,7 @@ export async function bulkUpdateDeals(input: { ids: string[]; stage?: string; cl
   const { ids, stage, nextStepOn, closeReason } = parsed.data;
   if (stage === "outreach_closed" && !closeReason) return { ok: false, error: "Pick why outreach is closing." };
   const ownerEmail = parsed.data.ownerEmail === undefined ? undefined : normalizeEmail(parsed.data.ownerEmail);
-  if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) return { ok: false, error: "The owner must be on the SKOX team." };
+  if (ownerEmail && !(await staffEmails(staff.workspaceId)).has(ownerEmail)) return { ok: false, error: "The owner must be on the UnBusy team." };
   const repId = parsed.data.repMembershipId;
   if (repId) {
     const fd = new FormData();

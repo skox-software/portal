@@ -149,7 +149,7 @@ function SendDialog({ dialog, email }: { dialog: React.RefObject<HTMLDialogEleme
   const [body, setBody] = useState(email.body);
   const [state, setState] = useState<"review" | "sending" | "sent">("review");
   const [error, setError] = useState("");
-  const linkIn = /https:\/\/previews\.skoxsoftware\.com\/\S+/.test(body);
+  const linkIn = /https:\/\/previews\.(?:skoxsoftware|gounbusy)\.com\/\S+/.test(body);
 
 
   async function send() {

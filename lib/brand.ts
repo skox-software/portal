@@ -10,10 +10,10 @@ const trim = (url: string) => url.replace(/\/$/, "");
 export const BRAND_NAME = "UnBusy";
 
 /** The marketing site. */
-export const SITE_URL = trim(process.env.PUBLIC_SITE_URL || "https://www.skoxsoftware.com");
+export const SITE_URL = trim(process.env.PUBLIC_SITE_URL || "https://gounbusy.com");
 
 /** The portal's public address, including the /portal base path. */
-export const PORTAL_URL = trim(process.env.PORTAL_URL || "https://www.skoxsoftware.com/portal");
+export const PORTAL_URL = trim(process.env.PORTAL_URL || "https://gounbusy.com/portal");
 
 /** The From line on every portal email. Its domain must be verified in Resend. */
 export const MAIL_FROM = process.env.EMAIL_FROM || "UnBusy <portal@skoxsoftware.com>";
@@ -22,7 +22,7 @@ export const MAIL_FROM = process.env.EMAIL_FROM || "UnBusy <portal@skoxsoftware.
  * Where clients write to a person: replies, "email us", account invitations.
  * NEXT_PUBLIC_ so the error pages, which render in the browser, read it too.
  */
-export const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "founder@skoxsoftware.com";
+export const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "founders@gounbusy.com";
 
 /** The logo for email (480×116 PNG; Gmail drops SVG), shown at 120×29. */
 export const EMAIL_LOGO_URL = `${PORTAL_URL}/brand/lockup-email.png`;

@@ -25,7 +25,7 @@ function page(title: string, message: string, status: number) {
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   return (await optOut(token))
-    ? page("You're unsubscribed", "You won't receive further marketing emails from SKOX Software. Sorry for the interruption.", 200)
+    ? page("You're unsubscribed", "You won't receive further marketing emails from UnBusy (formerly SKOX Software). Sorry for the interruption.", 200)
     : page("Link not recognised", "This unsubscribe link didn't work. Reply to our email with “no thanks” and we'll take you off our list.", 404);
 }
 

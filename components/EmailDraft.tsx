@@ -105,7 +105,7 @@ export function EmailDraft({
             Body
           </label>
           <textarea id={`email-body-${dealId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={12} disabled={pending || status !== "draft"} />
-          <p className="small muted">Signature: <a href={SKOX_WEBSITE} target="_blank" rel="noreferrer">SKOX Software</a> links to our website in the email. Our postal address and an unsubscribe link are added below it when sent.</p>
+          <p className="small muted">Signature: <a href={SKOX_WEBSITE} target="_blank" rel="noreferrer">UnBusy</a> links to our website in the email. Our postal address and an unsubscribe link are added below it when sent.</p>
           <div className="email-draft-actions">
             <button type="button" className="btn btn-primary btn-small" onClick={() => persist("send")} disabled={!!outreachBlocked || doNotEmail || !canSend || !to || pending || status !== "draft"}>
               {pending ? "Working…" : "Send email"}

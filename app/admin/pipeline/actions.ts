@@ -890,7 +890,7 @@ export async function savePreviewLink(formData: FormData) {
   const { viewer, deal, back } = await panelDeal(formData);
   if (!previewInFlight(deal.previewStatus)) backWith(back, "error", "Request a preview first.");
   const url = String(formData.get("previewUrl") ?? "").trim().replace(/\/$/, "");
-  if (!isPreviewLink(url)) backWith(back, "error", "Paste the link from previews.skoxsoftware.com, like https://previews.skoxsoftware.com/their-name-1a2b.");
+  if (!isPreviewLink(url)) backWith(back, "error", "Paste the preview link, like https://previews.gounbusy.com/their-name-1a2b.");
   const out = deal.previewStatus === "sent" || deal.previewStatus === "opened";
   if (url === deal.previewUrl && (out || deal.previewStatus === "ready")) backWith(back, "notice", "That link is already saved.");
   const rows = await getDb()

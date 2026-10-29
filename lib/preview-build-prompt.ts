@@ -4,10 +4,10 @@
  * that lead's preview site. It is the master prompt
  * (skox repo, scripts/lead-scan/preview-prompt.md) cut down to a static page
  * with SKOX's publishing rules: one folder in skox-software/prospect-previews,
- * live at previews.skoxsoftware.com/<slug>. Pure, so it can be tested alone.
+ * live at previews.gounbusy.com/<slug> (links already sent on previews.skoxsoftware.com keep working). Pure, so it can be tested alone.
  */
 
-export const PREVIEWS_HOST = "https://previews.skoxsoftware.com";
+export const PREVIEWS_HOST = "https://previews.gounbusy.com";
 const REPO = "skox-software/prospect-previews";
 const BOOK_URL = "https://gounbusy.com/review";
 

@@ -8,8 +8,8 @@ import type { CallBrief } from "./call-brief.ts";
 
 /** Who the draft is written as: the person who'll send it. */
 export type DraftAuthor = { name: string; firstName: string; title: string };
-export const DEFAULT_AUTHOR: DraftAuthor = { name: "Reiss Skeen", firstName: "Reiss", title: "Co-founder, SKOX Software" };
-export const signatureFor = (author: DraftAuthor) => [author.name, author.title, "skoxsoftware.com"];
+export const DEFAULT_AUTHOR: DraftAuthor = { name: "Reiss Skeen", firstName: "Reiss", title: "Co-founder, UnBusy (formerly SKOX Software)" };
+export const signatureFor = (author: DraftAuthor) => [author.name, author.title, "gounbusy.com"];
 
 const SUBJECTS: Record<string, (company: string) => string> = {
   "SITE DOWN": (c) => `${c}'s website isn't loading`,
@@ -82,9 +82,9 @@ export function buildEmailDraft(input: {
 
   const lines: string[] = [];
   if (brief?.tag === "NO WEBSITE") {
-    lines.push(`I'm ${author.firstName} with SKOX Software. I looked ${company} up and couldn't find a website, just your listing.`);
+    lines.push(`I'm ${author.firstName} with UnBusy, formerly SKOX Software. I looked ${company} up and couldn't find a website, just your listing.`);
   } else {
-    lines.push(`I'm ${author.firstName} with SKOX Software. I was looking at ${site ?? "your website"} and noticed ${problem ?? "it's showing its age"}.`);
+    lines.push(`I'm ${author.firstName} with UnBusy, formerly SKOX Software. I was looking at ${site ?? "your website"} and noticed ${problem ?? "it's showing its age"}.`);
   }
   lines.push(
     build

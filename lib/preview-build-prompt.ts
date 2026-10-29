@@ -8,7 +8,7 @@
 
 export const PREVIEWS_HOST = "https://previews.skoxsoftware.com";
 const REPO = "skox-software/prospect-previews";
-const BOOK_URL = "https://www.skoxsoftware.com/#scope";
+const BOOK_URL = "https://gounbusy.com/review";
 
 /** The lead's folder and link name: the company in kebab case plus the deal id's first 4 characters, so a rebuild or edit lands in the same place. */
 export function previewSlug(company: string, dealId: string) {
@@ -30,7 +30,7 @@ export function previewLinkFor(company: string, dealId: string) {
 
 /** A link saved on the lead must be on the previews site, in its own folder. */
 export function isPreviewLink(url: string) {
-  return /^https:\/\/previews\.skoxsoftware\.com\/[a-z0-9][a-z0-9-]{0,80}\/?$/.test(url.trim());
+  return /^https:\/\/previews\.(?:skoxsoftware|gounbusy)\.com\/[a-z0-9][a-z0-9-]{0,80}\/?$/.test(url.trim());
 }
 
 export type PreviewPromptLead = {

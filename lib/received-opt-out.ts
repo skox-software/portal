@@ -26,7 +26,7 @@ export async function receiveOptOut(emailId: string) {
   // Only the dedicated Gmail forwarding destination feeds this automation.
   if (!email.to.some(to => parseAddress(to)?.email === copy)) return { ignored: "other receiving address" };
   const sender = parseAddress(email.from)?.email;
-  if (!sender || /@(outreach\.)?skoxsoftware\.com$/i.test(sender)) return { ignored: "internal sender" };
+  if (!sender || /@(outreach\.)?(skoxsoftware|gounbusy)\.com$/i.test(sender)) return { ignored: "internal sender" };
   const text = email.text ?? authoredHtmlText(email.html ?? "");
   if (!isOptOutReply(email.subject ?? "", text)) return { ignored: "not an explicit opt-out" };
   // Idempotent and global: all matching deals and newly added deals are blocked.

@@ -40,7 +40,7 @@ test("a full draft: problem in the subject, four or five sentences, Reiss's sign
   assert.match(body, /a closing intake portal for agents and lenders, at a fixed price agreed before we start\./);
   assert.match(body, /preview\.example\.com\/staton/);
   assert.match(body, /how does it reach you\?/);
-  assert.match(body, /Reiss Skeen\nCo-founder, SKOX Software/);
+  assert.match(body, /Reiss Skeen\nCo-founder, UnBusy \(formerly SKOX Software\)\ngounbusy\.com/);
   const paragraph = body.split("\n\n")[1];
   const sentences = paragraph.split(/(?<=[.?])\s+(?=[A-Z])/).length;
   assert.ok(sentences >= 4 && sentences <= 5, `${sentences} sentences`);

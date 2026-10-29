@@ -29,7 +29,9 @@ type Invoice = typeof invoices.$inferSelect;
  * Leads no founder added by hand (imports, the lead scanner, website enquiries)
  * are Josh's: he sources them. Closing one earns the closer 60% and Josh 40%.
  */
-const DEFAULT_LEAD_SOURCE_EMAIL = process.env.LEAD_SOURCE_DEFAULT_EMAIL || "founders@skoxsoftware.com";
+const DEFAULT_LEAD_SOURCE_EMAIL = process.env.LEAD_SOURCE_DEFAULT_EMAIL || "founders@gounbusy.com";
+/** The same founder under the old and new domain, so the 29 Oct 2026 rename never drops the default source. */
+const DEFAULT_LEAD_SOURCE_ALIASES = new Set([DEFAULT_LEAD_SOURCE_EMAIL, "founders@gounbusy.com", "founders@skoxsoftware.com"].map((e) => e.toLowerCase()));
 
 /** Explicit project/deal credit wins; a founder deal owner is the fallback. Never throws on setup problems. */
 async function allocationsForProject(projectId: string, workspaceId: string, baseCents: number) {
@@ -320,6 +322,6 @@ export async function leadSourcer(workspaceId: string, createdBy: string | null)
   const founders = (await workspaceReps(workspaceId)).filter((p) => isStaffRole(p.membership.role));
   const found =
     founders.find((p) => p.membership.userId && p.membership.userId === createdBy) ??
-    founders.find((p) => p.membership.email.toLowerCase() === DEFAULT_LEAD_SOURCE_EMAIL.toLowerCase());
+    founders.find((p) => DEFAULT_LEAD_SOURCE_ALIASES.has(p.membership.email.toLowerCase()));
   return found ? { membershipId: found.membership.id, name: found.profile.displayName, email: found.membership.email } : null;
 }

@@ -9,12 +9,14 @@ test("the slug is the company in kebab case plus the deal id's first 4 character
   assert.equal(previewSlug("Café Olé", id), "cafe-ole-e036");
   assert.equal(previewSlug("!!!", id), "preview-e036");
   assert.ok(previewSlug("A".repeat(80), id).length <= 45);
-  assert.equal(previewLinkFor("Foster Rentals", id), "https://previews.skoxsoftware.com/foster-rentals-e036");
+  assert.equal(previewLinkFor("Foster Rentals", id), "https://previews.gounbusy.com/foster-rentals-e036");
 });
 
 test("only a previews-site link can be saved on a lead", () => {
   assert.ok(isPreviewLink("https://previews.skoxsoftware.com/foster-rentals-e036"));
   assert.ok(isPreviewLink("https://previews.skoxsoftware.com/foster-rentals-e036/"));
+  assert.ok(isPreviewLink("https://previews.gounbusy.com/foster-rentals-e036"));
+  assert.ok(!isPreviewLink("https://previews.gounbusy.com.evil.com/x"));
   assert.ok(!isPreviewLink("http://previews.skoxsoftware.com/foster-rentals-e036"));
   assert.ok(!isPreviewLink("https://skox-acorn-properties-a.vercel.app"));
   assert.ok(!isPreviewLink("https://previews.skoxsoftware.com/"));

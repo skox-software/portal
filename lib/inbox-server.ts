@@ -36,9 +36,12 @@ async function staffEmails(workspaceId: string) {
   return rows.map((r) => r.email.toLowerCase());
 }
 
-/** Staff addresses, plus anyone else at their (non-free) domains, e.g. founder@skoxsoftware.com. */
+/** Our own domains, old and new: mail from either is internal, never a lead conversation. */
+const TEAM_DOMAINS = ["gounbusy.com", "skoxsoftware.com"];
+
+/** Staff addresses, plus anyone else at their (non-free) domains or ours, e.g. founders@gounbusy.com. */
 function staffMatcher(staff: string[]) {
-  const domains = new Set(staff.map((e) => e.split("@")[1]).filter((d) => d && !/gmail|outlook|yahoo|icloud|hotmail/.test(d)));
+  const domains = new Set([...TEAM_DOMAINS, ...staff.map((e) => e.split("@")[1]).filter((d) => d && !/gmail|outlook|yahoo|icloud|hotmail/.test(d))]);
   return (email: string) => staff.includes(email) || domains.has(email.split("@")[1]);
 }
 

@@ -33,3 +33,16 @@ test("the prompt carries the lead, its folder, the deal id for open tracking and
   assert.match(p, /No SKOX price anywhere/);
   assert.match(p, /master UX\/UI and web designer/);
 });
+
+test("the prompt works the same in Claude Code and Codex, and the agent's own checks never fire the open alert", () => {
+  const p = buildPreviewPrompt({ id, company: "Foster Rentals", website: "https://fosterrentals.com" });
+  assert.match(p, /Claude Code, Codex or similar/);
+  assert.match(p, /curl -sIL --max-time 15 https:\/\/fosterrentals\.com/);
+  assert.match(p, /git ls-remote https:\/\/github\.com\/skox-software\/prospect-previews/);
+  assert.match(p, /web\.archive\.org/);
+  assert.match(p, /playwright@1 screenshot .*localhost:4173\/foster-rentals-e036\//);
+  for (const line of p.split("\n").filter((l) => /(curl|screenshot) .*previews\.skoxsoftware\.com/.test(l))) {
+    assert.match(line, /foster-rentals-e036\?team"/);
+  }
+  assert.doesNotMatch(p, /\(Claude Code\) to build/);
+});

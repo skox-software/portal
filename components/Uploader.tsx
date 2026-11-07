@@ -4,6 +4,7 @@ import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { withBase } from "@/lib/paths";
+import { safeUploadName, salesPrefix } from "@/lib/sales-files";
 
 type Purpose = "file" | "document" | "screenshot";
 
@@ -11,10 +12,12 @@ type Purpose = "file" | "document" | "screenshot";
  * Uploads straight to private storage, then hands the stored path to a server
  * action that checks it and records it. `fields` are extra form values for
  * that action (title, signers…), read from the surrounding form.
+ * Without a project, `salesWorkspaceId` sends it to the team's sales files.
  */
 export function Uploader({
   projectId,
-  purpose,
+  salesWorkspaceId,
+  purpose = "file",
   action,
   accept,
   label,
@@ -22,8 +25,10 @@ export function Uploader({
   formId,
   multiple = false,
 }: {
-  projectId: string;
-  purpose: Purpose;
+  projectId?: string;
+  /** Upload to the workspace's sales files instead of a project (staff only). */
+  salesWorkspaceId?: string;
+  purpose?: Purpose;
   action: (formData: FormData) => Promise<{ ok: boolean; message: string }>;
   accept?: string;
   label: string;
@@ -53,17 +58,19 @@ export function Uploader({
     try {
       let last = { ok: true, message: "" };
       for (const file of chosen) {
-        const safeName = file.name.replace(/[^\w.\- ]+/g, "_").slice(-120) || "file";
-        const blob = await upload(`projects/${projectId}/${purpose}/${safeName}`, file, {
+        const safeName = safeUploadName(file.name);
+        const sales = !projectId && salesWorkspaceId;
+        const blob = await upload(sales ? `${salesPrefix(salesWorkspaceId)}${safeName}` : `projects/${projectId}/${purpose}/${safeName}`, file, {
           access: "private",
           handleUploadUrl: withBase("/api/uploads"),
-          clientPayload: JSON.stringify({ projectId, purpose }),
+          clientPayload: JSON.stringify(sales ? { scope: "sales", workspaceId: salesWorkspaceId } : { projectId, purpose }),
           onUploadProgress: ({ percentage }) => setState((s) => ({ ...s, progress: Math.round(percentage) })),
         });
         const data = formId
           ? new FormData(document.getElementById(formId) as HTMLFormElement)
           : new FormData();
-        data.set("projectId", projectId);
+        if (sales) data.set("workspaceId", salesWorkspaceId);
+        else data.set("projectId", projectId ?? "");
         data.set("pathname", blob.pathname);
         data.set("fileName", file.name);
         last = await action(data);

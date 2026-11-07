@@ -4,7 +4,8 @@ import { z } from "zod";
 import { getViewer } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
-import { accessToProject } from "@/lib/permissions";
+import { accessToProject, staffMembershipIn } from "@/lib/permissions";
+import { SALES_MAX_BYTES, isSalesPath } from "@/lib/sales-files";
 import { MAX_UPLOAD_BYTES, projectPrefix } from "@/lib/storage";
 import { eq } from "drizzle-orm";
 
@@ -13,7 +14,11 @@ import { eq } from "drizzle-orm";
  * Blob storage (no server body-size limits). A token is only issued to someone
  * with access to the project, only for that project's folder, and only for
  * the file types the purpose allows. Staff-only purposes are enforced here.
+ * Sales files (the team's own sales material) go to the workspace's sales
+ * folder and only to staff of that workspace.
  */
+
+const salesPayload = z.object({ scope: z.literal("sales"), workspaceId: z.uuid() });
 
 const payload = z.object({
   projectId: z.uuid(),
@@ -35,7 +40,19 @@ export async function POST(request: Request) {
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         const viewer = await getViewer();
         if (!viewer) throw new Error("Sign in to upload.");
-        const parsed = payload.safeParse(JSON.parse(clientPayload ?? "{}"));
+        const raw = JSON.parse(clientPayload ?? "{}");
+        const sales = salesPayload.safeParse(raw);
+        if (sales.success) {
+          const { workspaceId } = sales.data;
+          if (!staffMembershipIn(viewer.memberships, workspaceId)) throw new Error("Only the UnBusy team can upload sales files.");
+          if (!isSalesPath(pathname, workspaceId)) throw new Error("Bad upload path.");
+          return {
+            maximumSizeInBytes: SALES_MAX_BYTES,
+            addRandomSuffix: true,
+            tokenPayload: JSON.stringify({ workspaceId, scope: "sales", userId: viewer.userId }),
+          };
+        }
+        const parsed = payload.safeParse(raw);
         if (!parsed.success) throw new Error("Bad upload request.");
         const { projectId, purpose } = parsed.data;
 

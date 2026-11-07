@@ -51,20 +51,41 @@ export function sha256(bytes: Uint8Array) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-/** Streams a private blob to the browser after the caller has checked access. */
+/**
+ * Streams a private blob to the browser after the caller has checked access.
+ * `range` (one checked "bytes=a-b" range) is passed to storage so a video can
+ * seek; the answer is 206 when storage returns just that part.
+ */
 export async function blobResponse(
   pathnameOrUrl: string,
-  { fileName, inline }: { fileName: string; inline: boolean },
+  { fileName, inline, range }: { fileName: string; inline: boolean; range?: string | null },
 ) {
-  const result = await readPrivate(pathnameOrUrl);
+  let result: Awaited<ReturnType<typeof readPrivate>>;
+  if (range) {
+    try {
+      const got = await get(pathnameOrUrl, { access: "private", headers: { Range: range } });
+      result = got && got.statusCode === 200 ? got : null;
+    } catch {
+      // Storage refuses a range past the end of the file.
+      return new Response("Range not satisfiable", { status: 416 });
+    }
+  } else {
+    result = await readPrivate(pathnameOrUrl);
+  }
   if (!result) return new Response("Not found", { status: 404 });
   const safeName = fileName.replace(/["\r\n]/g, "");
+  const contentRange = range ? result.headers.get("content-range") : null;
+  const length = result.headers.get("content-length");
   return new Response(result.stream, {
+    status: contentRange ? 206 : 200,
     headers: {
       "Content-Type": result.blob.contentType || "application/octet-stream",
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
+      ...(range !== undefined ? { "Accept-Ranges": "bytes" } : {}),
+      ...(contentRange ? { "Content-Range": contentRange } : {}),
+      ...(range !== undefined && length ? { "Content-Length": length } : {}),
     },
   });
 }

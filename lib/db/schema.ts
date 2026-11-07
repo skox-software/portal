@@ -383,6 +383,29 @@ export const files = pgTable(
   (t) => [index("files_project_idx").on(t.projectId)],
 );
 
+/**
+ * The team's own sales material (demo videos, one-pagers, decks) for whoever is selling.
+ * Staff only: never tied to a client or project, never shown to clients or reps.
+ */
+export const salesFiles = pgTable(
+  "sales_files",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    /** What the team calls it ("Job paperwork demo, 16:9"); the file keeps its own name for downloads. */
+    title: text("title").notNull(),
+    note: text("note"),
+    storageKey: text("storage_key").notNull(),
+    fileName: text("file_name").notNull(),
+    sizeBytes: integer("size_bytes"),
+    contentType: text("content_type"),
+    uploadedBy: text("uploaded_by").notNull(),
+    uploadedByEmail: text("uploaded_by_email"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("sales_files_workspace_idx").on(t.workspaceId, t.createdAt)],
+);
+
 /** A PDF sent for signature. The hash pins exactly what people signed. */
 export const documents = pgTable(
   "documents",

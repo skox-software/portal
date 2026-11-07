@@ -5,6 +5,7 @@ export const ADMIN_GROUPS = [
     { href: "/admin/clients", label: "Clients" },
     { href: "/admin/inbox", label: "Inbox" },
     { href: "/admin/outreach", label: "Email log" },
+    { href: "/admin/sales-files", label: "Sales files" },
   ] },
   { label: "Projects", links: [
     { href: "/admin/projects", label: "All projects" },

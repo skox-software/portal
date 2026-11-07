@@ -590,3 +590,21 @@ body:has(.fwall-root) .workspace-header, body:has(.fwall-root) .workspace-breadc
   .admin-topnav details { position: static; }
   .admin-topnav-menu, .admin-topnav details:last-child .admin-topnav-menu { left: 0; right: auto; top: 100%; width: min(320px, 100%); }
 }
+
+/* Sales files: the team's own demo videos, one-pagers and decks. */
+.sales-files-page.page{padding-top:28px}
+.sales-files-page .crm-head p.muted{max-width:62ch;margin:6px 0 0}
+.sales-files{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.sales-file{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 18px;align-items:start;padding:14px 0;border-top:1px solid var(--line-soft)}
+.sales-file:first-child{border-top:0;padding-top:4px}
+.sales-file-video,.sales-file-image{grid-column:1/-1;width:100%;max-width:720px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--ink)}
+.sales-file-image{background:var(--fog)}
+.sales-file-main{min-width:0}
+.sales-file-main .doc-title{margin:0 0 2px}
+.sales-file-main p{margin:0 0 2px}
+.sales-file-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.sales-file-remove summary{list-style:none;cursor:pointer}
+.sales-file-remove summary::-webkit-details-marker{display:none}
+.sales-file-remove[open] form{margin-top:8px;display:grid;gap:6px;justify-items:end}
+.sales-file-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px}
+@media (max-width: 760px){.sales-file{grid-template-columns:1fr}.sales-file-actions{justify-content:flex-start}}

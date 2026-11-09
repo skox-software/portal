@@ -55,7 +55,8 @@ test("events refuse anything that could carry client data", () => {
 });
 
 test("website checks give live/down and uptime", () => {
-  const site = FLOOR_APPS.find((a) => a.kind === "website")!;
+  // No website is watched today; the check still works for one that is.
+  const site = { ...FLOOR_APPS[0], key: "example-site", kind: "website" as const, siteUrl: "https://example.com" };
   const hb = (h: number, ok: boolean) => ({ kind: "heartbeat", ok, at: at(h), seconds: null, user: null, detail: { status: ok ? 200 : 503, ms: 140 } });
   const s = statsFor(site, [hb(0.1, true), hb(5, false), hb(10, true), hb(20, true)], now, 0);
   assert.deepEqual(s.site && { up: s.site.up, status: s.site.status, uptime: s.site.uptime, checks: s.site.checks }, { up: true, status: 200, uptime: 75, checks: 4 });

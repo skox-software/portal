@@ -7,6 +7,7 @@
 .wk-sum span{display:inline-flex;align-items:center;gap:8px}
 .wk-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3A404C;margin-right:8px;vertical-align:1px}
 .wk-dot[data-h=ok]{background:#2BD48A;box-shadow:0 0 0 3px rgba(43,212,138,.15)}
+.wk-dot[data-h=delivered]{background:#4D8DFF}
 .wk-dot[data-h=down]{background:#FF6B57;box-shadow:0 0 0 3px rgba(255,107,87,.18)}
 .wk-sum .wk-dot{margin-right:0}
 .wk-list{list-style:none;margin:0;padding:0;border-top:1px solid rgba(255,255,255,.12)}

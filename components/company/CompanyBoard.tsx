@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { decideProposal } from "@/app/admin/company/actions";
-import { DEPARTMENTS, KIND_LABEL, SEATS, chainToOwner, seatByKey, seatPulse, type SeatStatus } from "@/lib/company";
+import { DEPARTMENTS, KIND_LABEL, SEATS, chainToOwner, seatByKey, seatPulse, type OwnerDecision, type SeatStatus } from "@/lib/company";
 import { BOXES, H, W, edgePath, routeUp } from "./geometry";
 
 export type CardView = {
@@ -21,9 +21,11 @@ export type CardView = {
   decidedAt: string | null;
   decisionNote: string | null;
   edited: boolean;
+  doneAt: string | null;
+  doneNote: string | null;
 };
 export type RunView = { seat: string; at: string; summary: string; outcome: string };
-export type Score = { waiting: number; medianHours: number | null; approvedWeek: number; deniedWeek: number; editRate: number | null; runsWeek: number; liveSeats: number };
+export type Score = { actedOn: number; approvedTotal: number; medianActHours: number | null; waiting: number; medianHours: number | null; approvedWeek: number; deniedWeek: number; editRate: number | null; runsWeek: number; liveSeats: number };
 
 const MOTION = "(prefers-reduced-motion: reduce)";
 function subscribeMotion(on: () => void) {
@@ -88,9 +90,9 @@ export function CompanyBoard({ cards, runs, score, now }: { cards: CardView[]; r
           list[n]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
           return n;
         });
-      } else if (k === "a" || k === "d") {
+      } else if (k === "a" || k === "d" || k === "c" || k === "n") {
         const card = list[Math.min(cursor, list.length - 1)];
-        const btn = card?.querySelector<HTMLButtonElement>(k === "a" ? ".co-approve" : "[data-deny]");
+        const btn = card?.querySelector<HTMLButtonElement>({ a: ".co-approve", d: "[data-deny]", c: "[data-revise]", n: "[data-note]" }[k]);
         if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
       }
     }
@@ -140,6 +142,7 @@ export function CompanyBoard({ cards, runs, score, now }: { cards: CardView[]; r
         <div><dt>Approved this week</dt><dd>{score.approvedWeek}</dd></div>
         <div><dt>Denied this week</dt><dd>{score.deniedWeek}</dd></div>
         <div><dt>Edited before approval</dt><dd>{score.editRate === null ? "—" : `${Math.round(score.editRate * 100)}%`}</dd></div>
+        <div><dt>Approvals carried out</dt><dd>{score.approvedTotal ? `${score.actedOn} of ${score.approvedTotal}` : "—"}<small>{score.medianActHours === null ? "" : ` · ~${score.medianActHours < 1 ? "<1" : Math.round(score.medianActHours)} h`}</small></dd></div>
         <div><dt>Seat runs this week</dt><dd>{score.runsWeek}</dd></div>
         <div><dt>Seats live</dt><dd>{score.liveSeats} of {SEATS.filter((s) => s.title !== "Department" && s.key !== "josh").length}</dd></div>
       </dl>
@@ -228,7 +231,7 @@ export function CompanyBoard({ cards, runs, score, now }: { cards: CardView[]; r
         <section className="co-inbox" aria-labelledby="co-inbox-h">
           <h2 id="co-inbox-h">Waiting on you <span>{pending.length}</span></h2>
           {pending.length === 0 && <p className="co-empty">Nothing waiting. Seats send cards here when they need a yes.</p>}
-          {pending.length > 0 && <p className="co-keys" aria-hidden="true"><kbd>J</kbd><kbd>K</kbd> move <kbd>A</kbd> approve <kbd>D</kbd> deny</p>}
+          {pending.length > 0 && <p className="co-keys" aria-hidden="true"><kbd>J</kbd><kbd>K</kbd> move <kbd>A</kbd> approve <kbd>N</kbd> with a note <kbd>C</kbd> changes <kbd>D</kbd> deny</p>}
           {pending.map((c, i) => (
             <Card key={c.id} focused={i === Math.min(cursor, pending.length - 1)} card={c} nowMs={nowMs} onDecided={(tone) => { setGone((g) => new Set(g).add(c.id)); launch(c.seat, tone); }} onSeat={setSelected} />
           ))}
@@ -260,7 +263,7 @@ function Feed({ runs, reduce }: { runs: RunView[]; reduce: boolean }) {
     }, reduce ? 4000 : chars >= full.length ? 2600 : 24);
     return () => clearTimeout(id);
   }, [chars, line, lines, reduce]);
-  if (!lines.length) return <p className="co-feed">NO RUNS YET \u203a seats report here when they work</p>;
+  if (!lines.length) return <p className="co-feed">NO RUNS YET › seats report here when they work</p>;
   const full = lines[line % lines.length];
   return (
     <p className="co-feed" aria-live="off">
@@ -285,17 +288,20 @@ function FlightDot({ seat, tone }: { seat: string; tone: "approve" | "deny" }) {
 function Card({ card, focused, nowMs, onDecided, onSeat }: { card: CardView; focused: boolean; nowMs: number; onDecided: (tone: "approve" | "deny") => void; onSeat: (k: string) => void }) {
   const seat = seatByKey.get(card.seat);
   const [body, setBody] = useState(card.body ?? "");
-  const [denying, setDenying] = useState(false);
+  /** null: no note box; otherwise the action the note goes with. */
+  const [mode, setMode] = useState<null | "approve" | "revise" | "deny">(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
-  const decide = (decision: "approve" | "deny") =>
+  const edited = body !== (card.body ?? "");
+  const decide = (decision: OwnerDecision) =>
     start(async () => {
       setError(null);
-      const res = await decideProposal({ id: card.id, decision, note: note || undefined, body: card.body === null ? undefined : body });
-      if (res.ok) onDecided(decision);
+      const res = await decideProposal({ id: card.id, decision, note: note.trim() || undefined, body: card.body === null ? undefined : body });
+      if (res.ok) onDecided(decision === "approve" ? "approve" : "deny");
       else setError(res.error);
     });
+  const prompt = { approve: "Note for the seat (optional): how to carry it out", revise: "What should change? The seat redoes it and sends it back.", deny: "Why not? The seat learns from this." } as const;
   return (
     <article className="co-card" data-impact={card.impact} data-focused={focused || undefined} aria-busy={busy || undefined}>
       <header>
@@ -310,29 +316,34 @@ function Card({ card, focused, nowMs, onDecided, onSeat }: { card: CardView; foc
       {card.wrongIf && <p className="co-wrong"><strong>Wrong if:</strong> {card.wrongIf}</p>}
       {card.body !== null && (
         <details>
-          <summary>The draft{body !== (card.body ?? "") ? " (edited)" : ""}</summary>
+          <summary>The draft{edited ? " (edited)" : ""}</summary>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={Math.min(14, Math.max(4, body.split("\n").length + 1))} aria-label="Draft; edit before approving if needed" />
         </details>
       )}
       {card.links && card.links.length > 0 && (
         <ul className="co-links">{card.links.map((l) => <li key={l.url}><a href={l.url} target="_blank" rel="noreferrer">{l.label}</a></li>)}</ul>
       )}
-      {denying && (
-        <label className="co-reason">Why not? The seat learns from this.
-          <input value={note} onChange={(e) => setNote(e.target.value)} autoFocus maxLength={1000} onKeyDown={(e) => { if (e.key === "Enter" && note.trim()) decide("deny"); }} />
+      {mode && (
+        <label className="co-reason" data-mode={mode}>{prompt[mode]}
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} autoFocus maxLength={1000} rows={3}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && (mode === "approve" || note.trim())) decide(mode); }} />
         </label>
       )}
       {error && <p className="co-error" role="alert">{error}</p>}
       <footer>
-        {!denying ? (
+        {!mode ? (
           <>
-            <button type="button" className="btn co-approve" disabled={busy} onClick={() => decide("approve")}>{body !== (card.body ?? "") ? "Approve with edits" : "Approve"}</button>
-            <button type="button" className="btn btn-ghost" data-deny disabled={busy} onClick={() => setDenying(true)}>Deny</button>
+            <button type="button" className="btn co-approve" disabled={busy} onClick={() => decide("approve")}>{edited ? "Approve with edits" : "Approve"}</button>
+            <button type="button" className="btn btn-ghost" data-note disabled={busy} onClick={() => setMode("approve")}>Approve with a note</button>
+            <button type="button" className="btn btn-ghost" data-revise disabled={busy} onClick={() => setMode("revise")}>Changes</button>
+            <button type="button" className="btn btn-ghost" data-deny disabled={busy} onClick={() => setMode("deny")}>Deny</button>
           </>
         ) : (
           <>
-            <button type="button" className="btn co-deny" disabled={busy || !note.trim()} onClick={() => decide("deny")}>Deny with reason</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setDenying(false); setNote(""); }}>Back</button>
+            <button type="button" className={`btn ${mode === "deny" ? "co-deny" : mode === "revise" ? "co-revise" : "co-approve"}`} disabled={busy || (mode !== "approve" && !note.trim())} onClick={() => decide(mode)}>
+              {mode === "approve" ? (edited ? "Approve edits with note" : "Approve with note") : mode === "revise" ? "Send back for changes" : "Deny with reason"}
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setMode(null); setNote(""); }}>Back</button>
           </>
         )}
       </footer>
@@ -343,19 +354,26 @@ function Card({ card, focused, nowMs, onDecided, onSeat }: { card: CardView; foc
 function Decided({ cards, nowMs }: { cards: CardView[]; nowMs: number }) {
   const approved = cards.filter((c) => c.status === "approved");
   const recent = cards.filter((c) => c.status === "denied" || c.status === "done").slice(0, 12);
-  if (!approved.length && !recent.length) return null;
+  const revise = cards.filter((c) => c.status === "revise");
+  if (!approved.length && !recent.length && !revise.length) return null;
   return (
     <div className="co-decided">
       {approved.length > 0 && (
         <details open>
           <summary>Approved, waiting for the seat to carry it out <span>{approved.length}</span></summary>
-          <ul>{approved.map((c) => <li key={c.id}><b>{seatByKey.get(c.seat)?.name}</b> {c.title} <i>{c.decidedAt ? ago(c.decidedAt, nowMs) : ""}</i></li>)}</ul>
+          <ul>{approved.map((c) => <li key={c.id}><b>{seatByKey.get(c.seat)?.name}</b> {c.title}{c.decisionNote && <> — <i>&ldquo;{c.decisionNote}&rdquo;</i></>} <i>approved {c.decidedAt ? ago(c.decidedAt, nowMs) : ""}</i></li>)}</ul>
+        </details>
+      )}
+      {revise.length > 0 && (
+        <details open>
+          <summary>Sent back for changes <span>{revise.length}</span></summary>
+          <ul>{revise.map((c) => <li key={c.id}><b>{seatByKey.get(c.seat)?.name}</b> {c.title}{c.decisionNote && <> — <i>{c.decisionNote}</i></>}</li>)}</ul>
         </details>
       )}
       {recent.length > 0 && (
         <details>
           <summary>Recently done or denied <span>{recent.length}</span></summary>
-          <ul>{recent.map((c) => <li key={c.id} data-status={c.status}><b>{seatByKey.get(c.seat)?.name}</b> {c.title}{c.decisionNote && <> — <i>{c.decisionNote}</i></>}</li>)}</ul>
+          <ul>{recent.map((c) => <li key={c.id} data-status={c.status}><b>{seatByKey.get(c.seat)?.name}</b> {c.title}{c.status === "done" ? (c.doneNote && <> — <span className="co-done-note">Done: {c.doneNote}</span></>) : c.decisionNote && <> — <i>{c.decisionNote}</i></>}</li>)}</ul>
         </details>
       )}
     </div>

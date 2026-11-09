@@ -1,0 +1,1 @@
+ALTER TYPE "public"."company_proposal_status" ADD VALUE 'revise';

@@ -21,7 +21,7 @@ export default function proxy(...args: Parameters<Middleware>) {
 
 export const config = {
   // Public: sign-in, read-only status links (/s), referral pages (/r), email opt-out links (/u), the
-  // daily reminder cron, Stripe's and Resend's webhooks, Resend's delivery reports, the preview builder's API and the company seats' API (all verify their own secrets),
+  // daily reminder cron, Stripe's and Resend's webhooks, Resend's delivery reports, the preview builder's API, the company seats' API and the Floor's event intake (all verify their own secrets),
   // and the icons, share image, brand images (the email logo) and app manifest that browsers, mail clients and link previews fetch.
-  matcher: ["/((?!api/auth|api/cron|api/stripe|api/inbound|api/resend|api/lead-previews|api/company|sign-in|s/|r/|u/|_next/static|_next/image|favicon.ico|icon|apple-icon|share-image|brand/|manifest.webmanifest).*)"],
+  matcher: ["/((?!api/auth|api/cron|api/stripe|api/inbound|api/resend|api/lead-previews|api/company|api/floor|sign-in|s/|r/|u/|_next/static|_next/image|favicon.ico|icon|apple-icon|share-image|brand/|manifest.webmanifest).*)"],
 };

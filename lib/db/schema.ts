@@ -986,7 +986,7 @@ export const outreachRecipients = pgTable("outreach_recipients", {
  * these tables keep what they do. A run is one scheduled pass by a seat; a
  * proposal is a card it sends up for Josh to approve or deny.
  */
-export const companyProposalStatus = pgEnum("company_proposal_status", ["pending", "approved", "denied", "done", "withdrawn"]);
+export const companyProposalStatus = pgEnum("company_proposal_status", ["pending", "approved", "denied", "done", "withdrawn", "revise"]);
 
 export const companyRuns = pgTable(
   "company_runs",
@@ -1034,4 +1034,29 @@ export const companyProposals = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("company_proposals_status_idx").on(t.workspaceId, t.status, t.createdAt)],
+);
+
+/**
+ * The Floor (lib/floor.ts, docs/FLOOR.md): what each desk and app did. Counts
+ * and labels only; never a client's documents, addresses or emails.
+ */
+export const floorEvents = pgTable(
+  "floor_events",
+  {
+    id: id(),
+    /** A key from FLOOR_APPS in lib/floor.ts. */
+    app: text("app").notNull(),
+    /** The app's own id for the event, so a backfill or a retry never counts it twice. */
+    externalId: text("external_id").notNull(),
+    /** job | selftest | heartbeat | error */
+    kind: text("kind").notNull(),
+    ok: boolean("ok").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+    seconds: integer("seconds"),
+    /** Initials only. */
+    user: text("user"),
+    detail: jsonb("detail"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("floor_events_app_external_idx").on(t.app, t.externalId), index("floor_events_app_at_idx").on(t.app, t.at)],
 );

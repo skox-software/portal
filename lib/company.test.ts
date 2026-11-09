@@ -17,6 +17,8 @@ test("every seat reports up to Josh, and keys are unique", () => {
 test("seats can't approve: only done after approval, withdrawn while pending", () => {
   assert.equal(serviceProposalTransition("approved", "done"), "done");
   assert.equal(serviceProposalTransition("pending", "withdrawn"), "withdrawn");
+  assert.equal(serviceProposalTransition("revise", "withdrawn"), "withdrawn");
+  assert.ok(typeof serviceProposalTransition("revise", "done") === "object");
   assert.ok(typeof serviceProposalTransition("pending", "done") === "object");
   assert.ok(typeof serviceProposalTransition("denied", "done") === "object");
 });
@@ -24,6 +26,7 @@ test("seats can't approve: only done after approval, withdrawn while pending", (
 test("Josh decides a card once", () => {
   assert.equal(ownerDecision("pending", "approve"), "approved");
   assert.equal(ownerDecision("pending", "deny"), "denied");
+  assert.equal(ownerDecision("pending", "revise"), "revise");
   assert.ok(typeof ownerDecision("approved", "deny") === "object");
 });
 

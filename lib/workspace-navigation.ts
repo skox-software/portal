@@ -31,6 +31,7 @@ export function workspaceLocation(pathname: string, staff: boolean) {
   const parts = pathname.split("/").filter(Boolean);
   const home = staff ? "/admin" : "/";
   if (pathname === home) return { title: staff ? "Overview" : "Your projects", back: null };
+  if (staff && pathname.startsWith("/admin/command")) return { title: "Command", back: { href: home, label: "Back to overview" } };
   if (staff && pathname.startsWith("/admin/control-center")) return { title: "Control Center", back: { href: home, label: "Back to overview" } };
   if (staff && pathname.startsWith("/admin/work")) return { title: "Our work", back: { href: home, label: "Back to overview" } };
   if (parts[0] === "projects" && parts[1]) {

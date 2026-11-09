@@ -13,7 +13,7 @@ export type DecideResult = { ok: true; status: ProposalStatus } | { ok: false; e
 
 const input = z.object({
   id: z.uuid(),
-  decision: z.enum(["approve", "deny"]),
+  decision: z.enum(["approve", "deny", "revise"]),
   note: z.string().trim().max(1000).optional(),
   /** The draft as Josh left it; only kept on approve, and only if he changed it. */
   body: z.string().max(20_000).optional(),
@@ -31,6 +31,7 @@ export async function decideProposal(raw: z.input<typeof input>): Promise<Decide
   if (!parsed.success) return { ok: false, error: "That card couldn't be read." };
   const { id, decision, note, body } = parsed.data;
   if (decision === "deny" && !note) return { ok: false, error: "Say why in a few words, so the seat learns." };
+  if (decision === "revise" && !note) return { ok: false, error: "Say what to change, so the seat can redo it." };
   const db = getDb();
   const [card] = await db.select().from(companyProposals).where(and(eq(companyProposals.id, id), eq(companyProposals.workspaceId, staff.workspaceId)));
   if (!card) return { ok: false, error: "That card is gone." };
@@ -52,7 +53,7 @@ export async function decideProposal(raw: z.input<typeof input>): Promise<Decide
   await eventInsert({
     workspaceId: staff.workspaceId,
     actorId: viewer.userId,
-    verb: decision === "approve" ? "company.approved" : "company.denied",
+    verb: decision === "approve" ? "company.approved" : decision === "deny" ? "company.denied" : "company.revise",
     subjectType: "company_proposal",
     subjectId: id,
     payload: { seat: card.seat, title: card.title, edited },

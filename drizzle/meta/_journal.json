@@ -169,6 +169,20 @@
       "when": 1794187371188,
       "tag": "0023_company",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794189079806,
+      "tag": "0024_floor",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794189428866,
+      "tag": "0025_company_revise",
+      "breakpoints": true
     }
   ]
 }

@@ -23,12 +23,12 @@ Approving changes nothing by itself. The seat reads its approved cards on its ne
 ## The API
 
 ```
-GET   /api/company?seat=<key>        seats, approved cards to carry out, pending cards, recent denials with reasons
+GET   /api/company?seat=<key>        seats, approved cards to carry out (with Josh's note), pending cards, cards sent back for changes, recent denials
 POST  /api/company/runs              { seat, summary, outcome?: "ok"|"error", proposals?: [{ kind, title, why, body?, impact?, confidence, wrongIf?, links? }] }
 PATCH /api/company/proposals/<id>    { status: "done" | "withdrawn", note? }   done only after approval; withdrawn only while pending
 ```
 
-A seat can never approve or deny. `kind` is one of message, proposal, decision, spend, publish, client, change, other.
+A seat can never approve or deny. Josh can approve (optionally with a note), send a card back for changes (with a note; status `revise`: the seat sends a reworked card and withdraws the old one), or deny (with a reason). `kind` is one of message, proposal, decision, spend, publish, client, change, other.
 
 ## A seat's run, in order
 

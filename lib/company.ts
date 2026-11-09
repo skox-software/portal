@@ -174,7 +174,7 @@ export const seatsIn = (dept: string) => SEATS.filter((s) => s.parent === dept);
 
 export const PROPOSAL_KINDS = ["message", "proposal", "decision", "spend", "publish", "client", "change", "other"] as const;
 export const PROPOSAL_IMPACTS = ["high", "medium", "low"] as const;
-export const PROPOSAL_STATUSES = ["pending", "approved", "denied", "done", "withdrawn"] as const;
+export const PROPOSAL_STATUSES = ["pending", "approved", "denied", "done", "withdrawn", "revise"] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 
 export const KIND_LABEL: Record<(typeof PROPOSAL_KINDS)[number], string> = {
@@ -207,17 +207,22 @@ export const runInput = z
   .strict()
   .refine((r) => r.seat !== "josh", "Josh is not a seat that runs.");
 
-/** A seat may move its own card only to these, and only from these. Approving is Josh's alone. */
+/**
+ * A seat may move its own card only to these, and only from these. Approving is Josh's alone. A card Josh sent
+ * back for changes is withdrawn by the seat once it has sent the reworked card.
+ */
 export function serviceProposalTransition(current: ProposalStatus, next: "done" | "withdrawn"): ProposalStatus | { error: string } {
   if (next === "done" && current === "approved") return "done";
-  if (next === "withdrawn" && current === "pending") return "withdrawn";
+  if (next === "withdrawn" && (current === "pending" || current === "revise")) return "withdrawn";
   return { error: `A card that is ${current} can't be marked ${next}.` };
 }
 
-/** Josh's decision on a pending card. */
-export function ownerDecision(current: ProposalStatus, decision: "approve" | "deny"): ProposalStatus | { error: string } {
+export type OwnerDecision = "approve" | "deny" | "revise";
+
+/** Josh's decision on a pending card: yes, no, or "change this and send it back". */
+export function ownerDecision(current: ProposalStatus, decision: OwnerDecision): ProposalStatus | { error: string } {
   if (current !== "pending") return { error: "This card has already been decided." };
-  return decision === "approve" ? "approved" : "denied";
+  return decision === "approve" ? "approved" : decision === "deny" ? "denied" : "revise";
 }
 
 /** Order for the inbox: high impact first, then oldest first so nothing starves. */

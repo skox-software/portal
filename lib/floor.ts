@@ -163,3 +163,20 @@ export function statsFor(app: FloorApp, rows: Row[], now: Date, total: number): 
     troubleCounties: [...trouble.entries()].map(([county, failed]) => ({ county, failed })).sort((a, b) => b.failed - a.failed).slice(0, 3),
   };
 }
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Is the desk itself working? A failed self-test usually means a county's own website isn't answering, which
+ * isn't our app being down: if staff jobs have finished in the last day, the desk is working and only the named
+ * counties need a look. It's down only when the self-test fails and no job has finished in a day.
+ */
+export function deskHealth(stats: AppStats, now: Date): { level: "ok" | "look" | "down"; why: string | null } {
+  const finishedRecently = !!stats.lastAt && now.getTime() - new Date(stats.lastAt).getTime() < 26 * 3_600_000 && stats.week > 0;
+  if (stats.selftest && !stats.selftest.ok) {
+    const where = stats.selftest.failed.map(cap).join(", ");
+    if (finishedRecently) return { level: "look", why: `${where || "A county"} not answering in this morning's self-test. Jobs are still finishing.` };
+    return { level: "down", why: `Self-test failed${where ? `: ${where}` : ""}, and no job has finished in a day` };
+  }
+  return { level: "ok", why: null };
+}

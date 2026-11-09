@@ -2,7 +2,7 @@
  * The Command view's judgment calls, kept pure so they're tested: which desks need a look and why, and the
  * one sentence at the top. Everything shown comes from portal data; nothing here invents a number.
  */
-import type { AppStats, FloorApp } from "./floor.ts";
+import { deskHealth, type AppStats, type FloorApp } from "./floor.ts";
 
 export type DeskIssue = { key: string; name: string; client: string; level: "down" | "look"; why: string; lastAt: string | null };
 
@@ -13,10 +13,8 @@ export function deskIssues(desks: { app: FloorApp; stats: AppStats; reporting: b
   for (const { app, stats, reporting } of desks) {
     const base = { key: app.key, name: app.name, client: app.client, lastAt: stats.lastAt };
     if (!reporting) { issues.push({ ...base, level: "look", why: "Not reporting to the Control Center" }); continue; }
-    if (stats.selftest && !stats.selftest.ok) {
-      issues.push({ ...base, level: "down", why: `Morning self-test failed${stats.selftest.failed.length ? `: ${stats.selftest.failed.map(cap).join(", ")}` : ""}` });
-      continue;
-    }
+    const health = deskHealth(stats, now);
+    if (health.level !== "ok") { issues.push({ ...base, level: health.level, why: health.why! }); continue; }
     const quietH = stats.lastAt ? (now.getTime() - new Date(stats.lastAt).getTime()) / 3_600_000 : Infinity;
     if (weekday && quietH > 26) { issues.push({ ...base, level: "look", why: `No jobs in ${Math.round(quietH / 24)} days` }); continue; }
     const tried = stats.month + stats.failedMonth;
@@ -25,7 +23,6 @@ export function deskIssues(desks: { app: FloorApp; stats: AppStats; reporting: b
   return issues.sort((a, b) => (a.level === b.level ? 0 : a.level === "down" ? -1 : 1));
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** "Good morning, Josh. 2 decisions are waiting. 1 desk needs a look." */
 export function headline(name: string, hourET: number, decisions: number, issues: DeskIssue[]): { greeting: string; rest: string[] } {

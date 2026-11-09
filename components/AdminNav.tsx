@@ -25,6 +25,7 @@ export function AdminNav({ inboxCount = 0, dueCount = 0 }: { inboxCount?: number
       opened?.querySelector("summary")?.focus();
     }
   }}>
+    <Link href="/admin/command" aria-current={pathname.startsWith("/admin/command") ? "page" : undefined}>Command</Link>
     <Link href="/admin" aria-current={pathname === "/admin" ? "page" : undefined}>Overview</Link>
     <Link href="/admin/control-center" aria-current={pathname.startsWith("/admin/control-center") ? "page" : undefined}>Control Center</Link>
     <Link href="/admin/work" aria-current={pathname.startsWith("/admin/work") ? "page" : undefined}>Our work</Link>

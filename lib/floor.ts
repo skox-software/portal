@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * The Floor: every desk and app UnBusy runs, and what each one did. Apps are
+ * The Control Center: every live desk, app and website we built for a client, and what each one did. Apps are
  * listed here in code; their activity arrives as events on /api/floor/events
  * (floor_events). Hours saved is only ever jobs × a measured by-hand time:
  * until a desk's timing study sets `baselineMinutes`, the page says so.
@@ -34,27 +34,7 @@ export type FloorApp = {
 export const FLOOR_APPS: FloorApp[] = [
   {
     key: "job-paperwork", name: "Job Paperwork", client: "Ireland Surveying", kind: "desk", unit: "job",
-    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, source: "Its own activity log, read when the Floor opens",
-  },
-  {
-    key: "lorenzen-motors", name: "Lorenzen Motors website", client: "Lorenzen Motors", kind: "website", unit: "check",
-    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, siteUrl: "https://lorenzenmotors.com", source: "Checked each time the Control Center opens",
-  },
-  {
-    key: "company", name: "The company", client: "UnBusy", kind: "internal", unit: "seat run",
-    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, url: "/admin/company", source: "Seat runs and cards",
-  },
-  {
-    key: "portal", name: "Client portal", client: "UnBusy", kind: "internal", unit: "visit",
-    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, source: "Not reporting yet",
-  },
-  {
-    key: "credit-snitch", name: "Credit Snitch", client: "Credit Snitch", kind: "app", unit: "visit",
-    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, source: "Not reporting yet",
-  },
-  {
-    key: "lead-engine", name: "Lead engine", client: "UnBusy", kind: "internal", unit: "nightly run",
-    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, source: "Not reporting yet",
+    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, source: "Its own activity log, read when the Control Center opens",
   },
 ];
 

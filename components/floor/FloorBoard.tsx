@@ -48,9 +48,7 @@ export function FloorBoard({ tiles, feed, now }: { tiles: TileView[]; feed: Feed
   const nowMs = new Date(now).getTime();
   const live = tiles.filter((t) => t.reporting);
   const desks = tiles.filter((t) => t.app.kind === "desk" && t.reporting);
-  const sites = tiles.filter((t) => t.app.kind === "website" && t.stats.site);
   const healthy = desks.filter((t) => t.stats.selftest?.ok !== false && t.stats.failedMonth <= t.stats.month).length;
-  const saved = tiles.map((t) => t.stats.hoursSavedMonth).filter((h): h is number => h !== null);
   const [line, setLine] = useState(0);
   useEffect(() => {
     if (feed.length < 2 || reduce) return;
@@ -62,11 +60,9 @@ export function FloorBoard({ tiles, feed, now }: { tiles: TileView[]; feed: Feed
     <div className="fl">
       <section className="fl-stage">
         <dl className="fl-strip">
-          <div><dt>Jobs today</dt><dd>{live.reduce((s, t) => s + (t.app.kind === "internal" ? 0 : t.stats.today), 0)}</dd></div>
-          <div><dt>Jobs this month</dt><dd>{live.reduce((s, t) => s + (t.app.kind === "internal" ? 0 : t.stats.month), 0)}</dd></div>
-          <div><dt>Staff hours given back this month</dt><dd>{saved.length ? saved.reduce((a, b) => a + b, 0) : <span className="fl-unmeasured">Not measured yet</span>}</dd></div>
+          <div><dt>Jobs today</dt><dd>{live.reduce((s, t) => s + (t.app.kind === "website" ? 0 : t.stats.today), 0)}</dd></div>
+          <div><dt>Jobs this month</dt><dd>{live.reduce((s, t) => s + (t.app.kind === "website" ? 0 : t.stats.month), 0)}</dd></div>
           <div><dt>Desks healthy</dt><dd>{desks.length ? `${healthy} of ${desks.length}` : "—"}</dd></div>
-          <div><dt>Websites live</dt><dd>{sites.length ? `${sites.filter((t) => t.stats.site!.up).length} of ${sites.length}` : "—"}</dd></div>
         </dl>
         <div className="fl-feed" aria-live="off">
           <span className="fl-feed-tag">LIVE</span>

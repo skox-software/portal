@@ -28,6 +28,6 @@ export const JOBS: Job[] = [
   {
     key: "lorenzen-website", client: "Lorenzen Motors", title: "Website", kind: "Website",
     what: "A new website that works on phones and computers, published to their own hosting.",
-    liveSince: "2026-10-02", floorApp: "lorenzen-motors", portalClient: "Lorenzen Motors", url: "https://lorenzenmotors.com",
+    liveSince: "2026-10-02", portalClient: "Lorenzen Motors", url: "https://lorenzenmotors.com",
   },
 ];

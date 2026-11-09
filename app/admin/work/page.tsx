@@ -44,11 +44,12 @@ export default async function WorkPage() {
     const paid = rows.filter((r) => r.invStatus === "paid").reduce((s, r) => s + (r.cents ?? 0), 0);
     const open = rows.filter((r) => r.invStatus === "open").reduce((s, r) => s + (r.cents ?? 0), 0);
     const project = rows[0];
-    const health = !stats ? "unknown" : stats.site ? (stats.site.up ? "ok" : "down") : stats.selftest && !stats.selftest.ok ? "down" : stats.lastAt ? "ok" : "unknown";
+    const health = !job.floorApp ? "delivered" : !stats ? "unknown" : stats.site ? (stats.site.up ? "ok" : "down") : stats.selftest && !stats.selftest.ok ? "down" : stats.lastAt ? "ok" : "unknown";
     return { job: { ...job, liveSince: project?.launchedOn ?? job.liveSince }, stats, paid, open, project, health };
   });
   const collected = jobs.reduce((s, j) => s + j.paid, 0);
-  const live = jobs.filter((j) => j.health === "ok").length;
+  const watched = jobs.filter((j) => j.job.floorApp);
+  const live = watched.filter((j) => j.health === "ok").length;
 
   return (
     <main className="shell page wk">
@@ -56,7 +57,7 @@ export default async function WorkPage() {
         <p className="wk-eyebrow">Our work</p>
         <h1>{JOBS.length} jobs delivered</h1>
         <p className="wk-sum">
-          <span><i className="wk-dot" data-h="ok" />{live} live and working</span>
+          {watched.length > 0 && <span><i className="wk-dot" data-h={live === watched.length ? "ok" : "down"} />{live} of {watched.length} desks working</span>}
           <span>{money(collected)} collected</span>
           <span>Since {fmtDate(jobs.map((j) => j.job.liveSince).sort()[0])}</span>
         </p>
@@ -84,10 +85,10 @@ export default async function WorkPage() {
               <dl className="wk-facts">
                 <div>
                   <dt>Status</dt>
-                  <dd><i className="wk-dot" data-h={health} />{health === "ok" ? "Live" : health === "down" ? "Down" : "Not reporting"}</dd>
+                  <dd><i className="wk-dot" data-h={health} />{health === "ok" ? "Live" : health === "down" ? "Down" : health === "delivered" ? "Delivered" : "Not reporting"}</dd>
                 </div>
                 <div>
-                  <dt>Live since</dt>
+                  <dt>{job.kind === "Website" ? "Launched" : "Live since"}</dt>
                   <dd>{fmtDate(job.liveSince)}<small>{daysLive(job.liveSince, now)} days</small></dd>
                 </div>
                 {stats && job.kind === "Desk" && (

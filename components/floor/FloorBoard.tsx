@@ -48,6 +48,7 @@ export function FloorBoard({ tiles, feed, now }: { tiles: TileView[]; feed: Feed
   const nowMs = new Date(now).getTime();
   const live = tiles.filter((t) => t.reporting);
   const desks = tiles.filter((t) => t.app.kind === "desk" && t.reporting);
+  const sites = tiles.filter((t) => t.app.kind === "website" && t.stats.site);
   const healthy = desks.filter((t) => t.stats.selftest?.ok !== false && t.stats.failedMonth <= t.stats.month).length;
   const saved = tiles.map((t) => t.stats.hoursSavedMonth).filter((h): h is number => h !== null);
   const [line, setLine] = useState(0);
@@ -65,7 +66,7 @@ export function FloorBoard({ tiles, feed, now }: { tiles: TileView[]; feed: Feed
           <div><dt>Jobs this month</dt><dd>{live.reduce((s, t) => s + (t.app.kind === "internal" ? 0 : t.stats.month), 0)}</dd></div>
           <div><dt>Staff hours given back this month</dt><dd>{saved.length ? saved.reduce((a, b) => a + b, 0) : <span className="fl-unmeasured">Not measured yet</span>}</dd></div>
           <div><dt>Desks healthy</dt><dd>{desks.length ? `${healthy} of ${desks.length}` : "—"}</dd></div>
-          <div><dt>Reporting</dt><dd>{live.length} of {tiles.length}</dd></div>
+          <div><dt>Websites live</dt><dd>{sites.length ? `${sites.filter((t) => t.stats.site!.up).length} of ${sites.length}` : "—"}</dd></div>
         </dl>
         <div className="fl-feed" aria-live="off">
           <span className="fl-feed-tag">LIVE</span>
@@ -100,9 +101,43 @@ function Spark({ data }: { data: number[] }) {
   );
 }
 
+function SiteTile({ tile, nowMs, index }: { tile: TileView; nowMs: number; index: number }) {
+  const { app, stats } = tile;
+  const site = stats.site;
+  const status = !site ? "silent" : site.up ? "ok" : "down";
+  return (
+    <article className="fl-tile fl-site" data-status={status} data-kind="website" style={{ animationDelay: `${index * 70}ms` }}>
+      <header>
+        <span className="fl-led" aria-label={site ? (site.up ? "Live" : "Down") : "Not checked yet"} />
+        <div>
+          <h2>{app.name}</h2>
+          <p>{app.client} · Website</p>
+        </div>
+      </header>
+      {!site ? (
+        <p className="fl-silent">Not checked yet.</p>
+      ) : (
+        <>
+          <div className="fl-big fl-live">
+            <strong>{site.up ? "Live" : "Down"}</strong>
+            <span>{site.status ? `${site.status} · ${site.ms} ms` : "no answer"}</span>
+          </div>
+          <dl className="fl-nums">
+            <div><dt>Uptime (30d)</dt><dd>{site.uptime}%</dd></div>
+            <div><dt>Checks</dt><dd>{site.checks}</dd></div>
+            <div><dt>Checked</dt><dd>{ago(site.at, nowMs)}</dd></div>
+          </dl>
+          {app.siteUrl && <a className="fl-more fl-visit" href={app.siteUrl} target="_blank" rel="noreferrer">Visit {app.siteUrl.replace(/^https?:\/\//, "")}</a>}
+        </>
+      )}
+    </article>
+  );
+}
+
 function Tile({ tile, nowMs, index }: { tile: TileView; nowMs: number; index: number }) {
   const { app, stats, reporting } = tile;
   const [open, setOpen] = useState(false);
+  if (app.kind === "website") return <SiteTile tile={tile} nowMs={nowMs} index={index} />;
   const status = !reporting ? "silent" : stats.selftest && !stats.selftest.ok ? "down" : stats.failedMonth > 0 && stats.failedMonth >= stats.month ? "warn" : "ok";
   return (
     <article className="fl-tile" data-status={status} data-kind={app.kind} data-active={stats.activeNow || undefined} style={{ animationDelay: `${index * 70}ms` }}>
@@ -116,7 +151,7 @@ function Tile({ tile, nowMs, index }: { tile: TileView; nowMs: number; index: nu
       </header>
 
       {!reporting ? (
-        <p className="fl-silent">Not reporting yet. {app.source === "Not reporting yet" ? "Add the Floor reporter to this app to see it here." : app.source}</p>
+        <p className="fl-silent">Not reporting yet. {app.source === "Not reporting yet" ? "Connect this app to see it here." : app.source}</p>
       ) : (
         <>
           <div className="fl-big">

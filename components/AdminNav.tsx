@@ -26,6 +26,7 @@ export function AdminNav({ inboxCount = 0, dueCount = 0 }: { inboxCount?: number
     }
   }}>
     <Link href="/admin" aria-current={pathname === "/admin" ? "page" : undefined}>Overview</Link>
+    <Link href="/admin/control-center" aria-current={pathname.startsWith("/admin/control-center") ? "page" : undefined}>Control Center</Link>
     {ADMIN_GROUPS.map(group => <details key={group.label} data-active={group.links.some(link => activeNavigation(link.href, pathname)) || undefined} onToggle={event => {
       if (event.currentTarget.open) nav.current?.querySelectorAll("details[open]").forEach(item => { if (item !== event.currentTarget) item.removeAttribute("open"); });
     }}>

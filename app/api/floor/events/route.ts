@@ -30,6 +30,6 @@ export async function POST(request: Request) {
     })))
     .onConflictDoNothing({ target: [floorEvents.app, floorEvents.externalId] })
     .returning({ id: floorEvents.id });
-  if (saved.length) revalidatePath("/admin/floor");
+  if (saved.length) revalidatePath("/admin/control-center");
   return Response.json({ received: events.length, saved: saved.length }, { status: 201 });
 }

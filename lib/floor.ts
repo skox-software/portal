@@ -15,7 +15,7 @@ export type FloorApp = {
   name: string;
   /** Who it's for. Internal tools say "UnBusy". */
   client: string;
-  kind: "desk" | "app" | "internal";
+  kind: "desk" | "app" | "internal" | "website";
   /** What one unit of work is called on this app. */
   unit: string;
   /** Measured minutes the same job takes by hand; null until a timing study measures it. */
@@ -25,6 +25,8 @@ export type FloorApp = {
   /** What it costs us a month to run, in dollars, when known. */
   monthlyCost: number | null;
   url?: string;
+  /** A public website to check for live/down each time the Control Center opens. */
+  siteUrl?: string;
   /** Where its numbers come from, in words. */
   source: string;
 };
@@ -33,6 +35,10 @@ export const FLOOR_APPS: FloorApp[] = [
   {
     key: "job-paperwork", name: "Job Paperwork", client: "Ireland Surveying", kind: "desk", unit: "job",
     baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, source: "Its own activity log, read when the Floor opens",
+  },
+  {
+    key: "lorenzen-motors", name: "Lorenzen Motors website", client: "Lorenzen Motors", kind: "website", unit: "check",
+    baselineMinutes: null, withDeskMinutes: null, monthlyCost: null, siteUrl: "https://lorenzenmotors.com", source: "Checked each time the Control Center opens",
   },
   {
     key: "company", name: "The company", client: "UnBusy", kind: "internal", unit: "seat run",
@@ -77,6 +83,9 @@ export const floorEvent = z
         oneClick: z.number().int().min(0).max(1000).optional(),
         failed: z.number().int().min(0).max(1000).optional(),
         files: z.number().int().min(0).max(1000).optional(),
+        /** Website checks: the HTTP status and how long the page took. */
+        status: z.number().int().min(0).max(999).optional(),
+        ms: z.number().int().min(0).max(60_000).optional(),
         /** Self-test: the counties that failed. */
         failedCounties: z.array(label).max(40).optional(),
       })
@@ -102,6 +111,8 @@ export type AppStats = {
   activeNow: boolean;
   lastAt: string | null;
   selftest: { at: string; ok: boolean; failed: string[] } | null;
+  /** Websites: the latest check, and the share of checks in 30 days that found it up. */
+  site: { up: boolean; status: number; ms: number; at: string; uptime: number; checks: number } | null;
   /** jobs per day, oldest first, last 14 days. */
   spark: number[];
   hoursSavedMonth: number | null;
@@ -142,6 +153,8 @@ export function statsFor(app: FloorApp, rows: Row[], now: Date, total: number): 
     const d = (r.detail ?? {}) as { county?: string; failed?: number };
     if (d.county && (d.failed ?? 0) > 0) trouble.set(d.county, (trouble.get(d.county) ?? 0) + (d.failed ?? 0));
   }
+  const checks = rows.filter((r) => r.kind === "heartbeat" && inLast(30 * DAY)(r)).sort((a, b) => b.at.getTime() - a.at.getTime());
+  const lastCheck = checks[0];
   const last = rows.reduce<Date | null>((m, r) => (r.kind === "job" && (!m || r.at > m) ? r.at : m), null);
   return {
     today: done.filter((r) => dayKey(r.at) === today).length,
@@ -155,6 +168,16 @@ export function statsFor(app: FloorApp, rows: Row[], now: Date, total: number): 
     activeNow: !!last && now.getTime() - last.getTime() < 15 * 60_000,
     lastAt: last?.toISOString() ?? null,
     selftest: lastTest ? { at: lastTest.at.toISOString(), ok: lastTest.ok, failed: ((lastTest.detail ?? {}) as { failedCounties?: string[] }).failedCounties ?? [] } : null,
+    site: lastCheck
+      ? {
+          up: lastCheck.ok,
+          status: ((lastCheck.detail ?? {}) as { status?: number }).status ?? 0,
+          ms: ((lastCheck.detail ?? {}) as { ms?: number }).ms ?? 0,
+          at: lastCheck.at.toISOString(),
+          uptime: Math.round((checks.filter((c) => c.ok).length / checks.length) * 1000) / 10,
+          checks: checks.length,
+        }
+      : null,
     spark,
     hoursSavedMonth: hoursSaved(app, month.length),
     troubleCounties: [...trouble.entries()].map(([county, failed]) => ({ county, failed })).sort((a, b) => b.failed - a.failed).slice(0, 3),

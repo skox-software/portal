@@ -4,15 +4,15 @@ import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { companyRuns, floorEvents } from "@/lib/db/schema";
 import { FLOOR_APPS, statsFor } from "@/lib/floor";
-import { pullFloor } from "@/lib/floor-pull";
+import { checkSites, pullFloor } from "@/lib/floor-pull";
 import { FloorBoard, type FeedLine, type TileView } from "@/components/floor/FloorBoard";
 import "./floor.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "The Floor" };
+export const metadata: Metadata = { title: "Control Center" };
 
 /**
- * The Floor: every desk and app UnBusy runs, live. Apps are listed in
+ * The Control Center: every desk, app and website UnBusy runs, live. Apps are listed in
  * lib/floor.ts; pulled apps (lib/floor-pull.ts) are read when the page opens, pushed ones arrive on
  * /api/floor/events. The company's
  * seats report through their own runs table and are shown here too.
@@ -23,7 +23,7 @@ export default async function FloorPage() {
   const now = new Date();
   const since = new Date(now.getTime() - 30 * 86_400_000);
   // Fresh numbers from the apps that are pulled, before reading what's stored.
-  await pullFloor();
+  await Promise.all([pullFloor(), checkSites(now)]);
 
   const [events, totals, runs, runTotal] = await Promise.all([
     db.select().from(floorEvents).where(gte(floorEvents.at, since)).orderBy(desc(floorEvents.at)).limit(5000),
@@ -48,7 +48,9 @@ export default async function FloorPage() {
     ...events.slice(0, 40).map((e) => {
       const d = (e.detail ?? {}) as { county?: string; type?: string; found?: number; failed?: number; failedCounties?: string[] };
       const what =
-        e.kind === "selftest"
+        e.kind === "heartbeat"
+          ? `${e.ok ? "live" : "DOWN"} · ${(d as { status?: number }).status || "no answer"} · ${(d as { ms?: number }).ms ?? 0} ms`
+          : e.kind === "selftest"
           ? e.ok ? "self-test passed" : `self-test failed: ${(d.failedCounties ?? []).join(", ") || "see logs"}`
           : e.kind === "job"
             ? [d.county && `${d.county}`, d.type, e.ok ? "done" : (d as { result?: string }).result === "stopped" ? "stopped" : "failed", e.seconds ? `${e.seconds}s` : null, d.found !== undefined ? `${d.found} found` : null, d.failed ? `${d.failed} missed` : null].filter(Boolean).join(" · ")
@@ -64,9 +66,9 @@ export default async function FloorPage() {
     <main className="shell page">
       <div className="page-head">
         <div>
-          <p className="eyebrow">The Floor</p>
+          <p className="eyebrow">Control Center</p>
           <h1>Everything we&rsquo;ve built, working</h1>
-          <p className="muted">Live from each desk and app. Counts only: no client documents, addresses or names leave their systems.</p>
+          <p className="muted">Live from each desk, app and website. Counts only: no client documents, addresses or names leave their systems.</p>
         </div>
       </div>
       <FloorBoard now={now.toISOString()} tiles={tiles} feed={feed} />

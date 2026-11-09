@@ -1,7 +1,7 @@
 import { and, eq, max } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { floorEvents } from "@/lib/db/schema";
-import { floorEvent } from "@/lib/floor";
+import { FLOOR_APPS, floorEvent } from "@/lib/floor";
 
 /**
  * Apps the Floor pulls from when someone opens it, instead of the app pushing on every job: the app never waits on
@@ -48,6 +48,33 @@ export async function pullFloor(): Promise<{ app: string; ok: boolean; saved: nu
         console.error(`[floor] ${app}: ${(e as Error).message}`);
         return { app, ok: false, saved: 0 };
       }
+    }),
+  );
+}
+
+/**
+ * Live or down for each public website: one request each, 6-second limit, following redirects. Stored as one check
+ * per site per 5 minutes, so opening the page repeatedly never piles up rows.
+ */
+export async function checkSites(now = new Date()): Promise<void> {
+  const db = getDb();
+  const bucket = new Date(Math.floor(now.getTime() / 300_000) * 300_000).toISOString();
+  await Promise.all(
+    FLOOR_APPS.filter((a) => a.siteUrl).map(async (app) => {
+      const t0 = Date.now();
+      let status = 0;
+      try {
+        const res = await fetch(app.siteUrl!, { redirect: "follow", signal: AbortSignal.timeout(6000), cache: "no-store", headers: { "user-agent": "UnBusy uptime check" } });
+        status = res.status;
+        await res.body?.cancel();
+      } catch {
+        status = 0;
+      }
+      const ms = Date.now() - t0;
+      await db
+        .insert(floorEvents)
+        .values({ app: app.key, externalId: `up-${bucket}`, kind: "heartbeat", ok: status >= 200 && status < 400, at: now, seconds: null, user: null, detail: { status, ms } })
+        .onConflictDoNothing({ target: [floorEvents.app, floorEvents.externalId] });
     }),
   );
 }

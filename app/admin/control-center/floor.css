@@ -53,3 +53,9 @@
 
 @media (max-width:900px){.fl-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.fl-strip>div:last-child{grid-column:span 2}}
 @media (prefers-reduced-motion:reduce){.fl *,.fl-stage::after{animation:none!important;transition:none!important}.fl-spark-line{stroke-dashoffset:0}}
+
+.fl-live strong{font-size:34px}
+.fl-site[data-status=ok] .fl-live strong{color:#3ccf91;text-shadow:0 0 18px rgba(60,207,145,.45)}
+.fl-site[data-status=down] .fl-live strong{color:#ff7a66}
+.fl-site[data-status=down]{border-color:#ff7a66;box-shadow:0 0 0 1px #ff7a66,0 0 30px rgba(255,122,102,.25)}
+.fl-visit{text-decoration:none;display:inline-block}

@@ -1,13 +1,14 @@
-# The Floor
+# The Control Center
 
-`/admin/floor` (Team & settings → The Floor) shows every desk and app UnBusy runs: jobs today, this week and in total, typical time, who uses it (initials), failures, the morning self-test, and a live feed. Staff only.
+`/admin/control-center` (its own tab next to Overview) shows every desk, app and website UnBusy runs: jobs today, this week and in total, typical time, who uses it (initials), failures, the morning self-test, and a live feed. Staff only.
 
 ## How numbers get here
 
 | App | How | Where |
 | --- | --- | --- |
-| Job Paperwork (Ireland) | **Pulled** when the Floor opens: the portal asks the app's `/api/floor` for what's new and stores it | `lib/floor-pull.ts`; app side `lib/collect/floor.ts`, `app/api/floor/route.ts` in quote-desk |
+| Job Paperwork (Ireland) | **Pulled** when the Control Center opens: the portal asks the app's `/api/floor` for what's new and stores it | `lib/floor-pull.ts`; app side `lib/collect/floor.ts`, `app/api/floor/route.ts` in quote-desk |
 | The company | Read from `company_runs` | `app/admin/floor/page.tsx` |
+| Websites (Lorenzen Motors) | Checked live/down when the page opens: one request each, 6-second limit, one stored check per site per 5 minutes | `checkSites` in `lib/floor-pull.ts` |
 | Future apps | Pulled the same way, or pushed to `POST /api/floor/events` (Bearer `FLOOR_INGEST_SECRET`) | `app/api/floor/events/route.ts` |
 
 Pulling instead of pushing means a client's app never waits on the portal, and nothing runs (or wakes the database) while nobody is looking. Each pull asks only for events from a day before the newest one stored, gives up after 4 seconds and falls back to what's stored. Events are de-duplicated by app and id.

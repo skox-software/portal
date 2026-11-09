@@ -42,8 +42,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         { href: "/admin/inbox", label: "Inbox", icon: "mail", count: inboxCount },
       ]}
       more={[
+        { href: "/admin/control-center", label: "Control Center", icon: "results" },
         { href: "/admin/company", label: "Company", icon: "clients" },
-        { href: "/admin/floor", label: "The Floor", icon: "results" },
         { href: "/admin/clients", label: "Clients", icon: "clients", count: dueCount },
         { href: "/admin/outreach", label: "Email log", icon: "mail" },
         { href: "/admin/billing", label: "Billing", icon: "billing" },

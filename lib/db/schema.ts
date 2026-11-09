@@ -980,3 +980,58 @@ export const outreachRecipients = pgTable("outreach_recipients", {
   suppressed: boolean("suppressed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * The company (lib/company.ts, docs/COMPANY.md). Seats are defined in code;
+ * these tables keep what they do. A run is one scheduled pass by a seat; a
+ * proposal is a card it sends up for Josh to approve or deny.
+ */
+export const companyProposalStatus = pgEnum("company_proposal_status", ["pending", "approved", "denied", "done", "withdrawn"]);
+
+export const companyRuns = pgTable(
+  "company_runs",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    /** A key from SEATS in lib/company.ts. */
+    seat: text("seat").notNull(),
+    summary: text("summary").notNull(),
+    /** ok | error */
+    outcome: text("outcome").notNull().default("ok"),
+    proposalCount: integer("proposal_count").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("company_runs_seat_idx").on(t.workspaceId, t.seat, t.createdAt)],
+);
+
+export const companyProposals = pgTable(
+  "company_proposals",
+  {
+    id: id(),
+    workspaceId: workspaceId(),
+    seat: text("seat").notNull(),
+    runId: uuid("run_id").references(() => companyRuns.id, { onDelete: "set null" }),
+    /** One of PROPOSAL_KINDS. */
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    why: text("why").notNull(),
+    /** The draft itself: the email, the proposal, the change. */
+    body: text("body"),
+    /** high | medium | low */
+    impact: text("impact").notNull().default("medium"),
+    confidence: integer("confidence").notNull(),
+    wrongIf: text("wrong_if"),
+    links: jsonb("links").$type<{ label: string; url: string }[]>(),
+    status: companyProposalStatus("status").notNull().default("pending"),
+    decidedBy: text("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    /** Josh's reason on a deny, or his edit note on an approve. */
+    decisionNote: text("decision_note"),
+    /** Josh changed the draft before approving: the edit rate says whether a seat's drafts are good enough. */
+    edited: boolean("edited").notNull().default(false),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    doneNote: text("done_note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("company_proposals_status_idx").on(t.workspaceId, t.status, t.createdAt)],
+);

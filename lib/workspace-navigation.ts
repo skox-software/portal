@@ -17,6 +17,7 @@ export const ADMIN_GROUPS = [
     { href: "/admin/commissions", label: "Commissions" },
   ] },
   { label: "Team & settings", links: [
+    { href: "/admin/company", label: "Company" },
     { href: "/admin/reps", label: "Team" },
     { href: "/admin/activity", label: "Activity" },
     { href: "/admin/settings", label: "Workspace settings" },

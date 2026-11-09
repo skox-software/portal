@@ -4,7 +4,7 @@ import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { requireStaff } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { clients, floorEvents, invoices, projects } from "@/lib/db/schema";
-import { FLOOR_APPS, statsFor } from "@/lib/floor";
+import { FLOOR_APPS, deskHealth, statsFor } from "@/lib/floor";
 import { JOBS } from "@/lib/work";
 import "./work.css";
 
@@ -44,7 +44,7 @@ export default async function WorkPage() {
     const paid = rows.filter((r) => r.invStatus === "paid").reduce((s, r) => s + (r.cents ?? 0), 0);
     const open = rows.filter((r) => r.invStatus === "open").reduce((s, r) => s + (r.cents ?? 0), 0);
     const project = rows[0];
-    const health = !job.floorApp ? "delivered" : !stats ? "unknown" : stats.site ? (stats.site.up ? "ok" : "down") : stats.selftest && !stats.selftest.ok ? "down" : stats.lastAt ? "ok" : "unknown";
+    const health = !job.floorApp ? "delivered" : !stats ? "unknown" : stats.site ? (stats.site.up ? "ok" : "down") : deskHealth(stats, now).level === "down" ? "down" : stats.lastAt ? "ok" : "unknown";
     return { job: { ...job, liveSince: project?.launchedOn ?? job.liveSince }, stats, paid, open, project, health };
   });
   const collected = jobs.reduce((s, j) => s + j.paid, 0);
@@ -94,7 +94,7 @@ export default async function WorkPage() {
                 {stats && job.kind === "Desk" && (
                   <>
                     <div><dt>Jobs filed</dt><dd>{stats.total.toLocaleString()}<small>{stats.week} this week</small></dd></div>
-                    <div><dt>Typical time</dt><dd>{stats.medianSeconds === null ? "—" : `${Math.round(stats.medianSeconds)}s`}<small>{stats.selftest ? (stats.selftest.ok ? "self-test passing" : "self-test failing") : ""}</small></dd></div>
+                    <div><dt>Typical time</dt><dd>{stats.medianSeconds === null ? "—" : `${Math.round(stats.medianSeconds)}s`}<small>{stats.selftest ? (stats.selftest.ok ? "self-test passing" : `${stats.selftest.failed.join(", ") || "a county"} not answering`) : ""}</small></dd></div>
                   </>
                 )}
                 {stats?.site && (

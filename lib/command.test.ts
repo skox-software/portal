@@ -7,9 +7,12 @@ const app = FLOOR_APPS[0];
 const tue = new Date("2026-11-10T15:00:00Z");
 const job = (h: number, ok = true) => ({ kind: "job", ok, at: new Date(tue.getTime() - h * 3_600_000), seconds: 40, user: "MG", detail: { result: ok ? "done" : "error" } });
 
-test("a failed self-test makes a desk down, naming the counties", () => {
-  const stats = statsFor(app, [job(1), { kind: "selftest", ok: false, at: new Date(tue.getTime() - 5 * 3_600_000), seconds: null, user: null, detail: { failedCounties: ["polk"] } }], tue, 1);
-  assert.deepEqual(deskIssues([{ app, stats, reporting: true }], tue).map((i) => [i.level, i.why]), [["down", "Morning self-test failed: Polk"]]);
+test("a county not answering is a look, not down, while jobs still finish", () => {
+  const st = { kind: "selftest", ok: false, at: new Date(tue.getTime() - 5 * 3_600_000), seconds: null, user: null, detail: { failedCounties: ["seminole"] } };
+  const working = statsFor(app, [job(1), st], tue, 1);
+  assert.deepEqual(deskIssues([{ app, stats: working, reporting: true }], tue).map((i) => [i.level, i.why]), [["look", "Seminole not answering in this morning's self-test. Jobs are still finishing."]]);
+  const stuck = statsFor(app, [job(40), st], tue, 1);
+  assert.equal(deskIssues([{ app, stats: stuck, reporting: true }], tue)[0].level, "down");
 });
 
 test("quiet on a workday, or failing often, needs a look; healthy is silent", () => {

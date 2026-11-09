@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import type { AppStats, FloorApp } from "@/lib/floor";
+import { deskHealth, type AppStats, type FloorApp } from "@/lib/floor";
 
 export type TileView = { app: FloorApp; reporting: boolean; stats: AppStats };
 export type FeedLine = { at: string; text: string; ok: boolean };
@@ -134,7 +134,8 @@ function Tile({ tile, nowMs, index }: { tile: TileView; nowMs: number; index: nu
   const { app, stats, reporting } = tile;
   const [open, setOpen] = useState(false);
   if (app.kind === "website") return <SiteTile tile={tile} nowMs={nowMs} index={index} />;
-  const status = !reporting ? "silent" : stats.selftest && !stats.selftest.ok ? "down" : stats.failedMonth > 0 && stats.failedMonth >= stats.month ? "warn" : "ok";
+  const health = deskHealth(stats, new Date(nowMs));
+  const status = !reporting ? "silent" : health.level === "down" ? "down" : health.level === "look" || (stats.failedMonth > 0 && stats.failedMonth >= stats.month) ? "warn" : "ok";
   return (
     <article className="fl-tile" data-status={status} data-kind={app.kind} data-active={stats.activeNow || undefined} style={{ animationDelay: `${index * 70}ms` }}>
       <header>
@@ -166,7 +167,7 @@ function Tile({ tile, nowMs, index }: { tile: TileView; nowMs: number; index: nu
               <div><dt>Last {app.unit}</dt><dd>{ago(stats.lastAt, nowMs)}</dd></div>
               {app.kind !== "internal" && <div><dt>Failed, 30 days</dt><dd>{stats.failedMonth}{stats.stoppedMonth ? ` (plus ${stats.stoppedMonth} stopped on purpose)` : ""}</dd></div>}
               {stats.users.length > 0 && <div><dt>Who uses it</dt><dd className="fl-users">{stats.users.map((u) => <span key={u}>{u}</span>)}</dd></div>}
-              {stats.selftest && <div><dt>Morning self-test</dt><dd>{stats.selftest.ok ? "Passed" : `Failed: ${stats.selftest.failed.join(", ") || "see logs"}`} · {ago(stats.selftest.at, nowMs)}</dd></div>}
+              {stats.selftest && <div><dt>Morning self-test</dt><dd>{stats.selftest.ok ? "Passed" : `${stats.selftest.failed.join(", ") || "A county"} not answering`} · {ago(stats.selftest.at, nowMs)}</dd></div>}
               {stats.troubleCounties.length > 0 && <div><dt>Most missed documents</dt><dd>{stats.troubleCounties.map((c) => `${c.county} (${c.failed})`).join(", ")}</dd></div>}
               {app.kind === "desk" && <div><dt>Staff hours given back</dt><dd>{stats.hoursSavedMonth === null ? "Not measured yet: needs a timing study" : `${stats.hoursSavedMonth} h this month`}</dd></div>}
               <div><dt>Running cost</dt><dd>{app.monthlyCost === null ? "Not entered" : `$${app.monthlyCost}/month`}</dd></div>
